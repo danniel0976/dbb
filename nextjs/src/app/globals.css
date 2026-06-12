@@ -121,13 +121,41 @@ body {
 
 /* Button styles */
 .btn-primary {
-  @apply bg-dbb-accent hover:bg-red-600 text-white font-semibold py-2 px-4 rounded-lg transition-colors duration-200;
+  background-color: #e94560;
+  color: white;
+  font-weight: 600;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  transition: background-color 0.2s;
+}
+
+.btn-primary:hover {
+  background-color: #dc2626;
 }
 
 .btn-secondary {
-  @apply bg-dbb-secondary hover:bg-blue-900 text-white font-semibold py-2 px-4 rounded-lg transition-colors duration-200;
+  background-color: #16213e;
+  color: white;
+  font-weight: 600;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  transition: background-color 0.2s;
+}
+
+.btn-secondary:hover {
+  background-color: #1e3a8a;
 }
 
 .btn-outline {
-  @apply border-2 border-dbb-accent text-dbb-accent hover:bg-dbb-accent hover:text-white font-semibold py-2 px-4 rounded-lg transition-colors duration-200;
+  border: 2px solid #e94560;
+  color: #e94560;
+  font-weight: 600;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  transition: all 0.2s;
+}
+
+.btn-outline:hover {
+  background-color: #e94560;
+  color: white;
 }

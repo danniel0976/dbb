@@ -1,0 +1,11 @@
+{
+  "env": {
+    "NEXT_PUBLIC_SUPABASE_URL": "https://mnyhpwqskzadkplnhbrx.supabase.co",
+    "NEXT_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_9_9VB5sQ3jW75TUOcx4SiA_w_l9rWh2",
+    "SUPABASE_SERVICE_ROLE_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1ueWhwd3Fza3phZGtwbG5oYnJ4Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTczOTU0MjE1MywiZXhwIjoyMDU1MTE4MTUzfQ.R3rT7EXAMPLE_KEY_HERE",
+    "USD_MYR_RATE": "4.70"
+  },
+  "buildCommand": "next build",
+  "outputDirectory": ".next",
+  "framework": "nextjs"
+}

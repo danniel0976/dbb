@@ -44,20 +44,19 @@ function parseManaboxCSV(csvPath) {
 
   console.log(`📊 Parsed ${records.length} cards from CSV`)
 
-  // Map to our expected format
+  // Map to our expected format (ManaBox CSV columns)
   return records.map((row, index) => {
-    // Adapt to your actual ManaBox CSV column names
-    // Common formats:
-    // - Card Name, Set, Collector No, Foil, Condition
-    // - name, set_code, collector_number, foil, condition
+    // ManaBox CSV format:
+    // Name, Set code, Set name, Collector number, Foil, Rarity, Quantity, ..., Scryfall ID, Condition
     
     return {
-      card_name: row['Card Name'] || row['name'] || row['Card'],
-      set_code: row['Set'] || row['set_code'] || row['Set Code'],
-      collector_number: row['Collector No'] || row['collector_number'] || row['Number'] || row['#'],
-      is_foil: (row['Foil'] || row['foil'] || 'false').toLowerCase() === 'true' || row['Foil'] === 'Yes',
-      condition: row['Condition'] || row['condition'] || 'NM',
+      card_name: row['Name'] || row['Card Name'] || row['name'] || row['Card'],
+      set_code: row['Set code'] || row['Set'] || row['set_code'] || row['Set Code'],
+      collector_number: row['Collector number'] || row['Collector No'] || row['collector_number'] || row['Number'] || row['#'],
+      is_foil: (row['Foil'] || 'normal').toLowerCase() === 'foil' || row['Foil'] === 'Yes' || row['Foil'] === 'etched',
+      condition: mapCondition(row['Condition'] || row['condition'] || 'near_mint'),
       quantity: parseInt(row['Quantity'] || row['qty'] || '1', 10),
+      scryfall_id: row['Scryfall ID'] || null,
       _original: row, // Keep original for debugging
       _rowIndex: index + 1,
     }

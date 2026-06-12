@@ -1,0 +1,554 @@
+[
+  {
+    "card": "Adventurous Impulse",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Ash Barrens",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Putrefy",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Storm-Kiln Artist",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Galazeth Prismari",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Whirlwind Denial",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Despark",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Storm-Kiln Artist",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Greatsword of Tyr",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Thrill of Possibility",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Skyclave Squid",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Feed the Swarm",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Luminarch Aspirant",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Malakir Blood-Priest",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Shell Shield",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Seafloor Stalker",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Attended Healer",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Disenchant",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Stonework Packbeast",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Mite Overseer",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Eye of Malcator",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Hexgold Hoverwings",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Ovika, Enigma Goliath",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Greatsword of Tyr",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Flaming Fist",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Silver-Fur Master",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Spell Pierce",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Expel the Interlopers",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Wolfcaller's Howl",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Back for Seconds",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Bitter Chill",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Ruby, Daring Tracker",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Three Bowls of Porridge",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Jade Orb of Dragonkind",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "River Song's Diary",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Charix, the Raging Isle",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Tishana's Tidebinder",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Daemogoth Titan",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Splashy Spellcaster",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Queen Allenal of Ruadach",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "The Raven Man",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Essence Scatter",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Island",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Clockwork Drawbridge",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Omen of the Sea",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Soulreaper of Mogis",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Slaughter-Priest of Mogis",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Thriving Bluff",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Unknown Shores",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Crystal Grotto",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Dismal Backwater",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Sacred Peaks",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Bloodfell Caves",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Wooded Ridgeline",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Cliffgate",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Barbarian Ring",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Vrestin, Menoptra Leader",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Putrefy",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Quintorius Kand",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Queen Allenal of Ruadach",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Rith, Liberated Primeval",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Kroxa, Titan of Death's Hunger",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Daemogoth Woe-Eater",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Golden Ratio",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Killian, Ink Duelist",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Enigmatic Incarnation",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Elas il-Kor, Sadistic Pilgrim",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Dramatic Finale",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Crosis, the Purger",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Abuelo, Ancestral Echo",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Allure of the Unknown",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Up the Beanstalk",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Spring-Leaf Avenger",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Sentinel of Lost Lore",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Kami of Transience",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Avenging Hunter",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Herd Migration",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Night of the Sweets' Revenge",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Arasta of the Endless Web",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Herd Migration",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Jadelight Spelunker",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Arasta of the Endless Web",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Feral Encounter",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Hydra's Growth",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Roaming Throne",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Mirror Shield",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Three Bowls of Porridge",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Karn's Sylex",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Bontu's Monument",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Fraying Line",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Michiko's Reign of Truth // Portrait of Michiko",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Temporary Lockdown",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Protective Parents",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Phyrexian Unlife",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Kitsune Ace",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Eidolon of Obstruction",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Flicker of Fate",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Heartflame Duelist // Heartflame Slash",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Tezzeret's Gambit",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Picklock Prankster // Free the Fae",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Coralhelm Chronicler",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Witchstalker Frenzy",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Rundvelt Hordemaster",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Jaya, Fiery Negotiator",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Squee, Dubious Monarch",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Twisted Fealty",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Phoenix of Ash",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Hit the Mother Lode",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Detective's Phoenix",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Claim the Firstborn",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Shock",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Thrill of Possibility",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Adventurous Impulse",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "The Raven Man",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "The Raven Man",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Tymaret, Chosen from Death",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Village Rites",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Woe Strider",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Drag to the Bottom",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Diamond Pick-Axe",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Isshin, Two Heavens as One",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Fear of Missing Out",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Leonin Lightscribe",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Throne of the God-Pharaoh",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Kodama's Reach",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Access Tunnel",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Stroke of Midnight",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Necroblossom Snarl",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Tishana's Tidebinder",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Cybermen Squadron",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Grab the Prize",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Patchwork Beastie",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Shepherding Spirits",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Spineseeker Centipede",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Glassworks // Shattered Yard",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Tunnel Surveyor",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Terramorphic Expanse",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  },
+  {
+    "card": "Strangled Cemetery",
+    "error": "duplicate key value violates unique constraint \"cards_scryfall_id_key\""
+  }
+]
