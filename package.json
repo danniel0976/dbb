@@ -1,0 +1,33 @@
+{
+  "name": "dans-bizarre-bazaar",
+  "version": "1.0.0",
+  "description": "MTG Card Claim Sales System for Facebook Group",
+  "private": true,
+  "scripts": {
+    "dev": "cd nextjs && npm run dev",
+    "build": "cd nextjs && npm run build",
+    "start": "cd nextjs && npm run start",
+    "lint": "cd nextjs && npm run lint",
+    "import": "node scripts/import-collection.js"
+  },
+  "keywords": [
+    "mtg",
+    "magic-the-gathering",
+    "cardkingdom",
+    "scryfall",
+    "supabase",
+    "nextjs",
+    "malaysia",
+    "claim-sales"
+  ],
+  "author": "Dan",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/dbb.git"
+  },
+  "homepage": "https://dbb.lovelikenotomorrow.com",
+  "bugs": {
+    "url": "https://github.com/yourusername/dbb/issues"
+  }
+}

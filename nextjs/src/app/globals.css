@@ -1,0 +1,133 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --foreground-rgb: 255, 255, 255;
+  --background-start-rgb: 26, 26, 46;
+  --background-end-rgb: 22, 33, 62;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --foreground-rgb: 255, 255, 255;
+    --background-start-rgb: 26, 26, 46;
+    --background-end-rgb: 22, 33, 62;
+  }
+}
+
+body {
+  color: rgb(var(--foreground-rgb));
+  background: linear-gradient(
+      to bottom,
+      transparent,
+      rgb(var(--background-end-rgb))
+    )
+    rgb(var(--background-start-rgb));
+  min-height: 100vh;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #1a1a2e;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #e94560;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #ff6b6b;
+}
+
+/* Card hover effects */
+.card-hover {
+  transition: all 0.3s ease;
+}
+
+.card-hover:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 24px rgba(233, 69, 96, 0.3);
+}
+
+/* Rarity glow effects */
+.rarity-common { border-color: #8c8c8c; }
+.rarity-uncommon { border-color: #c0c0c0; }
+.rarity-rare { border-color: #f4d03f; box-shadow: 0 0 10px rgba(244, 208, 63, 0.3); }
+.rarity-mythic { border-color: #e94560; box-shadow: 0 0 15px rgba(233, 69, 96, 0.4); }
+
+/* Mana symbols */
+.mana-symbol {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: bold;
+  margin-right: 2px;
+}
+
+.mana-W { background: #f5f5dc; color: #000; border: 1px solid #d4d4aa; }
+.mana-U { background: #4a90e2; color: #fff; border: 1px solid #3a7bc8; }
+.mana-B { background: #2c2c2c; color: #fff; border: 1px solid #1a1a1a; }
+.mana-R { background: #e74c3c; color: #fff; border: 1px solid #c0392b; }
+.mana-G { background: #27ae60; color: #fff; border: 1px solid #1e8449; }
+
+/* Sidebar transitions */
+.sidebar-transition {
+  transition: transform 0.3s ease-in-out;
+}
+
+/* Loading skeleton */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    #1a1a2e 0%,
+    #2a2a3e 50%,
+    #1a1a2e 100%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-loading 1.5s infinite;
+}
+
+@keyframes skeleton-loading {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Toast notifications */
+.toast {
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+/* Button styles */
+.btn-primary {
+  @apply bg-dbb-accent hover:bg-red-600 text-white font-semibold py-2 px-4 rounded-lg transition-colors duration-200;
+}
+
+.btn-secondary {
+  @apply bg-dbb-secondary hover:bg-blue-900 text-white font-semibold py-2 px-4 rounded-lg transition-colors duration-200;
+}
+
+.btn-outline {
+  @apply border-2 border-dbb-accent text-dbb-accent hover:bg-dbb-accent hover:text-white font-semibold py-2 px-4 rounded-lg transition-colors duration-200;
+}
