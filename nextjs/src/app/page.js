@@ -188,10 +188,10 @@ export default function Home() {
                 <Filter className="w-6 h-6" />
               </button>
               <h1 className="text-2xl font-bold text-dbb-accent">
-                Dan&apos;s Bizarre Bazaar
+                MTG Bazaar
               </h1>
               <span className="text-sm text-gray-400 hidden sm:inline">
-                MTG Claim Sales
+                Magic: The Gathering Claim Sales
               </span>
             </div>
             
