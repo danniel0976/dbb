@@ -50,46 +50,48 @@ let lastRequestTime = 0
 const MIN_REQUEST_INTERVAL = 400
 
 export const enrichCardsWithImages = async (cards) => {
-  const cardsWithoutImages = cards.filter(c => !c.image_crop_url && !c.image_png_url).slice(0, 30)
+  const cardsWithoutImages = cards.filter(c => !c.image_crop_url && !c.image_png_url)
   
   if (cardsWithoutImages.length === 0) return cards
   
   const enrichedCards = [...cards]
+  const cacheKeyMap = new Map() // Map card id to cache key
   
-  for (let i = 0; i < cardsWithoutImages.length; i++) {
-    const card = cardsWithoutImages[i]
+  // Prepare all fetch promises for parallel execution
+  const fetchPromises = cardsWithoutImages.map(async (card) => {
     const cacheKey = `${card.set_code}_${card.collector_number}`
+    cacheKeyMap.set(card.id, cacheKey)
     
+    // Check cache first
     if (imageCache.has(cacheKey)) {
-      const images = imageCache.get(cacheKey)
-      const index = enrichedCards.findIndex(c => c.id === card.id)
-      if (index >= 0) {
-        enrichedCards[index] = { ...enrichedCards[index], ...images }
-      }
-      continue
-    }
-    
-    const now = Date.now()
-    const timeSinceLastRequest = now - lastRequestTime
-    if (timeSinceLastRequest < MIN_REQUEST_INTERVAL) {
-      await new Promise(resolve => setTimeout(resolve, MIN_REQUEST_INTERVAL - timeSinceLastRequest))
+      return { id: card.id, images: imageCache.get(cacheKey) }
     }
     
     try {
       const images = await scryfallAPI.getCardImages(card.set_code, card.collector_number)
-      lastRequestTime = Date.now()
-      
       if (images && !images.error) {
         imageCache.set(cacheKey, images)
-        const index = enrichedCards.findIndex(c => c.id === card.id)
-        if (index >= 0) {
-          enrichedCards[index] = { ...enrichedCards[index], ...images }
-        }
+        return { id: card.id, images }
       }
     } catch (error) {
       console.error(`Failed to fetch image for ${card.card_name}:`, error)
     }
-  }
+    
+    return { id: card.id, images: null }
+  })
+  
+  // Wait for all fetches to complete (parallel!)
+  const results = await Promise.all(fetchPromises)
+  
+  // Apply results to enriched cards
+  results.forEach(({ id, images }) => {
+    if (images) {
+      const index = enrichedCards.findIndex(c => c.id === id)
+      if (index >= 0) {
+        enrichedCards[index] = { ...enrichedCards[index], ...images }
+      }
+    }
+  })
   
   return enrichedCards
 }
