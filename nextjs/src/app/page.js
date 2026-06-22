@@ -28,6 +28,11 @@ export default function Home() {
     rarities: [],
     cardTypes: [],
   })
+  // Pagination state
+  const [page, setPage] = useState(1)
+  const [hasMore, setHasMore] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const PAGE_SIZE = 24
 
   // Load filter options
   useEffect(() => {
@@ -42,19 +47,21 @@ export default function Home() {
     loadFilterOptions()
   }, [])
 
-  // Load cards with filters
+  // Load cards with filters (initial load)
   const loadCards = useCallback(async () => {
     setLoading(true)
     setError(null)
+    setPage(1) // Reset to first page when filters change
     
     try {
-      const result = await cardQueries.getAvailableCards(filters)
+      const result = await cardQueries.getAvailableCards(filters, 1, PAGE_SIZE)
       
       if (result.error) {
         throw result.error
       }
       
       setCards(result.data || [])
+      setHasMore(result.data?.length === PAGE_SIZE) // More cards available if we got a full page
     } catch (err) {
       console.error('Failed to load cards:', err)
       setError('Failed to load cards. Please check your connection.')
@@ -62,6 +69,51 @@ export default function Home() {
       setLoading(false)
     }
   }, [filters])
+
+  // Load more cards (for infinite scroll)
+  const loadMoreCards = useCallback(async () => {
+    if (loadingMore || !hasMore || loading) return
+    
+    setLoadingMore(true)
+    
+    try {
+      const nextPage = page + 1
+      const result = await cardQueries.getAvailableCards(filters, nextPage, PAGE_SIZE)
+      
+      if (result.error) {
+        throw result.error
+      }
+      
+      if (result.data && result.data.length > 0) {
+        setCards(prev => [...prev, ...result.data])
+        setPage(nextPage)
+        setHasMore(result.data.length === PAGE_SIZE) // More cards available if we got a full page
+      } else {
+        setHasMore(false) // No more cards
+      }
+    } catch (err) {
+      console.error('Failed to load more cards:', err)
+    } finally {
+      setLoadingMore(false)
+    }
+  }, [filters, page, hasMore, loading, loadingMore])
+
+  // Infinite scroll hook
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && !loadingMore && hasMore) {
+          loadMoreCards()
+        }
+      },
+      { threshold: 0.5, rootMargin: '200px' }
+    )
+
+    const sentinel = document.getElementById('scroll-sentinel')
+    if (sentinel) observer.observe(sentinel)
+
+    return () => observer.disconnect()
+  }, [loadingMore, hasMore, loadMoreCards])
 
   // Initial load and filter changes
   useEffect(() => {
@@ -226,11 +278,23 @@ export default function Home() {
                 <p className="text-sm text-gray-400">
                   Showing {cards.length} card{cards.length !== 1 ? 's' : ''}
                 </p>
+                {hasMore && (
+                  <p className="text-xs text-gray-500">Scroll for more</p>
+                )}
               </div>
               <CardGrid 
                 cards={cards} 
                 onCardClick={handleCardClick}
               />
+              {/* Scroll sentinel for infinite scroll */}
+              <div id="scroll-sentinel" className="h-20 flex items-center justify-center py-4">
+                {loadingMore && (
+                  <div className="text-gray-400 text-sm">Loading more cards...</div>
+                )}
+                {!hasMore && cards.length > 0 && (
+                  <div className="text-gray-500 text-sm">No more cards</div>
+                )}
+              </div>
             </>
           )}
         </main>
