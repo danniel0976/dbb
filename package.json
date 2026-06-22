@@ -10,6 +10,9 @@
     "lint": "cd nextjs && npm run lint",
     "import": "node scripts/import-collection.js"
   },
+  "dependencies": {
+    "next": "^14.0.4"
+  },
   "keywords": [
     "mtg",
     "magic-the-gathering",
