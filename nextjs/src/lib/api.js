@@ -10,10 +10,10 @@ const scryfallClient = axios.create({
   timeout: 10000,
 })
 
-// CardKingdom API client
-const cardkingdomClient = axios.create({
-  baseURL: 'https://api.cardkingdom.com/api/v2',
-  timeout: 15000,
+// MTGJSON API client (for CardKingdom prices)
+const mtgjsonClient = axios.create({
+  baseURL: 'https://mtgjson.com/api/v5',
+  timeout: 300000, // 5 minutes for large file
 })
 
 export const scryfallAPI = {
@@ -74,7 +74,7 @@ export const scryfallAPI = {
       colors: scryfallCard.colors || [],
       is_foil: scryfallCard.foil || false,
       image_png_url: scryfallCard.image_uris?.png || scryfallCard.card_faces?.[0]?.image_uris?.png,
-      image_crop_url: scryfallCard.image_uris?.art_crop || scryfallCard.card_faces?.[0]?.image_uris?.art_crop,
+      image_crop_url: scryfallCard.image_uris?.normal || scryfallCard.card_faces?.[0]?.image_uris?.normal,
     }
   },
 
@@ -134,56 +134,72 @@ export const scryfallAPI = {
   },
 }
 
-export const cardkingdomAPI = {
-  // Fetch the entire pricelist (cached approach recommended)
+export const mtgjsonAPI = {
+  // Fetch entire MTGJSON prices file (includes CardKingdom data)
+  // This is a large file (~50MB), so cache it!
   getPricelist: async () => {
     try {
-      const response = await cardkingdomClient.get('/pricelist')
+      const response = await mtgjsonClient.get('/AllPrices.json')
       return response.data
     } catch (error) {
-      console.error('CardKingdom pricelist error:', error.message)
+      console.error('MTGJSON pricelist error:', error.message)
       throw error
     }
   },
 
-  // Build a lookup map from pricelist
-  buildPriceLookup: (pricelist) => {
+  // Build CardKingdom price lookup from MTGJSON data
+  buildCKDPriceLookup: (mtgjsonData) => {
     const lookup = new Map()
     
-    if (pricelist && Array.isArray(pricelist.products)) {
-      for (const product of pricelist.products) {
-        if (product.ScryfallID) {
-          lookup.set(product.ScryfallID.toLowerCase(), {
-            ckd_usd_price: parseFloat(product.PriceRetail) || 0,
-            ckd_buy_price: parseFloat(product.PriceBuy) || 0,
-            is_foil: product.IsFoil || false,
-            sku: product.Sku,
-          })
-        }
+    if (!mtgjsonData || !mtgjsonData.data || !mtgjsonData.data.prices) {
+      return lookup
+    }
+
+    const prices = mtgjsonData.data.prices
+    
+    for (const [scryfallUuid, priceData] of Object.entries(prices)) {
+      if (!priceData || typeof priceData !== 'object') continue
+
+      // Extract CardKingdom prices only
+      const ckdUsd = priceData.cardKingdom?.usd ? parseFloat(priceData.cardKingdom.usd) : null
+      const ckdFoil = priceData.cardKingdom?.usdFoil ? parseFloat(priceData.cardKingdom.usdFoil) : null
+      const ckdBuy = priceData.cardKingdom?.usdBuyList ? parseFloat(priceData.cardKingdom.usdBuyList) : null
+
+      if (ckdUsd !== null || ckdFoil !== null) {
+        lookup.set(scryfallUuid.toLowerCase(), {
+          ckd_usd_price: ckdUsd,
+          ckd_foil_price: ckdFoil,
+          ckd_buy_price: ckdBuy,
+          source: 'cardkingdom',
+        })
       }
     }
     
     return lookup
   },
 
-  // Find price for a specific card
-  findPrice: (priceLookup, scryfallId, isFoil = false) => {
+  // Find CardKingdom price for a specific card
+  findCKDPrice: (priceLookup, scryfallId, isFoil = false) => {
     if (!scryfallId) return null
     
     const key = scryfallId.toLowerCase()
     const price = priceLookup.get(key)
     
-    if (price && price.is_foil === isFoil) {
-      return price
-    }
+    if (!price) return null
     
-    return null
+    // Return foil price if foil, otherwise regular
+    return {
+      ckd_usd_price: isFoil && price.ckd_foil_price ? price.ckd_foil_price : price.ckd_usd_price,
+      ckd_buy_price: price.ckd_buy_price,
+      ckd_foil_price: price.ckd_foil_price,
+      source: 'cardkingdom',
+    }
   },
 
-  // Fetch and build price lookup (use sparingly - cache the result!)
-  fetchPriceLookup: async () => {
-    const pricelist = await cardkingdomAPI.getPricelist()
-    return cardkingdomAPI.buildPriceLookup(pricelist)
+  // Fetch and build CardKingdom price lookup (use sparingly - cache the result!)
+  fetchCKDPriceLookup: async () => {
+    const data = await mtgjsonAPI.getPricelist()
+    return mtgjsonAPI.buildCKDPriceLookup(data)
   },
 }
 
@@ -216,8 +232,8 @@ export const cardProcessingService = {
         throw new Error('Failed to extract card data')
       }
 
-      // Get pricing from CardKingdom
-      const priceInfo = cardkingdomAPI.findPrice(
+      // Get CardKingdom pricing from MTGJSON
+      const priceInfo = mtgjsonAPI.findCKDPrice(
         priceLookup,
         scryfallData.scryfall_id,
         cardInput.is_foil || false
@@ -232,10 +248,12 @@ export const cardProcessingService = {
         condition: cardInput.condition || 'NM',
         ckd_usd_price: ckdUsdPrice,
         ckd_buy_price: priceInfo?.ckd_buy_price || 0,
+        ckd_foil_price: priceInfo?.ckd_foil_price || 0,
         myr_price_2_5: ckdUsdPrice > 0 ? Math.round(ckdUsdPrice * exchangeRate * 2.5 * 100) / 100 : null,
         myr_price_2_8: ckdUsdPrice > 0 ? Math.round(ckdUsdPrice * exchangeRate * 2.8 * 100) / 100 : null,
         myr_price_3_0: ckdUsdPrice > 0 ? Math.round(ckdUsdPrice * exchangeRate * 3.0 * 100) / 100 : null,
         usd_myr_rate: exchangeRate,
+        pricing_source: 'cardkingdom_via_mtgjson',
       }
     } catch (error) {
       console.error(`Error processing ${cardInput.card_name}:`, error.message)

@@ -7,19 +7,19 @@
  * Usage: node scripts/import-collection.js <path-to-csv>
  */
 
-require('dotenv').config({ path: '.env.local' })
+require('dotenv').config({ path: '/root/.openclaw/workspace/dbb/nextjs/.env.local' })
 const { createClient } = require('@supabase/supabase-js')
 const { parse } = require('csv-parse/sync')
 const fs = require('fs')
 const path = require('path')
-const { scryfallAPI, cardkingdomAPI, cardProcessingService } = require('../src/lib/api')
+const { scryfallAPI, mtgjsonAPI, cardProcessingService } = require('../nextjs/src/lib/api')
 
 // Configuration
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
 const EXCHANGE_RATE = parseFloat(process.env.USD_MYR_RATE) || 4.70
 const BATCH_SIZE = 10
-const DELAY_MS = 150 // Respect Scryfall rate limits
+const DELAY_MS = 1000 // Respect Scryfall rate limits (100 calls/hour for anonymous)
 
 if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
   console.error('❌ Missing Supabase credentials in .env.local')
@@ -44,6 +44,18 @@ function parseManaboxCSV(csvPath) {
 
   console.log(`📊 Parsed ${records.length} cards from CSV`)
 
+  // Map condition from ManaBox format to our format
+  function mapCondition(condition) {
+    if (!condition) return 'NM'
+    const c = condition.toLowerCase()
+    if (c === 'near_mint' || c === 'nm' || c === 'mint') return 'NM'
+    if (c === 'light_play' || c === 'lp') return 'LP'
+    if (c === 'moderately_played' || c === 'mp') return 'MP'
+    if (c === 'heavily_played' || c === 'hp') return 'HP'
+    if (c === 'damaged' || c === 'dmg') return 'DMG'
+    return 'NM'
+  }
+
   // Map to our expected format (ManaBox CSV columns)
   return records.map((row, index) => {
     // ManaBox CSV format:
@@ -65,9 +77,12 @@ function parseManaboxCSV(csvPath) {
 
 // Insert card into Supabase
 async function insertCard(cardData) {
+  // Remove internal fields that aren't in our schema
+  const { _original, _rowIndex, quantity, ...cleanData } = cardData
+  
   const { data, error } = await supabase
     .from('cards')
-    .insert([cardData])
+    .insert([cleanData])
     .select()
     .single()
 
@@ -80,30 +95,33 @@ async function insertCard(cardData) {
 
 // Update existing card or insert new one
 async function upsertCard(cardData) {
+  // Remove internal fields that aren't in our schema
+  const { _original, _rowIndex, quantity, ...cleanData } = cardData
+  
   // Check if card exists by Scryfall ID
   const { data: existing } = await supabase
     .from('cards')
     .select('id')
-    .eq('scryfall_id', cardData.scryfall_id)
-    .eq('is_foil', cardData.is_foil)
+    .eq('scryfall_id', cleanData.scryfall_id)
+    .eq('is_foil', cleanData.is_foil)
     .single()
 
   if (existing) {
     // Update existing
     const { data, error } = await supabase
       .from('cards')
-      .update(cardData)
+      .update(cleanData)
       .eq('id', existing.id)
       .select()
       .single()
 
     if (error) throw error
-    console.log(`✏️  Updated: ${cardData.card_name}`)
+    console.log(`✏️  Updated: ${cleanData.card_name}`)
     return { ...data, _action: 'updated' }
   } else {
     // Insert new
-    const data = await insertCard(cardData)
-    console.log(`✅ Inserted: ${cardData.card_name}`)
+    const data = await insertCard(cleanData)
+    console.log(`✅ Inserted: ${cleanData.card_name}`)
     return { ...data, _action: 'inserted' }
   }
 }
@@ -128,14 +146,14 @@ async function importCollection(csvPath) {
     process.exit(1)
   }
 
-  // Fetch CardKingdom pricelist once
-  console.log('💰 Fetching CardKingdom pricelist...')
+  // Fetch MTGJSON pricelist once (includes CardKingdom data)
+  console.log('💰 Fetching MTGJSON pricelist (includes CardKingdom)...')
   let priceLookup
   try {
-    priceLookup = await cardkingdomAPI.fetchPriceLookup()
-    console.log(`   Loaded ${priceLookup.size} prices from CardKingdom\n`)
+    priceLookup = await mtgjsonAPI.fetchCKDPriceLookup()
+    console.log(`   Loaded ${priceLookup.size} CardKingdom price entries\n`)
   } catch (error) {
-    console.warn('⚠️  Failed to fetch CardKingdom prices:', error.message)
+    console.warn('⚠️  Failed to fetch MTGJSON prices:', error.message)
     console.warn('   Continuing without pricing data...\n')
     priceLookup = new Map()
   }
