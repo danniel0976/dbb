@@ -1,4 +1,12 @@
 {
-  "name": "mtg-bazaar",
-  "framework": "nextjs"
+  "crons": [
+    {
+      "path": "/api/health",
+      "schedule": "0 0 */5 * *"
+    },
+    {
+      "path": "/api/pricing?refresh=true",
+      "schedule": "0 2 * * *"
+    }
+  ]
 }

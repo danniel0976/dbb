@@ -2,37 +2,185 @@
  * DBB Collection Import Script
  * 
  * Imports MTG cards from ManaBox CSV format into Supabase DBB schema.
- * Fetches data from Scryfall API and CardKingdom API for pricing.
+ * Fetches card data from Scryfall API and prices from MTGJSON (CardKingdom).
  * 
- * Usage: node scripts/import-collection.js <path-to-csv>
+ * Usage:
+ *   node scripts/import-collection.js <path-to-csv>
+ *   node scripts/import-collection.js <path-to-csv> --dry-run
+ *   node scripts/import-collection.js --refresh-prices
+ * 
+ * Options:
+ *   --dry-run          Show what would be imported without writing to DB
+ *   --refresh-prices   Re-fetch and update prices for all existing cards
+ *   --rate <number>    Override exchange rate (default: live from API)
  */
 
-require('dotenv').config({ path: '/root/.openclaw/workspace/dbb/nextjs/.env.local' })
+require('dotenv').config({ path: require('path').join(__dirname, '..', 'nextjs', '.env.local') })
 const { createClient } = require('@supabase/supabase-js')
 const { parse } = require('csv-parse/sync')
 const fs = require('fs')
 const path = require('path')
-const { scryfallAPI, mtgjsonAPI, cardProcessingService } = require('../nextjs/src/lib/api')
+const https = require('https')
+const { createGunzip } = require('zlib')
 
 // Configuration
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
-const EXCHANGE_RATE = parseFloat(process.env.USD_MYR_RATE) || 4.70
+const EXCHANGE_RATE_API = 'https://open.er-api.com/v6/latest/USD'
+const MTGJSON_PRICES_URL = 'https://mtgjson.com/api/v5/AllPricesToday.json.gz'
+const SCRYFALL_BASE = 'https://api.scryfall.com'
 const BATCH_SIZE = 10
-const DELAY_MS = 1000 // Respect Scryfall rate limits (100 calls/hour for anonymous)
+const DELAY_MS = 100 // ms between Scryfall requests
 
 if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
-  console.error('❌ Missing Supabase credentials in .env.local')
+  console.error('❌ Missing Supabase credentials')
   console.error('Required: NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY')
+  console.error('Make sure nextjs/.env.local exists with these values')
   process.exit(1)
 }
 
 // Initialize Supabase client with service role key for writes
-const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
-  db: { schema: 'dbb' }
-})
+const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
-// Parse ManaBox CSV
+// ============================================================================
+// Exchange Rate
+// ============================================================================
+
+async function fetchExchangeRate() {
+  console.log('💱 Fetching live USD/MYR exchange rate...')
+  try {
+    const response = await fetch(EXCHANGE_RATE_API)
+    if (response.ok) {
+      const data = await response.json()
+      if (data.rates && data.rates.MYR) {
+        console.log(`   ✅ Live rate: 1 USD = ${data.rates.MYR} MYR`)
+        return data.rates.MYR
+      }
+    }
+  } catch (e) {
+    console.warn('   ⚠️  Failed to fetch live rate:', e.message)
+  }
+  console.log('   Using default rate: 1 USD = 4.70 MYR')
+  return 4.70
+}
+
+// ============================================================================
+// MTGJSON Price Lookup
+// ============================================================================
+
+async function fetchMTGJSONPrices() {
+  console.log('💰 Fetching MTGJSON AllPricesToday (CardKingdom prices)...')
+  
+  return new Promise((resolve, reject) => {
+    const req = https.get(MTGJSON_PRICES_URL, { headers: { 'User-Agent': 'DansBizarreBazaar/1.0' } }, (res) => {
+      if (res.statusCode !== 200) {
+        res.resume()
+        return reject(new Error(`MTGJSON returned HTTP ${res.statusCode}`))
+      }
+
+      const gunzip = createGunzip()
+      const chunks = []
+
+      res.pipe(gunzip)
+      gunzip.on('data', (chunk) => chunks.push(chunk))
+      gunzip.on('end', () => {
+        try {
+          const parsed = JSON.parse(Buffer.concat(chunks).toString('utf8'))
+          const data = parsed.data || {}
+          
+          // Build CardKingdom price lookup
+          const lookup = new Map()
+          let ckCount = 0
+          
+          for (const [uuid, priceData] of Object.entries(data)) {
+            if (!priceData || typeof priceData !== 'object') continue
+
+            const paper = priceData.paper || priceData.Paper
+            const ck = paper?.cardKingdom || paper?.CardKingdom
+            const ckFoil = paper?.cardKingdomFoil || paper?.CardKingdomFoil
+
+            if (ck || ckFoil) {
+              const retailPrice = parseFloat(ck?.retailPrice || ck?.RetailPrice) || null
+              const foilPrice = parseFloat(ckFoil?.retailPrice || ckFoil?.RetailPrice) || parseFloat(ck?.retailFoilPrice || ck?.RetailFoilPrice) || null
+              const buyPrice = parseFloat(ck?.buyPrice || ck?.BuyPrice) || null
+
+              if (retailPrice !== null || foilPrice !== null) {
+                lookup.set(uuid.toLowerCase(), {
+                  ckd_usd_price: retailPrice,
+                  ckd_foil_price: foilPrice,
+                  ckd_buy_price: buyPrice,
+                  source: 'cardkingdom_via_mtgjson',
+                })
+                ckCount++
+              }
+            }
+          }
+
+          console.log(`   ✅ Loaded ${ckCount} CardKingdom price entries`)
+          resolve(lookup)
+        } catch (e) {
+          reject(new Error(`Failed to parse MTGJSON: ${e.message}`))
+        }
+      })
+      gunzip.on('error', reject)
+      res.on('error', reject)
+    })
+
+    req.on('error', reject)
+    req.setTimeout(300000, () => { // 5 minute timeout for large file
+      req.destroy()
+      reject(new Error('MTGJSON request timed out'))
+    })
+  })
+}
+
+// ============================================================================
+// Scryfall API
+// ============================================================================
+
+async function scryfallGet(setCode, collectorNumber) {
+  const url = `${SCRYFALL_BASE}/cards/${encodeURIComponent(setCode)}/${encodeURIComponent(collectorNumber)}`
+  
+  const response = await fetch(url, {
+    headers: { 'Accept': 'application/json', 'User-Agent': 'DansBizarreBazaar/1.0' }
+  })
+
+  if (!response.ok) {
+    if (response.status === 404) return null
+    throw new Error(`Scryfall returned ${response.status}`)
+  }
+
+  return response.json()
+}
+
+async function scryfallSearchByName(name, setCode) {
+  const url = `${SCRYFALL_BASE}/cards/search?q=${encodeURIComponent(`!"${name}" e:${setCode}`)}`
+  
+  const response = await fetch(url, {
+    headers: { 'Accept': 'application/json', 'User-Agent': 'DansBizarreBazaar/1.0' }
+  })
+
+  if (!response.ok) return null
+
+  const data = await response.json()
+  return data.data && data.data.length > 0 ? data.data[0] : null
+}
+
+// ============================================================================
+// CSV Parsing
+// ============================================================================
+
+function mapCondition(condition) {
+  if (!condition) return 'NM'
+  const c = condition.toLowerCase()
+  if (c === 'near_mint' || c === 'nm' || c === 'mint') return 'NM'
+  if (c === 'light_play' || c === 'lp') return 'LP'
+  if (c === 'moderately_played' || c === 'mp') return 'MP'
+  if (c === 'heavily_played' || c === 'hp') return 'HP'
+  if (c === 'damaged' || c === 'dmg') return 'DMG'
+  return 'NM'
+}
+
 function parseManaboxCSV(csvPath) {
   const content = fs.readFileSync(csvPath, 'utf-8')
   
@@ -44,61 +192,111 @@ function parseManaboxCSV(csvPath) {
 
   console.log(`📊 Parsed ${records.length} cards from CSV`)
 
-  // Map condition from ManaBox format to our format
-  function mapCondition(condition) {
-    if (!condition) return 'NM'
-    const c = condition.toLowerCase()
-    if (c === 'near_mint' || c === 'nm' || c === 'mint') return 'NM'
-    if (c === 'light_play' || c === 'lp') return 'LP'
-    if (c === 'moderately_played' || c === 'mp') return 'MP'
-    if (c === 'heavily_played' || c === 'hp') return 'HP'
-    if (c === 'damaged' || c === 'dmg') return 'DMG'
-    return 'NM'
-  }
+  return records.map((row, index) => ({
+    card_name: row['Name'] || row['Card Name'] || row['name'] || row['Card'],
+    set_code: row['Set code'] || row['Set'] || row['set_code'] || row['Set Code'],
+    collector_number: row['Collector number'] || row['Collector No'] || row['collector_number'] || row['Number'] || row['#'],
+    is_foil: (row['Foil'] || 'normal').toLowerCase() === 'foil' || row['Foil'] === 'Yes' || row['Foil'] === 'etched',
+    condition: mapCondition(row['Condition'] || row['condition'] || 'near_mint'),
+    quantity: parseInt(row['Quantity'] || row['qty'] || '1', 10),
+    scryfall_id: row['Scryfall ID'] || null,
+    _original: row,
+    _rowIndex: index + 1,
+  })).filter(card => card.card_name && card.set_code)
+}
 
-  // Map to our expected format (ManaBox CSV columns)
-  return records.map((row, index) => {
-    // ManaBox CSV format:
-    // Name, Set code, Set name, Collector number, Foil, Rarity, Quantity, ..., Scryfall ID, Condition
-    
-    return {
-      card_name: row['Name'] || row['Card Name'] || row['name'] || row['Card'],
-      set_code: row['Set code'] || row['Set'] || row['set_code'] || row['Set Code'],
-      collector_number: row['Collector number'] || row['Collector No'] || row['collector_number'] || row['Number'] || row['#'],
-      is_foil: (row['Foil'] || 'normal').toLowerCase() === 'foil' || row['Foil'] === 'Yes' || row['Foil'] === 'etched',
-      condition: mapCondition(row['Condition'] || row['condition'] || 'near_mint'),
-      quantity: parseInt(row['Quantity'] || row['qty'] || '1', 10),
-      scryfall_id: row['Scryfall ID'] || null,
-      _original: row, // Keep original for debugging
-      _rowIndex: index + 1,
+// ============================================================================
+// Process a single card (fetch from Scryfall + enrich with CK prices)
+// ============================================================================
+
+async function processCard(card, priceLookup, exchangeRate) {
+  // Fetch from Scryfall
+  let scryfallData = null
+  
+  if (card.scryfall_id) {
+    const url = `${SCRYFALL_BASE}/cards/${card.scryfall_id}`
+    try {
+      const response = await fetch(url, {
+        headers: { 'Accept': 'application/json', 'User-Agent': 'DansBizarreBazaar/1.0' }
+      })
+      if (response.ok) scryfallData = await response.json()
+    } catch (e) {
+      // Fall through to set/number lookup
     }
-  }).filter(card => card.card_name && card.set_code)
-}
-
-// Insert card into Supabase
-async function insertCard(cardData) {
-  // Remove internal fields that aren't in our schema
-  const { _original, _rowIndex, quantity, ...cleanData } = cardData
-  
-  const { data, error } = await supabase
-    .from('cards')
-    .insert([cleanData])
-    .select()
-    .single()
-
-  if (error) {
-    throw error
   }
 
-  return data
+  if (!scryfallData && card.set_code && card.collector_number) {
+    try {
+      scryfallData = await scryfallGet(card.set_code, card.collector_number)
+    } catch (e) {
+      // Fall through to name search
+    }
+  }
+
+  if (!scryfallData && card.card_name) {
+    try {
+      scryfallData = await scryfallSearchByName(card.card_name, card.set_code)
+    } catch (e) {
+      // Nothing more we can do
+    }
+  }
+
+  if (!scryfallData || scryfallData.object !== 'card') {
+    throw new Error('Card not found in Scryfall')
+  }
+
+  // Build card data from Scryfall
+  const processedCard = {
+    scryfall_id: scryfallData.id,
+    card_name: scryfallData.name,
+    set_code: scryfallData.set,
+    set_name: scryfallData.set_name,
+    collector_number: scryfallData.collector_number,
+    rarity: scryfallData.rarity || 'common',
+    card_type: scryfallData.type_line,
+    colors: scryfallData.colors || [],
+    is_foil: card.is_foil,
+    condition: card.condition || 'NM',
+    image_png_url: scryfallData.image_uris?.png || scryfallData.card_faces?.[0]?.image_uris?.png,
+    image_crop_url: scryfallData.image_uris?.normal || scryfallData.card_faces?.[0]?.image_uris?.normal,
+  }
+
+  // Get CardKingdom price from MTGJSON lookup
+  const ckPrice = priceLookup.get(scryfallData.id.toLowerCase())
+  
+  if (ckPrice) {
+    processedCard.ckd_usd_price = card.is_foil && ckPrice.ckd_foil_price ? ckPrice.ckd_foil_price : ckPrice.ckd_usd_price
+    processedCard.ckd_buy_price = ckPrice.ckd_buy_price
+    processedCard.ckd_foil_price = ckPrice.ckd_foil_price
+    processedCard.pricing_source = 'cardkingdom_via_mtgjson'
+  } else {
+    // Fallback to Scryfall prices (market/TCGPlayer, NOT CardKingdom)
+    const prices = scryfallData.prices || {}
+    processedCard.ckd_usd_price = prices.usd ? parseFloat(prices.usd) : null
+    processedCard.ckd_buy_price = null
+    processedCard.ckd_foil_price = prices.usd_foil ? parseFloat(prices.usd_foil) : null
+    processedCard.pricing_source = 'scryfall_market'
+  }
+
+  // Calculate MYR prices
+  const basePrice = processedCard.ckd_usd_price
+  processedCard.usd_myr_rate = exchangeRate
+  processedCard.myr_price_2_5 = basePrice ? Math.round(basePrice * exchangeRate * 2.5 * 100) / 100 : null
+  processedCard.myr_price_2_8 = basePrice ? Math.round(basePrice * exchangeRate * 2.8 * 100) / 100 : null
+  processedCard.myr_price_3_0 = basePrice ? Math.round(basePrice * exchangeRate * 3.0 * 100) / 100 : null
+  processedCard.pricing_last_updated = new Date().toISOString()
+
+  return processedCard
 }
 
-// Update existing card or insert new one
+// ============================================================================
+// Upsert card to Supabase
+// ============================================================================
+
 async function upsertCard(cardData) {
-  // Remove internal fields that aren't in our schema
   const { _original, _rowIndex, quantity, ...cleanData } = cardData
-  
-  // Check if card exists by Scryfall ID
+
+  // Check if card exists by scryfall_id + is_foil
   const { data: existing } = await supabase
     .from('cards')
     .select('id')
@@ -107,7 +305,6 @@ async function upsertCard(cardData) {
     .single()
 
   if (existing) {
-    // Update existing
     const { data, error } = await supabase
       .from('cards')
       .update(cleanData)
@@ -116,21 +313,115 @@ async function upsertCard(cardData) {
       .single()
 
     if (error) throw error
-    console.log(`✏️  Updated: ${cleanData.card_name}`)
     return { ...data, _action: 'updated' }
   } else {
-    // Insert new
-    const data = await insertCard(cleanData)
-    console.log(`✅ Inserted: ${cleanData.card_name}`)
+    const { data, error } = await supabase
+      .from('cards')
+      .insert([cleanData])
+      .select()
+      .single()
+
+    if (error) throw error
     return { ...data, _action: 'inserted' }
   }
 }
 
-// Main import function
-async function importCollection(csvPath) {
+// ============================================================================
+// Refresh prices for all existing cards
+// ============================================================================
+
+async function refreshPrices(priceLookup, exchangeRate, dryRun = false) {
+  console.log('\n🔄 Refreshing prices for all existing cards...\n')
+
+  // Fetch all cards
+  const { data: cards, error } = await supabase
+    .from('cards')
+    .select('id, scryfall_id, card_name, is_foil, ckd_usd_price, pricing_source')
+    .order('card_name')
+
+  if (error) {
+    console.error('❌ Failed to fetch cards:', error.message)
+    process.exit(1)
+  }
+
+  console.log(`   Found ${cards.length} cards in database\n`)
+
+  let updated = 0
+  let unchanged = 0
+  let notFound = 0
+  let failed = 0
+
+  for (let i = 0; i < cards.length; i++) {
+    const card = cards[i]
+    const ckPrice = priceLookup.get(card.scryfall_id?.toLowerCase())
+
+    if (!ckPrice) {
+      notFound++
+      if (i % 50 === 0) console.log(`   ⚠️  No CK price: ${card.card_name} (${card.scryfall_id})`)
+      continue
+    }
+
+    const newPrice = card.is_foil && ckPrice.ckd_foil_price ? ckPrice.ckd_foil_price : ckPrice.ckd_usd_price
+
+    if (Math.abs((card.ckd_usd_price || 0) - (newPrice || 0)) < 0.01 && card.pricing_source === 'cardkingdom_via_mtgjson') {
+      unchanged++
+      continue
+    }
+
+    // Price changed or source needs update
+    const updateData = {
+      ckd_usd_price: newPrice,
+      ckd_foil_price: ckPrice.ckd_foil_price,
+      ckd_buy_price: ckPrice.ckd_buy_price,
+      usd_myr_rate: exchangeRate,
+      myr_price_2_5: newPrice ? Math.round(newPrice * exchangeRate * 2.5 * 100) / 100 : null,
+      myr_price_2_8: newPrice ? Math.round(newPrice * exchangeRate * 2.8 * 100) / 100 : null,
+      myr_price_3_0: newPrice ? Math.round(newPrice * exchangeRate * 3.0 * 100) / 100 : null,
+      pricing_source: 'cardkingdom_via_mtgjson',
+      pricing_last_updated: new Date().toISOString(),
+    }
+
+    if (dryRun) {
+      console.log(`   📝 Would update: ${card.card_name} $${card.ckd_usd_price} → $${newPrice}`)
+      updated++
+    } else {
+      const { error: updateError } = await supabase
+        .from('cards')
+        .update(updateData)
+        .eq('id', card.id)
+
+      if (updateError) {
+        console.error(`   ❌ Failed to update ${card.card_name}: ${updateError.message}`)
+        failed++
+      } else {
+        updated++
+      }
+    }
+  }
+
+  console.log('\n' + '='.repeat(50))
+  console.log('📊 PRICE REFRESH SUMMARY')
+  console.log('='.repeat(50))
+  console.log(`✅ Updated: ${updated}`)
+  console.log(`⚪ Unchanged: ${unchanged}`)
+  console.log(`⚠️  Not found in MTGJSON: ${notFound}`)
+  console.log(`❌ Failed: ${failed}`)
+  console.log('='.repeat(50))
+
+  if (dryRun) {
+    console.log('\n⚠️  DRY RUN — no changes were written to database')
+  }
+}
+
+// ============================================================================
+// Main: Import CSV
+// ============================================================================
+
+async function importCollection(csvPath, exchangeRate, priceLookup, dryRun = false) {
   console.log('🚀 Starting DBB Collection Import\n')
   console.log(`📁 CSV File: ${csvPath}`)
-  console.log(`💱 Exchange Rate: 1 USD = ${EXCHANGE_RATE} MYR\n`)
+  console.log(`💱 Exchange Rate: 1 USD = ${exchangeRate} MYR`)
+  if (dryRun) console.log('🔍 DRY RUN — no changes will be written\n')
 
   // Parse CSV
   let cards
@@ -146,25 +437,8 @@ async function importCollection(csvPath) {
     process.exit(1)
   }
 
-  // Fetch MTGJSON pricelist once (includes CardKingdom data)
-  console.log('💰 Fetching MTGJSON pricelist (includes CardKingdom)...')
-  let priceLookup
-  try {
-    priceLookup = await mtgjsonAPI.fetchCKDPriceLookup()
-    console.log(`   Loaded ${priceLookup.size} CardKingdom price entries\n`)
-  } catch (error) {
-    console.warn('⚠️  Failed to fetch MTGJSON prices:', error.message)
-    console.warn('   Continuing without pricing data...\n')
-    priceLookup = new Map()
-  }
-
   // Process cards in batches
-  const results = {
-    success: [],
-    failed: [],
-    updated: 0,
-    inserted: 0,
-  }
+  const results = { success: 0, updated: 0, inserted: 0, failed: [] }
 
   console.log(`⚙️  Processing ${cards.length} cards in batches of ${BATCH_SIZE}...\n`)
 
@@ -172,50 +446,36 @@ async function importCollection(csvPath) {
     const batch = cards.slice(i, i + BATCH_SIZE)
     const batchNum = Math.floor(i / BATCH_SIZE) + 1
     const totalBatches = Math.ceil(cards.length / BATCH_SIZE)
-    
     console.log(`📦 Batch ${batchNum}/${totalBatches} (${batch.length} cards)`)
 
-    const batchResults = await Promise.all(
-      batch.map(async (card) => {
-        try {
-          // Process card through APIs
-          const processedCard = await cardProcessingService.processCard(
-            card,
-            priceLookup,
-            EXCHANGE_RATE
-          )
+    for (const card of batch) {
+      try {
+        const processedCard = await processCard(card, priceLookup, exchangeRate)
 
-          if (!processedCard.scryfall_id) {
-            throw new Error(processedCard.error || 'No Scryfall ID')
-          }
-
-          // Upsert to Supabase
-          const result = await upsertCard(processedCard)
-          
-          results[result._action === 'updated' ? 'updated' : 'inserted']++
-          results.success.push(result)
-
-          return { success: true, card: processedCard }
-        } catch (error) {
-          const failRecord = {
-            ...card,
-            error: error.message,
-          }
-          results.failed.push(failRecord)
-          console.error(`   ❌ ${card.card_name} (${card.set_code}): ${error.message}`)
-          return { success: false, card: card, error: error.message }
+        if (!processedCard.scryfall_id) {
+          throw new Error('No Scryfall ID resolved')
         }
-      })
-    )
 
-    // Progress update
-    const successCount = results.success.length
-    const failCount = results.failed.length
-    console.log(`   ✓ ${successCount} succeeded, ${failCount} failed\n`)
+        if (dryRun) {
+          console.log(`   📝 Would import: ${processedCard.card_name} (${processedCard.set_code}) $${processedCard.ckd_usd_price}`)
+          results.success++
+        } else {
+          const result = await upsertCard(processedCard)
+          if (result._action === 'updated') {
+            results.updated++
+          } else {
+            results.inserted++
+          }
+          results.success++
+          console.log(`   ${result._action === 'updated' ? '✏️' : '✅'} ${processedCard.card_name}`)
+        }
 
-    // Rate limiting delay between batches
-    if (i + BATCH_SIZE < cards.length) {
-      await new Promise(resolve => setTimeout(resolve, DELAY_MS))
+        // Rate limit Scryfall requests
+        await new Promise(resolve => setTimeout(resolve, DELAY_MS))
+      } catch (error) {
+        results.failed.push({ ...card, error: error.message })
+        console.error(`   ❌ ${card.card_name} (${card.set_code}): ${error.message}`)
+      }
     }
   }
 
@@ -223,50 +483,69 @@ async function importCollection(csvPath) {
   console.log('\n' + '='.repeat(50))
   console.log('📊 IMPORT SUMMARY')
   console.log('='.repeat(50))
-  console.log(`✅ Total Success: ${results.success.length}`)
+  console.log(`✅ Total Success: ${results.success}`)
   console.log(`   ├─ Inserted: ${results.inserted}`)
   console.log(`   └─ Updated: ${results.updated}`)
   console.log(`❌ Total Failed: ${results.failed.length}`)
   console.log('='.repeat(50))
 
-  // Save failed imports to file
+  // Save failed imports
   if (results.failed.length > 0) {
     const failPath = path.join(path.dirname(csvPath), 'failed-imports.json')
     fs.writeFileSync(failPath, JSON.stringify(results.failed, null, 2))
     console.log(`\n⚠️  Failed imports saved to: ${failPath}`)
   }
 
+  if (dryRun) {
+    console.log('\n⚠️  DRY RUN — no changes were written to database')
+  }
+
   console.log('\n✨ Import complete!\n')
 }
 
-// CLI entry point
-if (require.main === module) {
-  const csvPath = process.argv[2]
+// ============================================================================
+// CLI Entry Point
+// ============================================================================
 
-  if (!csvPath) {
-    console.log('Usage: node scripts/import-collection.js <path-to-csv>')
-    console.log('\nExample:')
-    console.log('  node scripts/import-collection.js ./manabox-collection.csv')
-    console.log('\nCSV should have columns:')
-    console.log('  - Card Name (or "name", "Card")')
-    console.log('  - Set (or "set_code", "Set Code")')
-    console.log('  - Collector No (or "collector_number", "Number", "#")')
-    console.log('  - Foil (optional, "true"/"false" or "Yes"/"No")')
-    console.log('  - Condition (optional, defaults to "NM")')
-    console.log('  - Quantity (optional)\n')
-    process.exit(1)
+async function main() {
+  const args = process.argv.slice(2)
+  const dryRun = args.includes('--dry-run')
+  const refreshPrices = args.includes('--refresh-prices')
+  const rateArg = args.findIndex(a => a === '--rate')
+  const overrideRate = rateArg >= 0 ? parseFloat(args[rateArg + 1]) : null
+
+  // Get exchange rate
+  const exchangeRate = overrideRate || await fetchExchangeRate()
+
+  // Fetch MTGJSON prices
+  let priceLookup
+  try {
+    priceLookup = await fetchMTGJSONPrices()
+  } catch (error) {
+    console.warn('⚠️  Failed to fetch MTGJSON prices:', error.message)
+    console.warn('   Continuing without pricing data...\n')
+    priceLookup = new Map()
   }
 
-  if (!fs.existsSync(csvPath)) {
-    console.error(`❌ File not found: ${csvPath}`)
-    process.exit(1)
+  if (refreshPrices) {
+    await refreshPrices(priceLookup, exchangeRate, dryRun)
+  } else {
+    const csvPath = args.find(a => !a.startsWith('--') && a !== (overrideRate ? String(overrideRate) : ''))
+    if (!csvPath) {
+      console.log('Usage: node scripts/import-collection.js <path-to-csv> [--dry-run] [--rate <number>]')
+      console.log('       node scripts/import-collection.js --refresh-prices [--dry-run] [--rate <number>]')
+      process.exit(1)
+    }
+    if (!fs.existsSync(csvPath)) {
+      console.error(`❌ File not found: ${csvPath}`)
+      process.exit(1)
+    }
+    await importCollection(csvPath, exchangeRate, priceLookup, dryRun)
   }
-
-  importCollection(csvPath).catch(error => {
-    console.error('\n❌ Fatal error:', error.message)
-    console.error(error.stack)
-    process.exit(1)
-  })
 }
 
-module.exports = { importCollection, parseManaboxCSV }
+main().catch(error => {
+  console.error('\n❌ Fatal error:', error.message)
+  console.error(error.stack)
+  process.exit(1)
+})

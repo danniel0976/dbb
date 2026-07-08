@@ -25,48 +25,96 @@ export const scryfallAPI = {
   },
 }
 
-// MTGJSON API for pricing (includes CardKingdom data)
-export const mtgjsonAPI = {
-  getCardPricing: async (scryfallId) => {
-    if (!scryfallId) return null
-    
-    try {
-      const response = await fetch(
-        `/api/pricing?scryfallId=${encodeURIComponent(scryfallId)}`
-      )
-      if (!response.ok) return null
-      return await response.json()
-    } catch (error) {
-      console.error('MTGJSON pricing error:', error)
-      return null
-    }
-  },
-}
+// ============================================================================
+// Price enrichment via /api/pricing (now uses real CardKingdom prices)
+// ============================================================================
 
-// Enrich cards with images and pricing
-const imageCache = new Map()
 const priceCache = new Map()
 let lastRequestTime = 0
-const MIN_REQUEST_INTERVAL = 400
+const MIN_REQUEST_INTERVAL = 200 // ms between pricing requests
+
+export const enrichCardWithPricing = async (card) => {
+  if (!card.scryfall_id) return card
+
+  const cacheKey = card.scryfall_id.toLowerCase()
+
+  // Check cache first
+  if (priceCache.has(cacheKey)) {
+    const cached = priceCache.get(cacheKey)
+    return { ...card, ...cached }
+  }
+
+  // Rate limit
+  const now = Date.now()
+  const timeSinceLastRequest = now - lastRequestTime
+  if (timeSinceLastRequest < MIN_REQUEST_INTERVAL) {
+    await new Promise(resolve => setTimeout(resolve, MIN_REQUEST_INTERVAL - timeSinceLastRequest))
+  }
+  lastRequestTime = Date.now()
+
+  try {
+    const response = await fetch(
+      `/api/pricing?scryfallId=${encodeURIComponent(card.scryfall_id)}`
+    )
+
+    if (!response.ok) {
+      console.error(`Pricing API error for ${card.card_name}: ${response.status}`)
+      return card
+    }
+
+    const pricing = await response.json()
+
+    if (pricing && !pricing.error) {
+      // The new API returns MYR prices directly — use them
+      const enrichedData = {
+        // CardKingdom USD prices (real CK prices, not TCGPlayer)
+        ckd_usd_price: pricing.ckd_usd_price ?? card.ckd_usd_price,
+        ckd_foil_price: pricing.ckd_foil_price ?? card.ckd_foil_price,
+        ckd_buy_price: pricing.ckd_buy_price ?? card.ckd_buy_price,
+        // Live MYR prices from API
+        myr_price_2_5: pricing.myr_price_2_5 ?? card.myr_price_2_5,
+        myr_price_2_8: pricing.myr_price_2_8 ?? card.myr_price_2_8,
+        myr_price_3_0: pricing.myr_price_3_0 ?? card.myr_price_3_0,
+        // Foil MYR prices
+        myr_foil_price_2_5: pricing.myr_foil_price_2_5,
+        myr_foil_price_2_8: pricing.myr_foil_price_2_8,
+        myr_foil_price_3_0: pricing.myr_foil_price_3_0,
+        // Exchange rate and source tracking
+        usd_myr_rate: pricing.usd_myr_rate ?? card.usd_myr_rate,
+        pricing_source: pricing.source ?? card.pricing_source,
+        pricing_last_updated: pricing.lastUpdated,
+      }
+
+      priceCache.set(cacheKey, enrichedData)
+      return { ...card, ...enrichedData }
+    }
+  } catch (error) {
+    console.error(`Failed to fetch pricing for ${card.card_name}:`, error)
+  }
+
+  return card
+}
+
+// ============================================================================
+// Card image enrichment
+// ============================================================================
+
+const imageCache = new Map()
 
 export const enrichCardsWithImages = async (cards) => {
   const cardsWithoutImages = cards.filter(c => !c.image_crop_url && !c.image_png_url)
-  
+
   if (cardsWithoutImages.length === 0) return cards
-  
+
   const enrichedCards = [...cards]
-  const cacheKeyMap = new Map() // Map card id to cache key
-  
-  // Prepare all fetch promises for parallel execution
+
   const fetchPromises = cardsWithoutImages.map(async (card) => {
     const cacheKey = `${card.set_code}_${card.collector_number}`
-    cacheKeyMap.set(card.id, cacheKey)
-    
-    // Check cache first
+
     if (imageCache.has(cacheKey)) {
       return { id: card.id, images: imageCache.get(cacheKey) }
     }
-    
+
     try {
       const images = await scryfallAPI.getCardImages(card.set_code, card.collector_number)
       if (images && !images.error) {
@@ -76,14 +124,12 @@ export const enrichCardsWithImages = async (cards) => {
     } catch (error) {
       console.error(`Failed to fetch image for ${card.card_name}:`, error)
     }
-    
+
     return { id: card.id, images: null }
   })
-  
-  // Wait for all fetches to complete (parallel!)
+
   const results = await Promise.all(fetchPromises)
-  
-  // Apply results to enriched cards
+
   results.forEach(({ id, images }) => {
     if (images) {
       const index = enrichedCards.findIndex(c => c.id === id)
@@ -92,47 +138,24 @@ export const enrichCardsWithImages = async (cards) => {
       }
     }
   })
-  
+
   return enrichedCards
 }
 
-// Enrich single card with pricing (for detail view)
-export const enrichCardWithPricing = async (card) => {
-  if (!card.scryfall_id) return card
-  
-  const cacheKey = card.scryfall_id.toLowerCase()
-  
-  if (priceCache.has(cacheKey)) {
-    const pricing = priceCache.get(cacheKey)
-    return { ...card, ...pricing }
-  }
-  
-  try {
-    const pricing = await mtgjsonAPI.getCardPricing(card.scryfall_id)
-    
-    if (pricing && !pricing.error) {
-      priceCache.set(cacheKey, pricing)
-      return { ...card, ...pricing }
-    }
-  } catch (error) {
-    console.error(`Failed to fetch pricing for ${card.card_name}:`, error)
-  }
-  
-  return card
-}
-
+// ============================================================================
 // Card queries
+// ============================================================================
+
 export const cardQueries = {
   getAvailableCards: async (filters = {}, page = 1, pageSize = 24) => {
     const start = (page - 1) * pageSize
     const end = start + pageSize - 1
-    
-    // Select only fields you actually display (faster than *)
+
     let query = supabase
       .from('cards')
       .select('id, card_name, set_code, set_name, collector_number, rarity, card_type, colors, is_foil, condition, ckd_usd_price, myr_price_2_5, myr_price_2_8, myr_price_3_0, image_png_url, image_crop_url, created_at')
       .eq('is_available', true)
-    
+
     if (filters.setCode) query = query.eq('set_code', filters.setCode)
     if (filters.rarity) query = query.eq('rarity', filters.rarity)
     if (filters.colors && filters.colors.length > 0) query = query.contains('colors', filters.colors)
@@ -140,16 +163,15 @@ export const cardQueries = {
     if (filters.isFoil !== undefined) query = query.eq('is_foil', filters.isFoil)
     if (filters.minPrice) query = query.gte('myr_price_2_8', filters.minPrice)
     if (filters.maxPrice) query = query.lte('myr_price_2_8', filters.maxPrice)
-    
-    // Order by created_at DESC for infinite scroll (newest first)
+
     const result = await query
       .order('created_at', { ascending: false })
       .range(start, end)
-    
+
     if (result.data && result.data.length > 0) {
       result.data = await enrichCardsWithImages(result.data)
     }
-    
+
     return result
   },
 
@@ -169,23 +191,26 @@ export const cardQueries = {
 
   getCardById: async (id) => {
     const result = await supabase.from('cards').select('*').eq('id', id).single()
-    
+
     if (result.data) {
       // Fetch image if missing
       if (!result.data.image_crop_url && !result.data.image_png_url) {
         const images = await scryfallAPI.getCardImages(result.data.set_code, result.data.collector_number)
         if (images) result.data = { ...result.data, ...images }
       }
-      
-      // Fetch pricing from MTGJSON
+
+      // Fetch live pricing from CardKingdom via MTGJSON
       result.data = await enrichCardWithPricing(result.data)
     }
-    
+
     return result
   },
 }
 
-// Price utilities
+// ============================================================================
+// Price utilities & caption generator
+// ============================================================================
+
 export const priceUtils = {
   calculateMYR: (usdPrice, multiplier, exchangeRate = 4.70) => {
     return Math.round(usdPrice * exchangeRate * multiplier * 100) / 100
@@ -199,11 +224,14 @@ export const generateCaption = (card, multiplier = 2.8) => {
   const selectedPrice = prices[multiplier.toString()] || card.myr_price_2_8
   const raritySymbol = { mythic: 'M', rare: 'R', uncommon: 'U', common: 'C' }[card.rarity] || 'C'
 
+  // Show pricing source label
+  const sourceLabel = card.pricing_source === 'cardkingdom_via_mtgjson' ? 'CKD' : 'Market'
+
   return `${card.card_name}
-${raritySymbol} ${card.collector_number.padStart(4, '0')}
+${raritySymbol} ${card.collector_number?.padStart(4, '0') ?? '????'}
 ${card.set_code}
-CKD: ${priceUtils.formatUSD(card.ckd_usd_price)}
-CKD 2.5 / 2.8 / 3.0: RM ${card.myr_price_2_5?.toFixed(2) || 'N/A'} / RM ${card.myr_price_2_8?.toFixed(2) || 'N/A'} / RM ${card.myr_price_3_0?.toFixed(2) || 'N/A'}
+${sourceLabel}: ${priceUtils.formatUSD(card.ckd_usd_price)}
+${sourceLabel} 2.5 / 2.8 / 3.0: RM ${card.myr_price_2_5?.toFixed(2) || 'N/A'} / RM ${card.myr_price_2_8?.toFixed(2) || 'N/A'} / RM ${card.myr_price_3_0?.toFixed(2) || 'N/A'}
 Your price (${multiplier}x): ${priceUtils.formatMYR(selectedPrice)}
 ${card.is_foil ? '✨ FOIL ✨' : ''}`
 }

@@ -39,6 +39,20 @@ export default function CardDetail({ card, onClose, onCopyCaption }) {
 
   const selectedPrice = prices[multiplier]
 
+  // Foil prices (from live pricing API)
+  const foilPrices = {
+    2.5: card.myr_foil_price_2_5,
+    2.8: card.myr_foil_price_2_8,
+    3.0: card.myr_foil_price_3_0,
+  }
+
+  // Determine price source label
+  const isCardKingdom = card.pricing_source === 'cardkingdom_via_mtgjson'
+  const priceSourceLabel = isCardKingdom ? 'CardKingdom' : 'Market'
+  const priceSourceNote = isCardKingdom
+    ? 'Real CardKingdom retail prices via MTGJSON'
+    : 'Market prices from Scryfall (CK price unavailable)'
+
   const handleCopy = async () => {
     await onCopyCaption(card, multiplier)
     setCopied(true)
@@ -107,7 +121,7 @@ export default function CardDetail({ card, onClose, onCopyCaption }) {
                 
                 {/* Collector Number */}
                 <span className="text-sm text-gray-400">
-                  #{card.collector_number.padStart(4, '0')}
+                  #{card.collector_number?.padStart(4, '0') ?? '????'}
                 </span>
                 
                 {/* Set Code */}
@@ -146,13 +160,24 @@ export default function CardDetail({ card, onClose, onCopyCaption }) {
 
             {/* Pricing */}
             <div className="bg-dbb-primary rounded-lg p-4 space-y-4">
-              <h3 className="font-semibold text-dbb-accent">Pricing</h3>
-              
-              {/* CKD USD Price */}
               <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-400">CardKingdom USD</span>
+                <h3 className="font-semibold text-dbb-accent">Pricing</h3>
+                <span className="text-xs text-gray-500">{priceSourceLabel}</span>
+              </div>
+              
+              {/* USD Price */}
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-400">{priceSourceLabel} USD</span>
                 <span className="font-semibold">{priceUtils.formatUSD(card.ckd_usd_price)}</span>
               </div>
+
+              {/* Foil USD Price (if available) */}
+              {card.ckd_foil_price && (
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-400">{priceSourceLabel} USD (Foil)</span>
+                  <span className="font-semibold text-yellow-400">{priceUtils.formatUSD(card.ckd_foil_price)}</span>
+                </div>
+              )}
 
               {/* MYR Multipliers */}
               <div className="grid grid-cols-3 gap-2 pt-2 border-t border-gray-700">
@@ -175,6 +200,20 @@ export default function CardDetail({ card, onClose, onCopyCaption }) {
                 ))}
               </div>
 
+              {/* Foil MYR Prices (if available) */}
+              {card.myr_foil_price_2_8 && (
+                <div className="grid grid-cols-3 gap-2">
+                  {[2.5, 2.8, 3.0].map((mult) => (
+                    <div key={mult} className="p-2 rounded-lg text-center bg-yellow-900/20 border border-yellow-600/30">
+                      <div className="text-xs opacity-75 text-yellow-400">✨ {mult}x</div>
+                      <div className="font-bold text-sm text-yellow-400">
+                        RM {foilPrices[mult]?.toFixed(2) || 'N/A'}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               {/* Selected Price Highlight */}
               <div className="pt-2 border-t border-gray-700">
                 <div className="flex items-center justify-between">
@@ -184,6 +223,9 @@ export default function CardDetail({ card, onClose, onCopyCaption }) {
                   </span>
                 </div>
               </div>
+
+              {/* Price source note */}
+              <p className="text-xs text-gray-500">{priceSourceNote}</p>
             </div>
 
             {/* Caption Generator */}
@@ -217,8 +259,11 @@ export default function CardDetail({ card, onClose, onCopyCaption }) {
             <div className="text-xs text-gray-500 space-y-1 pt-4 border-t border-gray-700">
               <div>Condition: {card.condition || 'NM'}</div>
               <div>Exchange Rate: 1 USD = {card.usd_myr_rate?.toFixed(4) || '4.70'} MYR</div>
-              {card.updated_at && (
-                <div>Last Updated: {new Date(card.updated_at).toLocaleString('en-MY')}</div>
+              {card.pricing_source && (
+                <div>Price Source: {card.pricing_source}</div>
+              )}
+              {card.pricing_last_updated && (
+                <div>Prices Updated: {new Date(card.pricing_last_updated).toLocaleString('en-MY')}</div>
               )}
             </div>
           </div>
