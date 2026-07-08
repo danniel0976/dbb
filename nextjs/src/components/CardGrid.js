@@ -32,7 +32,7 @@ export default function CardGrid({ cards, onCardClick }) {
 }
 
 function CardItem({ card, onClick }) {
-  const imageUrl = card.image_crop_url || card.image_png_url
+  const imageUrl = card.image_png_url || card.image_crop_url
   
   return (
     <div

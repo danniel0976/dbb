@@ -102,7 +102,7 @@ export const enrichCardWithPricing = async (card) => {
 const imageCache = new Map()
 
 export const enrichCardsWithImages = async (cards) => {
-  const cardsWithoutImages = cards.filter(c => !c.image_crop_url && !c.image_png_url)
+  const cardsWithoutImages = cards.filter(c => !c.image_png_url && !c.image_crop_url)
 
   if (cardsWithoutImages.length === 0) return cards
 
