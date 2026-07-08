@@ -262,6 +262,16 @@ export default function CardDetail({ card, onClose, onCopyCaption }) {
               </p>
             </div>
 
+            {/* CardKingdom Purchase Link */}
+            <a
+              href={`https://www.cardkingdom.com/mtg-singles/${card.card_name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block w-full text-center py-2.5 px-4 rounded-lg bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white font-semibold transition-all hover:shadow-lg hover:shadow-purple-500/25"
+            >
+              🛒 View on CardKingdom
+            </a>
+
             {/* Additional Info */}
             <div className="text-xs text-gray-500 space-y-1 pt-4 border-t border-gray-700">
               <div>Condition: {card.condition || 'NM'}</div>
