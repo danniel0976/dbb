@@ -154,7 +154,7 @@ function parseManaboxCSV(csvPath) {
     card_name: row['Name'] || row['Card Name'] || row['name'] || row['Card'],
     set_code: row['Set code'] || row['Set'] || row['set_code'] || row['Set Code'],
     collector_number: row['Collector number'] || row['Collector No'] || row['collector_number'] || row['Number'] || row['#'],
-    is_foil: (row['Foil'] || 'normal').toLowerCase() === 'foil' || row['Foil'] === 'Yes' || row['Foil'] === 'etched',
+    is_foil: !['normal', 'no', 'false', ''].includes((row['Foil'] || 'normal').toLowerCase()),
     condition: mapCondition(row['Condition'] || row['condition'] || 'near_mint'),
     quantity: parseInt(row['Quantity'] || row['qty'] || '1', 10),
     scryfall_id: row['Scryfall ID'] || null,

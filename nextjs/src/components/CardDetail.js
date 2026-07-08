@@ -42,12 +42,12 @@ export default function CardDetail({ card, onClose, onCopyCaption }) {
 
   const selectedPrice = prices ? prices[multiplier] : null
 
-  // Foil selling prices
+  // Foil selling prices — computed on the fly from ckd_foil_price × multiplier
   const hasCKFoilPrice = card.ckd_foil_price !== null && card.ckd_foil_price !== undefined
   const foilPrices = hasCKFoilPrice ? {
-    2.5: card.myr_foil_price_2_5,
-    2.8: card.myr_foil_price_2_8,
-    3.0: card.myr_foil_price_3_0,
+    2.5: Math.round(card.ckd_foil_price * 2.5 * 2) / 2,
+    2.8: Math.round(card.ckd_foil_price * 2.8 * 2) / 2,
+    3.0: Math.round(card.ckd_foil_price * 3.0 * 2) / 2,
   } : null
 
   const handleCopy = async () => {
