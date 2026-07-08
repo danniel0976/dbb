@@ -26,13 +26,12 @@ let exchangeRateTimestamp = 0
 
 async function fetchPriceCache() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
-  if (!supabaseUrl || !supabaseAnonKey) {
-    throw new Error('Missing Supabase env vars')
+  if (!supabaseUrl) {
+    throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL env var')
   }
 
-  // Try Supabase Storage public URL first
+  // Fetch from Supabase Storage public URL
   const cacheUrl = `${supabaseUrl}/storage/v1/object/public/${CACHE_BUCKET}/${CACHE_FILE}?t=${Date.now()}`
   
   console.log('[Pricing API] Fetching price cache from Supabase Storage...')
@@ -42,14 +41,7 @@ async function fetchPriceCache() {
   })
 
   if (!response.ok) {
-    // Fallback: try static file in /public
-    console.log('[Pricing API] Storage fetch failed, trying static file...')
-    const staticResponse = await fetch(`${supabaseUrl ? '' : ''}/ck-prices.json`, {
-      headers: { 'User-Agent': 'DansBizarreBazaar/1.0' },
-    })
-    if (!staticResponse.ok) {
-      throw new Error(`Price cache not available: storage=${response.status}`)
-    }
+    throw new Error(`Price cache fetch failed: ${response.status} ${response.statusText}`)
   }
 
   const data = await response.json()
