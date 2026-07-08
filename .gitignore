@@ -5,3 +5,4 @@ node_modules/
 .DS_Store
 failed-imports.json
 .vercel
+nextjs/public/ck-prices.json
