@@ -2,8 +2,10 @@ import { NextResponse } from 'next/server'
 
 // ============================================================================
 // CardKingdom price lookup via pre-built price cache
-// Cache is built daily by build-price-cache.js and stored in Supabase Storage
-// Falls back to Scryfall for cards not in the cache
+// Cache has two indexes:
+//   - "prices": scryfallId -> {n, f, b} (direct lookup)
+//   - "names": card_name_lower -> {n, f, b} (fallback for different printings)
+// Falls back to Scryfall for cards not in cache at all
 // ============================================================================
 
 export const runtime = 'nodejs'
@@ -16,12 +18,13 @@ const EXCHANGE_RATE_API = 'https://open.er-api.com/v6/latest/USD'
 const DEFAULT_USD_MYR = 4.70
 
 let priceCache = null          // Map<scryfallId_lowercase, {n, f, b}>
+let namePriceCache = null      // Map<name_lower, {n, f, b}>
 let priceCacheTimestamp = 0
 let exchangeRate = DEFAULT_USD_MYR
 let exchangeRateTimestamp = 0
 
 // ============================================================================
-// Fetch price cache from Supabase Storage (compact, ~5-10MB)
+// Fetch price cache from Supabase Storage (compact, ~8-12MB)
 // ============================================================================
 
 async function fetchPriceCache() {
@@ -33,7 +36,7 @@ async function fetchPriceCache() {
 
   // Fetch from Supabase Storage public URL
   const cacheUrl = `${supabaseUrl}/storage/v1/object/public/${CACHE_BUCKET}/${CACHE_FILE}?t=${Date.now()}`
-  
+
   console.log('[Pricing API] Fetching price cache from Supabase Storage...')
 
   const response = await fetch(cacheUrl, {
@@ -50,13 +53,32 @@ async function fetchPriceCache() {
     throw new Error('Invalid price cache data')
   }
 
-  const lookup = new Map()
-  for (const [uuid, prices] of Object.entries(data)) {
-    lookup.set(uuid.toLowerCase(), prices)
+  // Support both old format (flat object) and new format ({prices, names})
+  const priceMap = new Map()
+  const nameMap = new Map()
+
+  if (data.prices && data.names) {
+    // New format with separate name index
+    for (const [id, prices] of Object.entries(data.prices)) {
+      priceMap.set(id.toLowerCase(), prices)
+    }
+    for (const [name, prices] of Object.entries(data.names)) {
+      nameMap.set(name.toLowerCase(), prices)
+    }
+  } else {
+    // Old format (flat object of scryfallId -> prices)
+    for (const [id, prices] of Object.entries(data)) {
+      priceMap.set(id.toLowerCase(), prices)
+    }
   }
 
-  console.log(`[Pricing API] Loaded ${lookup.size} CardKingdom prices from cache`)
-  return lookup
+  console.log(`[Pricing API] Loaded ${priceMap.size} CardKingdom prices by ID, ${nameMap.size} by name`)
+
+  // Store both caches
+  priceCache = priceMap
+  namePriceCache = nameMap
+
+  return priceMap
 }
 
 // ============================================================================
@@ -87,7 +109,7 @@ async function fetchExchangeRate() {
 // Scryfall fallback for cards not in cache
 // ============================================================================
 
-async function scryfallFallback(scryfallId, cardName, setName, collectorNumber) {
+async function scryfallFallback(scryfallId, cardName) {
   let scryfallUrl
   if (scryfallId) {
     scryfallUrl = `https://api.scryfall.com/cards/${scryfallId}`
@@ -146,7 +168,7 @@ export async function GET(request) {
   const now = Date.now()
   if (!priceCache || forceRefresh || (now - priceCacheTimestamp) > CACHE_DURATION_MS) {
     try {
-      priceCache = await fetchPriceCache()
+      await fetchPriceCache()
       priceCacheTimestamp = Date.now()
       // Also refresh exchange rate if stale
       if (!exchangeRateTimestamp || (now - exchangeRateTimestamp) > CACHE_DURATION_MS) {
@@ -168,6 +190,7 @@ export async function GET(request) {
     return NextResponse.json({
       status: 'ok',
       pricesLoaded: priceCache ? priceCache.size : 0,
+      namesLoaded: namePriceCache ? namePriceCache.size : 0,
       cacheAge: priceCacheTimestamp ? Math.round((Date.now() - priceCacheTimestamp) / 1000 / 60) : null,
       exchangeRate: exchangeRate || DEFAULT_USD_MYR,
       source: 'cardkingdom_via_mtgjson',
@@ -177,10 +200,21 @@ export async function GET(request) {
     })
   }
 
-  // Look up in price cache
+  // Look up in price cache by Scryfall ID
   let result = null
+  let source = 'cardkingdom_via_mtgjson'
+
   if (scryfallId && priceCache) {
     result = priceCache.get(scryfallId.toLowerCase())
+  }
+
+  // If not found by ID, try name-based lookup
+  if (!result && cardName && namePriceCache) {
+    const nameLower = cardName.toLowerCase()
+    result = namePriceCache.get(nameLower)
+    if (result) {
+      source = 'cardkingdom_via_mtgjson_name'
+    }
   }
 
   // If found in cache, return CardKingdom prices
@@ -197,7 +231,7 @@ export async function GET(request) {
       myr_foil_price_2_8: calculateMYR(result.f, usdMyr * 2.8),
       myr_foil_price_3_0: calculateMYR(result.f, usdMyr * 3.0),
       usd_myr_rate: usdMyr,
-      source: 'cardkingdom_via_mtgjson',
+      source,
       lastUpdated: new Date(priceCacheTimestamp).toISOString(),
     }, {
       headers: { 'Cache-Control': 'public, s-maxage=3600' }

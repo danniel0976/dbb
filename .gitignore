@@ -6,3 +6,4 @@ node_modules/
 failed-imports.json
 .vercel
 nextjs/public/ck-prices.json
+scripts/data/ck-prices.json

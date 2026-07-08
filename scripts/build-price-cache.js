@@ -1,178 +1,182 @@
 /**
- * Build-time script: Download MTGJSON AllPricesToday, extract CardKingdom prices,
- * and upload a compact price map to Supabase Storage for the API to consume.
+ * Daily CardKingdom price cache refresh — VPS-SAFE version.
  *
- * Run: cd nextjs && node ../scripts/build-price-cache.js
- *   OR: node scripts/build-price-cache.js (with NODE_PATH set)
+ * Strategy (see scripts/README-price-pipeline.md):
+ *   - AllPricesToday keys are MTGJSON UUIDs. The DB and pricing API use Scryfall IDs.
+ *   - The uuid->scryfall translation comes from a small pre-built artifact
+ *     (scripts/data/ck-uuid-map.json.gz, ~5MB, built on the MacBook by
+ *     build-ck-cache-macbook.py — NEVER parse AllIdentifiers on the VPS: OOM).
+ *   - This script only downloads AllPricesToday (~5MB gz), so it runs fine
+ *     on the 1.9GB VPS. Peak memory well under 500MB.
  *
- * This should be run daily (cron) or before deployments.
+ * Output format (matches /api/pricing/route.js):
+ *   { prices: { scryfallId: {n,f,b} }, names: { name_lower: {n,f,b} }, _meta }
+ *   n = CK retail normal, f = CK retail foil, b = CK buylist normal (USD).
+ *   names index keeps the CHEAPEST normal-retail printing so name-fallback
+ *   quotes never overprice a card.
+ *
+ * Usage: node scripts/build-price-cache.js
  */
 
 const path = require('path')
-const nextjsDir = path.join(__dirname, '..', 'nextjs')
-const envPath = path.join(nextjsDir, '.env.local')
-
-// Load env vars from .env.local
 const fs = require('fs')
+const zlib = require('zlib')
+
+// Load env vars from nextjs/.env.local
+const envPath = path.join(__dirname, '..', 'nextjs', '.env.local')
 if (fs.existsSync(envPath)) {
-  const envContent = fs.readFileSync(envPath, 'utf8')
-  for (const line of envContent.split('\n')) {
-    const match = line.match(/^([A-Z_]+)=(.*)$/)
-    if (match && !process.env[match[1]]) {
-      process.env[match[1]] = match[2].trim()
-    }
+  for (const line of fs.readFileSync(envPath, 'utf8').split('\n')) {
+    const m = line.match(/^([A-Z_]+)=(.*)$/)
+    if (m && !process.env[m[1]]) process.env[m[1]] = m[2].trim()
   }
-  console.log('Loaded env from', envPath)
-} else {
-  console.error('.env.local not found at', envPath)
-}
-
-const https = require('https')
-const { createGunzip } = require('zlib')
-
-// Resolve supabase-js from nextjs/node_modules
-let createClient
-try {
-  const supabaseModule = require(path.join(nextjsDir, 'node_modules', '@supabase', 'supabase-js'))
-  createClient = supabaseModule.createClient
-} catch (e) {
-  console.error('Cannot find @supabase/supabase-js. Run: cd nextjs && npm install')
-  process.exit(1)
 }
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
-const MTGJSON_URL = 'https://mtgjson.com/api/v5/AllPricesToday.json.gz'
+const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
 const BUCKET = 'price-cache'
-const FILE_NAME = 'ck-prices.json'
+const CACHE_FILE = 'ck-prices.json'
+const MAP_LOCAL = path.join(__dirname, 'data', 'ck-uuid-map.json.gz')
+const MAP_STORAGE_URL = `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/ck-uuid-map.json.gz`
+const PRICES_URL = 'https://mtgjson.com/api/v5/AllPricesToday.json.gz'
+const UA = 'Mozilla/5.0 (DBB price bot)'
 
-if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
-  console.error('Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY')
+if (!SUPABASE_URL || !SERVICE_KEY) {
+  console.error('Missing NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY')
   process.exit(1)
 }
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
-
-// Extract latest price from date-keyed object like {"2026-07-07": 7.99}
-function getLatestPrice(dateObj) {
-  if (!dateObj || typeof dateObj !== 'object') return null
-  const dates = Object.keys(dateObj).sort()
-  if (dates.length === 0) return null
-  const val = dateObj[dates[dates.length - 1]]
-  return typeof val === 'number' ? val : parseFloat(val)
+function getLatestPrice(series) {
+  if (!series || typeof series !== 'object') return null
+  const dates = Object.keys(series).sort()
+  if (!dates.length) return null
+  const v = series[dates[dates.length - 1]]
+  const num = typeof v === 'number' ? v : parseFloat(v)
+  return Number.isFinite(num) ? num : null
 }
 
-function downloadGzippedJson(url) {
-  return new Promise((resolve, reject) => {
-    const doRequest = (requestUrl) => {
-      https.get(requestUrl, { headers: { 'User-Agent': 'DansBizarreBazaar/1.0' } }, (res) => {
-        if (res.statusCode === 301 || res.statusCode === 302) {
-          const redirectUrl = res.headers.location
-          console.log(`Redirecting to ${redirectUrl}`)
-          doRequest(redirectUrl)
-          return
-        }
-        if (res.statusCode !== 200) {
-          reject(new Error(`HTTP ${res.statusCode} from ${requestUrl}`))
-          return
-        }
+async function fetchGzJson(url) {
+  const res = await fetch(url, { headers: { 'User-Agent': UA } })
+  if (!res.ok) throw new Error(`${url} -> HTTP ${res.status}`)
+  const buf = Buffer.from(await res.arrayBuffer())
+  return JSON.parse(zlib.gunzipSync(buf).toString('utf8'))
+}
 
-        const gunzip = createGunzip()
-        const chunks = []
-        res.pipe(gunzip)
-        gunzip.on('data', (chunk) => chunks.push(chunk))
-        gunzip.on('end', () => {
-          try {
-            resolve(JSON.parse(Buffer.concat(chunks).toString('utf8')))
-          } catch (e) { reject(e) }
-        })
-        gunzip.on('error', reject)
-      }).on('error', reject)
-    }
-    doRequest(url)
-  })
+async function loadUuidMap() {
+  if (fs.existsSync(MAP_LOCAL)) {
+    console.log(`Loading uuid map from ${MAP_LOCAL}`)
+    return JSON.parse(zlib.gunzipSync(fs.readFileSync(MAP_LOCAL)).toString('utf8'))
+  }
+  console.log('Local uuid map missing, fetching from Supabase Storage...')
+  return fetchGzJson(MAP_STORAGE_URL)
 }
 
 async function main() {
-  console.log('Downloading MTGJSON AllPricesToday (gzipped)...')
-  const jsonData = await downloadGzippedJson(MTGJSON_URL)
+  // uuid -> [scryfallId, cardName], only for CK-priced cards (~97k entries)
+  const uuidMap = await loadUuidMap()
+  console.log(`UUID map entries: ${Object.keys(uuidMap).length}`)
 
-  if (!jsonData || !jsonData.data) {
-    console.error('No data in MTGJSON response')
-    process.exit(1)
-  }
+  console.log('Downloading AllPricesToday...')
+  const priceData = await fetchGzJson(PRICES_URL)
+  const entries = priceData.data || {}
+  console.log(`Price entries: ${Object.keys(entries).length}`)
 
-  console.log(`Processing ${Object.keys(jsonData.data).length} card entries...`)
+  const prices = {}
+  const names = {}
+  let unmapped = 0
 
-  // Extract only CardKingdom prices — compact format
-  const priceMap = {}
-  let ckCount = 0
+  for (const [uuid, entry] of Object.entries(entries)) {
+    const ck = entry && entry.paper && entry.paper.cardkingdom
+    if (!ck) continue
+    const retail = ck.retail || {}
+    const buylist = ck.buylist || {}
+    const n = getLatestPrice(retail.normal)
+    const f = getLatestPrice(retail.foil)
+    const b = getLatestPrice(buylist.normal)
+    if (n === null && f === null && b === null) continue
 
-  for (const [uuid, priceData] of Object.entries(jsonData.data)) {
-    if (!priceData || typeof priceData !== 'object') continue
-    const paper = priceData.paper
-    if (!paper || typeof paper !== 'object') continue
+    const mapped = uuidMap[uuid]
+    if (!mapped) { unmapped++; continue }
+    const [scryfallId, cardName] = mapped
 
-    const ck = paper.cardkingdom || paper.cardKingdom || paper.CardKingdom
-    if (!ck || typeof ck !== 'object') continue
+    const rec = {}
+    if (n !== null) rec.n = n
+    if (f !== null) rec.f = f
+    if (b !== null) rec.b = b
+    prices[scryfallId.toLowerCase()] = rec
 
-    const retail = ck.retail || ck.Retail || {}
-    const buylist = ck.buylist || ck.Buylist || {}
-
-    const normalRetail = getLatestPrice(retail.normal || retail.Normal)
-    const foilRetail = getLatestPrice(retail.foil || retail.Foil)
-    const normalBuylist = getLatestPrice(buylist.normal || buylist.Normal)
-
-    if (normalRetail !== null || foilRetail !== null) {
-      priceMap[uuid.toLowerCase()] = {
-        n: normalRetail,
-        f: foilRetail,
-        b: normalBuylist,
+    if (cardName) {
+      const key = cardName.toLowerCase()
+      const cur = names[key]
+      if (!cur || (n !== null && (cur.n === undefined || n < cur.n))) {
+        names[key] = rec
       }
-      ckCount++
     }
   }
 
-  console.log(`Extracted ${ckCount} CardKingdom prices`)
+  const output = JSON.stringify({
+    prices,
+    names,
+    _meta: {
+      source: 'cardkingdom via mtgjson AllPricesToday',
+      built: new Date().toISOString(),
+      ids: Object.keys(prices).length,
+      names: Object.keys(names).length,
+      unmapped_uuids: unmapped,
+    },
+  })
+  console.log(`CK prices: ${Object.keys(prices).length} ids, ${Object.keys(names).length} names, ` +
+    `${unmapped} unmapped (new printings — rebuild uuid map on the MacBook if this grows), ` +
+    `${(output.length / 1024 / 1024).toFixed(1)} MB`)
 
-  // Compact JSON
-  const output = JSON.stringify(priceMap)
-  console.log(`Price cache size: ${(output.length / 1024 / 1024).toFixed(1)} MB`)
-
-  // Upload to Supabase Storage
-  console.log('Uploading to Supabase Storage...')
-
-  // Ensure bucket exists (public read)
-  const { error: bucketError } = await supabase.storage.createBucket(BUCKET, { public: true })
-  if (bucketError && !bucketError.message.includes('already exists')) {
-    console.warn('Bucket creation warning:', bucketError.message)
-  }
-
-  const { error: uploadError } = await supabase.storage
-    .from(BUCKET)
-    .upload(FILE_NAME, Buffer.from(output), {
-      contentType: 'application/json',
-      upsert: true,
-    })
-
-  if (uploadError) {
-    console.error('Upload failed:', uploadError.message)
-    process.exit(1)
-  }
-
-  const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(FILE_NAME)
-  console.log(`Price cache uploaded: ${urlData.publicUrl}`)
-
-  // Also save locally as fallback
-  const localPath = path.join(nextjsDir, 'public', 'ck-prices.json')
+  // Keep a repo-local copy as backup
+  const localPath = path.join(__dirname, 'data', CACHE_FILE)
   fs.mkdirSync(path.dirname(localPath), { recursive: true })
   fs.writeFileSync(localPath, output)
-  console.log(`Also saved locally: ${localPath}`)
+  console.log(`Saved ${localPath}`)
 
-  console.log('\nDone!')
+  // Upload to Supabase Storage
+  const uploadRes = await fetch(`${SUPABASE_URL}/storage/v1/object/${BUCKET}/${CACHE_FILE}`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${SERVICE_KEY}`,
+      'Content-Type': 'application/json',
+      'x-upsert': 'true',
+    },
+    body: output,
+  })
+  if (!uploadRes.ok) {
+    throw new Error(`Storage upload failed: HTTP ${uploadRes.status} ${await uploadRes.text()}`)
+  }
+  console.log('Uploaded to Supabase Storage')
+
+  // Verify coverage against the live DB (paginated — PostgREST caps at 1000/page)
+  const dbCards = []
+  for (let offset = 0; ; offset += 1000) {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/cards?select=scryfall_id,card_name&limit=1000&offset=${offset}`,
+      { headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` } }
+    )
+    const page = await res.json()
+    if (!Array.isArray(page) || !page.length) break
+    dbCards.push(...page)
+    if (page.length < 1000) break
+  }
+  let byId = 0, byName = 0, neither = 0
+  const misses = []
+  for (const card of dbCards) {
+    const sid = (card.scryfall_id || '').toLowerCase()
+    const nm = (card.card_name || '').toLowerCase()
+    if (prices[sid]) byId++
+    else if (names[nm]) byName++
+    else { neither++; if (misses.length < 10) misses.push(card.card_name) }
+  }
+  console.log(`DB coverage: ${dbCards.length} cards — ${byId} by id, ${byName} by name, ${neither} missing`)
+  if (misses.length) console.log('  missing:', misses.join(', '))
+
+  console.log('Done!')
 }
 
 main().catch(err => {
-  console.error('Fatal error:', err.message)
+  console.error('Fatal:', err.message)
   process.exit(1)
 })
