@@ -311,7 +311,7 @@ async function refreshPrices(priceLookup, dryRun = false) {
   for (let from = 0; ; from += 1000) {
     const { data: page, error } = await supabase
       .from('cards')
-      .select('id, scryfall_id, card_name, is_foil, foil_type, ckd_usd_price, myr_price_2_5, myr_price_2_8, myr_price_3_0, pricing_source')
+      .select('id, scryfall_id, card_name, is_foil, foil_type, ckd_usd_price, ckd_etched_price, myr_price_2_5, myr_price_2_8, myr_price_3_0, pricing_source')
       .order('card_name')
       .range(from, from + 999)
 
@@ -356,7 +356,10 @@ async function refreshPrices(priceLookup, dryRun = false) {
       Math.abs(card.myr_price_3_0 - Math.round(card.ckd_usd_price * 3.0 * 2) / 2) > 0.01
     )
 
-    if (Math.abs((card.ckd_usd_price || 0) - (newPrice || 0)) < 0.01 && card.pricing_source === 'cardkingdom_via_mtgjson' && !needsMyrUpdate) {
+    // Also update if ckd_etched_price is newly available (was null, now has a value)
+    const needsEtchedUpdate = ckPrice.ckd_etched_price != null && card.ckd_etched_price == null
+
+    if (Math.abs((card.ckd_usd_price || 0) - (newPrice || 0)) < 0.01 && card.pricing_source === 'cardkingdom_via_mtgjson' && !needsMyrUpdate && !needsEtchedUpdate) {
       unchanged++
       continue
     }
