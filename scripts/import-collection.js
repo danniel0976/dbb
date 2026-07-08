@@ -69,6 +69,7 @@ async function fetchMTGJSONPrices() {
   const toRecord = (rec) => ({
     ckd_usd_price: rec.n ?? null,
     ckd_foil_price: rec.f ?? null,
+    ckd_etched_price: rec.e ?? null,
     ckd_buy_price: rec.b ?? null,
     source: 'cardkingdom_via_mtgjson',
   })
@@ -154,6 +155,11 @@ function parseManaboxCSV(csvPath) {
     card_name: row['Name'] || row['Card Name'] || row['name'] || row['Card'],
     set_code: row['Set code'] || row['Set'] || row['set_code'] || row['Set Code'],
     collector_number: row['Collector number'] || row['Collector No'] || row['collector_number'] || row['Number'] || row['#'],
+    foil_type: (() => {
+      const v = (row['Foil'] || 'normal').toLowerCase().replace(/[\s-]/g, '_')
+      if (v === 'normal' || v === 'no' || v === 'false' || v === '') return 'nonfoil'
+      return v // 'foil', 'etched', 'surge_foil', 'gilded_foil', etc.
+    })(),
     is_foil: !['normal', 'no', 'false', ''].includes((row['Foil'] || 'normal').toLowerCase()),
     condition: mapCondition(row['Condition'] || row['condition'] || 'near_mint'),
     quantity: parseInt(row['Quantity'] || row['qty'] || '1', 10),
@@ -214,6 +220,7 @@ async function processCard(card, priceLookup) {
     card_type: scryfallData.type_line,
     colors: scryfallData.colors || [],
     is_foil: card.is_foil,
+    foil_type: card.foil_type,
     condition: card.condition || 'NM',
     image_png_url: scryfallData.image_uris?.png || scryfallData.card_faces?.[0]?.image_uris?.png,
     image_crop_url: scryfallData.image_uris?.normal || scryfallData.card_faces?.[0]?.image_uris?.normal,
@@ -221,18 +228,27 @@ async function processCard(card, priceLookup) {
 
   // Get CardKingdom price from MTGJSON lookup
   const ckPrice = priceLookup.get(scryfallData.id, scryfallData.name)
-  
+
   if (ckPrice) {
-    processedCard.ckd_usd_price = card.is_foil && ckPrice.ckd_foil_price ? ckPrice.ckd_foil_price : ckPrice.ckd_usd_price
-    // ckd_buy_price omitted — column doesn't exist in the cards table yet
+    // Pick the right base price based on finish type
+    const isEtched = card.foil_type === 'etched'
+    const isFoil = card.is_foil && !isEtched
+    processedCard.ckd_usd_price =
+      isEtched && ckPrice.ckd_etched_price ? ckPrice.ckd_etched_price :
+      isFoil && ckPrice.ckd_foil_price ? ckPrice.ckd_foil_price :
+      ckPrice.ckd_usd_price
     processedCard.ckd_foil_price = ckPrice.ckd_foil_price
+    processedCard.ckd_etched_price = ckPrice.ckd_etched_price
     processedCard.pricing_source = 'cardkingdom_via_mtgjson'
   } else {
     // Fallback to Scryfall prices (market/TCGPlayer, NOT CardKingdom)
     const prices = scryfallData.prices || {}
-    processedCard.ckd_usd_price = prices.usd ? parseFloat(prices.usd) : null
-    processedCard.ckd_buy_price = null
+    processedCard.ckd_usd_price =
+      card.foil_type === 'etched' && prices.usd_etched ? parseFloat(prices.usd_etched) :
+      card.is_foil && prices.usd_foil ? parseFloat(prices.usd_foil) :
+      prices.usd ? parseFloat(prices.usd) : null
     processedCard.ckd_foil_price = prices.usd_foil ? parseFloat(prices.usd_foil) : null
+    processedCard.ckd_etched_price = prices.usd_etched ? parseFloat(prices.usd_etched) : null
     processedCard.pricing_source = 'scryfall_market'
   }
 
@@ -295,7 +311,7 @@ async function refreshPrices(priceLookup, dryRun = false) {
   for (let from = 0; ; from += 1000) {
     const { data: page, error } = await supabase
       .from('cards')
-      .select('id, scryfall_id, card_name, is_foil, ckd_usd_price, myr_price_2_5, myr_price_2_8, myr_price_3_0, pricing_source')
+      .select('id, scryfall_id, card_name, is_foil, foil_type, ckd_usd_price, myr_price_2_5, myr_price_2_8, myr_price_3_0, pricing_source')
       .order('card_name')
       .range(from, from + 999)
 
@@ -325,7 +341,12 @@ async function refreshPrices(priceLookup, dryRun = false) {
       continue
     }
 
-    const newPrice = card.is_foil && ckPrice.ckd_foil_price ? ckPrice.ckd_foil_price : ckPrice.ckd_usd_price
+    const isEtched = card.foil_type === 'etched'
+    const isFoil = card.is_foil && !isEtched
+    const newPrice =
+      isEtched && ckPrice.ckd_etched_price ? ckPrice.ckd_etched_price :
+      isFoil && ckPrice.ckd_foil_price ? ckPrice.ckd_foil_price :
+      ckPrice.ckd_usd_price
 
     // Always recalculate MYR selling prices even if USD price unchanged
     // (previous runs may have used wrong FX-based conversion)
@@ -344,6 +365,7 @@ async function refreshPrices(priceLookup, dryRun = false) {
     const updateData = {
       ckd_usd_price: newPrice,
       ckd_foil_price: ckPrice.ckd_foil_price,
+      ckd_etched_price: ckPrice.ckd_etched_price,
       // Selling prices: CKD × multiplier (no FX conversion)
       myr_price_2_5: newPrice ? Math.round(newPrice * 2.5 * 2) / 2 : null,
       myr_price_2_8: newPrice ? Math.round(newPrice * 2.8 * 2) / 2 : null,

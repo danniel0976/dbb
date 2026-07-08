@@ -78,13 +78,15 @@ async function main() {
       
       const ckUrl = card.purchaseUrls?.cardKingdom || null
       const ckFoilUrl = card.purchaseUrls?.cardKingdomFoil || null
+      const ckEtchedUrl = card.purchaseUrls?.cardKingdomEtched || null
       const ckId = card.identifiers?.cardKingdomId || null
-      
+
       if (ckUrl || ckId) {
         withCk++
         urlMap[sfId] = {
           ck_url: ckUrl,
           ck_foil_url: ckFoilUrl,
+          ck_etched_url: ckEtchedUrl,
           ck_id: ckId,
         }
       }
@@ -133,13 +135,18 @@ async function main() {
       scryfall_id: sfId,
       ck_product_url: urls.ck_url || (urls.ck_id ? `https://www.cardkingdom.com/mtg-singles/product/${urls.ck_id}` : null),
       ck_foil_product_url: urls.ck_foil_url || null,
+      ck_etched_product_url: urls.ck_etched_url || null,
     }))
-    
+
     // Update by scryfall_id
     for (const upd of updates) {
       const { error } = await supabase
         .from('cards')
-        .update({ ck_product_url: upd.ck_product_url, ck_foil_product_url: upd.ck_foil_product_url })
+        .update({
+          ck_product_url: upd.ck_product_url,
+          ck_foil_product_url: upd.ck_foil_product_url,
+          ck_etched_product_url: upd.ck_etched_product_url,
+        })
         .eq('scryfall_id', upd.scryfall_id)
       
       if (error) {

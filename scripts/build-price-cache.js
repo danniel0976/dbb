@@ -91,8 +91,9 @@ async function main() {
     const buylist = ck.buylist || {}
     const n = getLatestPrice(retail.normal)
     const f = getLatestPrice(retail.foil)
+    const e = getLatestPrice(retail.etched)
     const b = getLatestPrice(buylist.normal)
-    if (n === null && f === null && b === null) continue
+    if (n === null && f === null && e === null && b === null) continue
 
     const mapped = uuidMap[uuid]
     if (!mapped) { unmapped++; continue }
@@ -101,6 +102,7 @@ async function main() {
     const rec = {}
     if (n !== null) rec.n = n
     if (f !== null) rec.f = f
+    if (e !== null) rec.e = e
     if (b !== null) rec.b = b
     prices[scryfallId.toLowerCase()] = rec
 

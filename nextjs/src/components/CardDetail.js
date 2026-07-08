@@ -32,8 +32,10 @@ export default function CardDetail({ card, onClose, onCopyCaption }) {
   const [copied, setCopied] = useState(false)
 
   const hasCKPrice = card.ckd_usd_price !== null && card.ckd_usd_price !== undefined
+  const foilType = card.foil_type || (card.is_foil ? 'foil' : 'nonfoil')
+  const isEtched = foilType === 'etched'
 
-  // Selling prices: CKD USD × multiplier
+  // Selling prices: CKD USD × multiplier (ckd_usd_price already reflects the correct finish price)
   const prices = hasCKPrice ? {
     2.5: card.myr_price_2_5,
     2.8: card.myr_price_2_8,
@@ -42,12 +44,18 @@ export default function CardDetail({ card, onClose, onCopyCaption }) {
 
   const selectedPrice = prices ? prices[multiplier] : null
 
-  // Foil selling prices — computed on the fly from ckd_foil_price × multiplier
+  // Reference foil/etched prices for comparison (non-foil cards only)
   const hasCKFoilPrice = card.ckd_foil_price !== null && card.ckd_foil_price !== undefined
-  const foilPrices = hasCKFoilPrice ? {
+  const hasCKEtchedPrice = card.ckd_etched_price !== null && card.ckd_etched_price !== undefined
+  const foilPrices = !card.is_foil && hasCKFoilPrice ? {
     2.5: Math.round(card.ckd_foil_price * 2.5 * 2) / 2,
     2.8: Math.round(card.ckd_foil_price * 2.8 * 2) / 2,
     3.0: Math.round(card.ckd_foil_price * 3.0 * 2) / 2,
+  } : null
+  const etchedPrices = !card.is_foil && hasCKEtchedPrice ? {
+    2.5: Math.round(card.ckd_etched_price * 2.5 * 2) / 2,
+    2.8: Math.round(card.ckd_etched_price * 2.8 * 2) / 2,
+    3.0: Math.round(card.ckd_etched_price * 3.0 * 2) / 2,
   } : null
 
   const handleCopy = async () => {
@@ -96,7 +104,7 @@ export default function CardDetail({ card, onClose, onCopyCaption }) {
               {card.is_foil && (
                 <div className="absolute top-3 right-3 bg-gradient-to-r from-yellow-400 to-orange-500 text-black text-sm font-bold px-3 py-1.5 rounded-full shadow-lg flex items-center gap-1">
                   <Sparkles className="w-4 h-4" />
-                  FOIL
+                  {isEtched ? 'ETCHED' : foilType === 'surge_foil' ? 'SURGE' : 'FOIL'}
                 </div>
               )}
             </div>
@@ -188,37 +196,56 @@ export default function CardDetail({ card, onClose, onCopyCaption }) {
                     ))}
                   </div>
 
-                  {/* Foil Prices */}
-                  {hasCKFoilPrice && foilPrices && (
-                    <div className="grid grid-cols-3 gap-2">
-                      {[2.5, 2.8, 3.0].map((mult) => (
-                        <button
-                          key={mult}
-                          onClick={() => setMultiplier(mult)}
-                          className={`
-                            p-2 rounded-lg text-center transition-all bg-yellow-900/20 border border-yellow-600/30
-                            ${multiplier === mult ? 'ring-2 ring-yellow-400' : ''}
-                          `}
-                        >
-                          <div className="text-xs opacity-75 text-yellow-400">✨ {mult}×</div>
-                          <div className="font-bold text-sm text-yellow-400">
-                            RM {foilPrices[mult]?.toFixed(2) || 'N/A'}
+                  {/* Foil/Etched reference prices (for non-foil cards only) */}
+                  {foilPrices && (
+                    <div>
+                      <div className="text-xs text-gray-500 mb-1">✨ Foil price (FYI)</div>
+                      <div className="grid grid-cols-3 gap-2">
+                        {[2.5, 2.8, 3.0].map((mult) => (
+                          <div key={mult} className="p-2 rounded-lg text-center bg-yellow-900/20 border border-yellow-600/30">
+                            <div className="text-xs opacity-75 text-yellow-400">{mult}×</div>
+                            <div className="font-bold text-sm text-yellow-400">
+                              RM {foilPrices[mult]?.toFixed(2) || 'N/A'}
+                            </div>
                           </div>
-                        </button>
-                      ))}
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {etchedPrices && (
+                    <div>
+                      <div className="text-xs text-gray-500 mb-1">⬡ Etched price (FYI)</div>
+                      <div className="grid grid-cols-3 gap-2">
+                        {[2.5, 2.8, 3.0].map((mult) => (
+                          <div key={mult} className="p-2 rounded-lg text-center bg-purple-900/20 border border-purple-600/30">
+                            <div className="text-xs opacity-75 text-purple-400">{mult}×</div>
+                            <div className="font-bold text-sm text-purple-400">
+                              RM {etchedPrices[mult]?.toFixed(2) || 'N/A'}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
 
                   {/* Price Info */}
                   <div className="pt-3 border-t border-gray-700 space-y-1.5">
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-400">CKD USD</span>
+                      <span className="text-sm text-gray-400">
+                        CKD USD {isEtched ? '(Etched)' : card.is_foil && foilType !== 'nonfoil' ? '(Foil)' : ''}
+                      </span>
                       <span className="font-semibold">{priceUtils.formatUSD(card.ckd_usd_price)}</span>
                     </div>
-                    {hasCKFoilPrice && (
+                    {!card.is_foil && hasCKFoilPrice && (
                       <div className="flex items-center justify-between">
                         <span className="text-sm text-gray-400">CKD USD (Foil)</span>
                         <span className="font-semibold text-yellow-400">{priceUtils.formatUSD(card.ckd_foil_price)}</span>
+                      </div>
+                    )}
+                    {!card.is_foil && hasCKEtchedPrice && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-gray-400">CKD USD (Etched)</span>
+                        <span className="font-semibold text-purple-400">{priceUtils.formatUSD(card.ckd_etched_price)}</span>
                       </div>
                     )}
                     <div className="flex items-center justify-between">
@@ -252,27 +279,34 @@ export default function CardDetail({ card, onClose, onCopyCaption }) {
               Copies formatted caption for Facebook posts
             </p>
 
-            {/* CardKingdom Purchase Link */}
-            {card.ck_product_url ? (
-              <a
-                href={card.ck_product_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="block w-full text-center py-2.5 px-4 rounded-lg bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white font-semibold transition-all hover:shadow-lg hover:shadow-purple-500/25"
-              >
-                🛒 View on CardKingdom
-              </a>
-            ) : (
-              <a
-                href={`https://www.cardkingdom.com/mtg-singles/${card.card_name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="block w-full text-center py-2.5 px-4 rounded-lg bg-gradient-to-r from-purple-600/50 to-blue-600/50 hover:from-purple-600/70 hover:to-blue-600/70 text-white font-semibold transition-all hover:shadow-lg hover:shadow-purple-500/25 opacity-70"
-                title="Best-guess link — may not match exact printing"
-              >
-                🛒 Search on CardKingdom
-              </a>
-            )}
+            {/* CardKingdom Purchase Link — routes to correct finish-specific product */}
+            {(() => {
+              const ckUrl = isEtched
+                ? (card.ck_etched_product_url || card.ck_product_url)
+                : card.is_foil
+                  ? (card.ck_foil_product_url || card.ck_product_url)
+                  : card.ck_product_url
+              return ckUrl ? (
+                <a
+                  href={ckUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block w-full text-center py-2.5 px-4 rounded-lg bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white font-semibold transition-all hover:shadow-lg hover:shadow-purple-500/25"
+                >
+                  🛒 View on CardKingdom
+                </a>
+              ) : (
+                <a
+                  href={`https://www.cardkingdom.com/mtg-singles/${card.card_name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block w-full text-center py-2.5 px-4 rounded-lg bg-gradient-to-r from-purple-600/50 to-blue-600/50 hover:from-purple-600/70 hover:to-blue-600/70 text-white font-semibold transition-all hover:shadow-lg hover:shadow-purple-500/25 opacity-70"
+                  title="Best-guess link — may not match exact printing"
+                >
+                  🛒 Search on CardKingdom
+                </a>
+              )
+            })()}
 
             {/* Additional Info */}
             <div className="text-xs text-gray-500 space-y-1 pt-4 border-t border-gray-700">

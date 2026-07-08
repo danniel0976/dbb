@@ -153,7 +153,7 @@ export const cardQueries = {
 
     let query = supabase
       .from('cards')
-      .select('id, card_name, set_code, set_name, collector_number, rarity, card_type, colors, is_foil, condition, ckd_usd_price, ckd_foil_price, myr_price_2_5, myr_price_2_8, myr_price_3_0, image_png_url, image_crop_url, ck_product_url, created_at', { count: 'exact' })
+      .select('id, card_name, set_code, set_name, collector_number, rarity, card_type, colors, is_foil, foil_type, condition, ckd_usd_price, ckd_foil_price, ckd_etched_price, myr_price_2_5, myr_price_2_8, myr_price_3_0, image_png_url, image_crop_url, ck_product_url, ck_etched_product_url, created_at', { count: 'exact' })
       .eq('is_available', true)
 
     if (filters.setCode) query = query.eq('set_code', filters.setCode)

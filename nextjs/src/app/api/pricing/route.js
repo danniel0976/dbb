@@ -150,6 +150,7 @@ export async function GET(request) {
     return NextResponse.json({
       ckd_usd_price: result.n ?? null,
       ckd_foil_price: result.f ?? null,
+      ckd_etched_price: result.e ?? null,
       ckd_buy_price: result.b ?? null,
       // Selling prices: CKD USD × multiplier (multiplier IS the conversion)
       myr_price_2_5: sellPrice(result.n, 2.5),
@@ -158,6 +159,9 @@ export async function GET(request) {
       myr_foil_price_2_5: sellPrice(result.f, 2.5),
       myr_foil_price_2_8: sellPrice(result.f, 2.8),
       myr_foil_price_3_0: sellPrice(result.f, 3.0),
+      myr_etched_price_2_5: sellPrice(result.e, 2.5),
+      myr_etched_price_2_8: sellPrice(result.e, 2.8),
+      myr_etched_price_3_0: sellPrice(result.e, 3.0),
       source,
       lastUpdated: new Date(priceCacheTimestamp).toISOString(),
     }, {
@@ -169,6 +173,7 @@ export async function GET(request) {
   return NextResponse.json({
     ckd_usd_price: null,
     ckd_foil_price: null,
+    ckd_etched_price: null,
     ckd_buy_price: null,
     myr_price_2_5: null,
     myr_price_2_8: null,
@@ -176,6 +181,9 @@ export async function GET(request) {
     myr_foil_price_2_5: null,
     myr_foil_price_2_8: null,
     myr_foil_price_3_0: null,
+    myr_etched_price_2_5: null,
+    myr_etched_price_2_8: null,
+    myr_etched_price_3_0: null,
     source: null,
     lastUpdated: null,
   }, {
