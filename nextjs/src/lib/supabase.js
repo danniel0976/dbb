@@ -265,16 +265,16 @@ export const priceUtils = {
 export const generateCaption = (card, multiplier = 2.8) => {
   const prices = { '2.5': card.myr_price_2_5, '2.8': card.myr_price_2_8, '3.0': card.myr_price_3_0 }
   const selectedPrice = prices[multiplier.toString()] || card.myr_price_2_8
-  const raritySymbol = { mythic: 'M', rare: 'R', uncommon: 'U', common: 'C' }[card.rarity] || 'C'
+  const rarityLabel = { mythic: 'MR', rare: 'R', uncommon: 'U', common: 'C' }[card.rarity] || 'C'
 
   const hasPrice = card.ckd_usd_price !== null && card.ckd_usd_price !== undefined
-  const sourceLabel = hasPrice ? 'CKD' : 'N/A'
+  const ckdUsd = hasPrice ? priceUtils.formatUSD(card.ckd_usd_price) : 'N/A'
 
-  return `${card.card_name}
-${raritySymbol} ${card.collector_number?.padStart(4, '0') ?? '????'}
-${card.set_code}
-${sourceLabel}: ${priceUtils.formatUSD(card.ckd_usd_price)}
-${sourceLabel} 2.5×/2.8×/3.0×: ${priceUtils.formatMYR(card.myr_price_2_5)} / ${priceUtils.formatMYR(card.myr_price_2_8)} / ${priceUtils.formatMYR(card.myr_price_3_0)}
-Your price (${multiplier}×): ${priceUtils.formatMYR(selectedPrice)}
-${card.is_foil ? '✨ FOIL ✨' : ''}`
+  const lines = []
+  lines.push(`${priceUtils.formatMYR(selectedPrice)} @${multiplier}×`)
+  lines.push(`CKD ${ckdUsd}`)
+  lines.push(`${card.card_name} | ${card.set_code} | ${rarityLabel} | #${card.collector_number?.padStart(4, '0') ?? '????'}`)
+  if (card.is_foil) lines.push('✨ FOIL ✨')
+
+  return lines.join('\n')
 }

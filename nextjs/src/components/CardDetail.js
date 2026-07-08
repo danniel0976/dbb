@@ -227,10 +227,6 @@ export default function CardDetail({ card, onClose, onCopyCaption }) {
                     </div>
                   </div>
 
-                  {/* Card Identity Line */}
-                  <div className="text-center text-sm text-gray-400 pt-1">
-                    {card.card_name} · {card.set_code} · {rarityLabels[card.rarity]} · #{card.collector_number?.padStart(4, '0') ?? '????'}
-                  </div>
                 </>
               ) : (
                 <div className="text-center py-4">
