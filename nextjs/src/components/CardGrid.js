@@ -44,13 +44,13 @@ function CardItem({ card, onClick }) {
       `}
     >
       {/* Card Image */}
-      <div className="aspect-[2/3] relative">
+      <div className="aspect-[2/3] relative bg-dbb-primary">
         {imageUrl ? (
           <Image
             src={imageUrl}
             alt={card.card_name}
             fill
-            className="object-cover"
+            className="object-contain"
             sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 20vw"
           />
         ) : (

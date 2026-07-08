@@ -132,14 +132,14 @@ async function main() {
     const updates = batch.map(([sfId, urls]) => ({
       scryfall_id: sfId,
       ck_product_url: urls.ck_url || (urls.ck_id ? `https://www.cardkingdom.com/mtg-singles/product/${urls.ck_id}` : null),
-      // ck_foil_product_url: urls.ck_foil_url || null,  // TODO: add column first
+      ck_foil_product_url: urls.ck_foil_url || null,
     }))
     
     // Update by scryfall_id
     for (const upd of updates) {
       const { error } = await supabase
         .from('cards')
-        .update({ ck_product_url: upd.ck_product_url })
+        .update({ ck_product_url: upd.ck_product_url, ck_foil_product_url: upd.ck_foil_product_url })
         .eq('scryfall_id', upd.scryfall_id)
       
       if (error) {

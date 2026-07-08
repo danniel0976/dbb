@@ -153,7 +153,7 @@ export const cardQueries = {
 
     let query = supabase
       .from('cards')
-      .select('id, card_name, set_code, set_name, collector_number, rarity, card_type, colors, is_foil, condition, ckd_usd_price, myr_price_2_5, myr_price_2_8, myr_price_3_0, image_png_url, image_crop_url, ck_product_url, created_at')
+      .select('id, card_name, set_code, set_name, collector_number, rarity, card_type, colors, is_foil, condition, ckd_usd_price, myr_price_2_5, myr_price_2_8, myr_price_3_0, image_png_url, image_crop_url, ck_product_url, created_at', { count: 'exact' })
       .eq('is_available', true)
 
     if (filters.setCode) query = query.eq('set_code', filters.setCode)
@@ -184,6 +184,7 @@ export const cardQueries = {
       // Rarity sort needs client-side reordering — fetch all matching cards
       const result = await query
       if (result.data) {
+        result.total = result.data.length
         const rarityOrder = { mythic: 1, rare: 2, uncommon: 3, common: 4 }
         result.data.sort((a, b) => (rarityOrder[a.rarity] || 99) - (rarityOrder[b.rarity] || 99))
         const total = result.data.length
@@ -203,6 +204,13 @@ export const cardQueries = {
 
     if (result.data && result.data.length > 0) {
       result.data = await enrichCardsWithImages(result.data)
+    }
+
+    // Get total count for display
+    if (result.count !== null && result.count !== undefined) {
+      result.total = result.count
+    } else {
+      result.total = result.data?.length ?? 0
     }
 
     return result

@@ -34,6 +34,7 @@ export default function Home() {
   const [page, setPage] = useState(1)
   const [hasMore, setHasMore] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
+  const [totalCards, setTotalCards] = useState(0)
   const PAGE_SIZE = 24
 
   // Load filter options
@@ -64,6 +65,7 @@ export default function Home() {
       
       setCards(result.data || [])
       setHasMore(result.hasMore ?? result.data?.length === PAGE_SIZE)
+      setTotalCards(result.total ?? result.data?.length ?? 0)
     } catch (err) {
       console.error('Failed to load cards:', err)
       setError('Failed to load cards. Please check your connection.')
@@ -304,7 +306,7 @@ export default function Home() {
               <div className="mb-4 flex items-center justify-between">
                 <div className="flex items-center gap-4">
                   <p className="text-sm text-gray-400">
-                    Showing {cards.length} card{cards.length !== 1 ? 's' : ''}
+                    Showing {cards.length} of {totalCards} card{totalCards !== 1 ? 's' : ''}
                   </p>
                   <select
                     value={filters.sortBy}

@@ -56,8 +56,6 @@ export default function CardDetail({ card, onClose, onCopyCaption }) {
     setTimeout(() => setCopied(false), 2000)
   }
 
-  const caption = generateCaption(card, multiplier)
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       {/* Backdrop */}
@@ -79,13 +77,13 @@ export default function CardDetail({ card, onClose, onCopyCaption }) {
         <div className="grid md:grid-cols-2 gap-6 p-6">
           {/* Left: Card Image */}
           <div className="space-y-4">
-            <div className="relative aspect-[2/3] rounded-lg overflow-hidden border-2 border-dbb-accent/30">
+            <div className="relative aspect-[2/3] rounded-lg overflow-hidden border-2 border-dbb-accent/30 bg-dbb-primary">
               {card.image_png_url ? (
                 <Image
                   src={card.image_png_url}
                   alt={card.card_name}
                   fill
-                  className="object-cover"
+                  className="object-contain"
                   sizes="(max-width: 768px) 100vw, 50vw"
                   priority
                 />
@@ -157,31 +155,20 @@ export default function CardDetail({ card, onClose, onCopyCaption }) {
 
             {/* Pricing */}
             <div className="bg-dbb-primary rounded-lg p-4 space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="font-semibold text-dbb-accent">Pricing</h3>
-                <span className="text-xs text-gray-500">
-                  {hasCKPrice ? 'CardKingdom' : 'N/A'}
-                </span>
-              </div>
-              
               {hasCKPrice ? (
                 <>
-                  {/* CKD USD Price */}
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-400">CKD USD</span>
-                    <span className="font-semibold">{priceUtils.formatUSD(card.ckd_usd_price)}</span>
+                  {/* Hero Price */}
+                  <div className="text-center py-2">
+                    <div className="text-3xl font-bold text-dbb-accent">
+                      {priceUtils.formatMYR(selectedPrice)}
+                    </div>
+                    <div className="text-xs text-gray-500 mt-1">
+                      Selling price @ {multiplier}× multiplier
+                    </div>
                   </div>
 
-                  {/* CKD USD Foil Price */}
-                  {hasCKFoilPrice && (
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-400">CKD USD (Foil)</span>
-                      <span className="font-semibold text-yellow-400">{priceUtils.formatUSD(card.ckd_foil_price)}</span>
-                    </div>
-                  )}
-
-                  {/* Selling Price Multipliers: CKD × multiplier */}
-                  <div className="grid grid-cols-3 gap-2 pt-2 border-t border-gray-700">
+                  {/* Multiplier Selector */}
+                  <div className="grid grid-cols-3 gap-2">
                     {[2.5, 2.8, 3.0].map((mult) => (
                       <button
                         key={mult}
@@ -190,7 +177,7 @@ export default function CardDetail({ card, onClose, onCopyCaption }) {
                           p-2 rounded-lg text-center transition-all
                           ${multiplier === mult 
                             ? 'bg-dbb-accent text-white' 
-                            : 'bg-dbb-secondary hover:bg-dbb-primary'}
+                            : 'bg-dbb-secondary hover:bg-dbb-primary border border-gray-700'}
                         `}
                       >
                         <div className="text-xs opacity-75">{mult}×</div>
@@ -201,31 +188,49 @@ export default function CardDetail({ card, onClose, onCopyCaption }) {
                     ))}
                   </div>
 
-                  {/* Foil Selling Prices */}
+                  {/* Foil Prices */}
                   {hasCKFoilPrice && foilPrices && (
                     <div className="grid grid-cols-3 gap-2">
                       {[2.5, 2.8, 3.0].map((mult) => (
-                        <div key={mult} className="p-2 rounded-lg text-center bg-yellow-900/20 border border-yellow-600/30">
+                        <button
+                          key={mult}
+                          onClick={() => setMultiplier(mult)}
+                          className={`
+                            p-2 rounded-lg text-center transition-all bg-yellow-900/20 border border-yellow-600/30
+                            ${multiplier === mult ? 'ring-2 ring-yellow-400' : ''}
+                          `}
+                        >
                           <div className="text-xs opacity-75 text-yellow-400">✨ {mult}×</div>
                           <div className="font-bold text-sm text-yellow-400">
                             RM {foilPrices[mult]?.toFixed(2) || 'N/A'}
                           </div>
-                        </div>
+                        </button>
                       ))}
                     </div>
                   )}
 
-                  {/* Selected Price Highlight */}
-                  <div className="pt-2 border-t border-gray-700">
+                  {/* Price Info */}
+                  <div className="pt-3 border-t border-gray-700 space-y-1.5">
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-400">Your Price ({multiplier}×)</span>
-                      <span className="text-xl font-bold text-dbb-accent">
-                        RM {selectedPrice?.toFixed(2) || 'N/A'}
-                      </span>
+                      <span className="text-sm text-gray-400">CKD USD</span>
+                      <span className="font-semibold">{priceUtils.formatUSD(card.ckd_usd_price)}</span>
+                    </div>
+                    {hasCKFoilPrice && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-gray-400">CKD USD (Foil)</span>
+                        <span className="font-semibold text-yellow-400">{priceUtils.formatUSD(card.ckd_foil_price)}</span>
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-400">Source</span>
+                      <span className="text-sm">CardKingdom</span>
                     </div>
                   </div>
 
-                  <p className="text-xs text-gray-500">CKD USD × {multiplier} multiplier</p>
+                  {/* Card Identity Line */}
+                  <div className="text-center text-sm text-gray-400 pt-1">
+                    {card.card_name} · {card.set_code} · {rarityLabels[card.rarity]} · #{card.collector_number?.padStart(4, '0') ?? '????'}
+                  </div>
                 </>
               ) : (
                 <div className="text-center py-4">
@@ -235,32 +240,21 @@ export default function CardDetail({ card, onClose, onCopyCaption }) {
               )}
             </div>
 
-            {/* Caption Generator */}
-            <div className="space-y-2">
-              <h3 className="text-sm font-semibold text-gray-400">Facebook Caption</h3>
-              <div className="relative">
-                <textarea
-                  readOnly
-                  value={caption}
-                  className="w-full bg-dbb-primary border border-gray-700 rounded-lg p-3 text-xs font-mono resize-none h-40 focus:border-dbb-accent focus:outline-none"
-                />
-                <button
-                  onClick={handleCopy}
-                  className={`
-                    absolute top-2 right-2 p-2 rounded-lg transition-all
-                    ${copied 
-                      ? 'bg-green-600 text-white' 
-                      : 'bg-dbb-accent hover:bg-red-600 text-white'}
-                  `}
-                  title="Copy to clipboard"
-                >
-                  {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                </button>
-              </div>
-              <p className="text-xs text-gray-500">
-                Click the copy button to grab the formatted caption for your Facebook post.
-              </p>
-            </div>
+            {/* Copy as Caption */}
+            <button
+              onClick={handleCopy}
+              className={`
+                w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg font-semibold transition-all
+                ${copied 
+                  ? 'bg-green-600 text-white' 
+                  : 'bg-dbb-accent hover:bg-red-600 text-white'}
+              `}
+            >
+              {copied ? <><Check className="w-4 h-4" /> Copied!</> : <><Copy className="w-4 h-4" /> Copy as Caption</>}
+            </button>
+            <p className="text-xs text-gray-500 text-center -mt-3">
+              Copies formatted caption for Facebook posts
+            </p>
 
             {/* CardKingdom Purchase Link */}
             {card.ck_product_url ? (
