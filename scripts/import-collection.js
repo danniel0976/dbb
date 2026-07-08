@@ -69,83 +69,48 @@ async function fetchExchangeRate() {
 // ============================================================================
 
 async function fetchMTGJSONPrices() {
-  console.log('💰 Fetching MTGJSON AllPricesToday (CardKingdom prices)...')
-  
-  return new Promise((resolve, reject) => {
-    const req = https.get(MTGJSON_PRICES_URL, { headers: { 'User-Agent': 'DansBizarreBazaar/1.0' } }, (res) => {
-      if (res.statusCode !== 200) {
-        res.resume()
-        return reject(new Error(`MTGJSON returned HTTP ${res.statusCode}`))
-      }
+  // AllPricesToday keys are MTGJSON UUIDs, NOT Scryfall IDs — never look up
+  // prices in it directly. We read the pre-built cache instead (built daily by
+  // scripts/build-price-cache.js, keyed by Scryfall ID with a name-fallback
+  // index — see scripts/README-price-pipeline.md).
+  console.log('💰 Loading CardKingdom price cache (Scryfall-ID keyed)...')
 
-      const gunzip = createGunzip()
-      const chunks = []
+  const localPath = path.join(__dirname, 'data', 'ck-prices.json')
+  let cache
+  if (fs.existsSync(localPath)) {
+    cache = JSON.parse(fs.readFileSync(localPath, 'utf8'))
+  } else {
+    const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/price-cache/ck-prices.json`
+    console.log('   Local cache missing, fetching from Supabase Storage...')
+    const res = await fetch(url, { headers: { 'User-Agent': 'DansBizarreBazaar/1.0' } })
+    if (!res.ok) throw new Error(`Price cache fetch failed: HTTP ${res.status}`)
+    cache = await res.json()
+  }
 
-      res.pipe(gunzip)
-      gunzip.on('data', (chunk) => chunks.push(chunk))
-      gunzip.on('end', () => {
-        try {
-          const parsed = JSON.parse(Buffer.concat(chunks).toString('utf8'))
-          const data = parsed.data || {}
-          
-          // Build CardKingdom price lookup
-          // MTGJSON v5.3 format: { uuid: { paper: { cardkingdom: { retail: { normal: { "2026-07-07": 7.99 } }, buylist: { ... } } } } }
-          // Prices are nested under date keys — we take the latest date
-          
-          function getLatestPrice(dateObj) {
-            if (!dateObj || typeof dateObj !== 'object') return null
-            const dates = Object.keys(dateObj).sort()
-            if (dates.length === 0) return null
-            const val = dateObj[dates[dates.length - 1]]
-            return typeof val === 'number' ? val : parseFloat(val)
-          }
-          
-          const lookup = new Map()
-          let ckCount = 0
-          
-          for (const [uuid, priceData] of Object.entries(data)) {
-            if (!priceData || typeof priceData !== 'object') continue
-
-            const paper = priceData.paper
-            if (!paper || typeof paper !== 'object') continue
-
-            const ck = paper.cardkingdom || paper.cardKingdom || paper.CardKingdom
-            if (!ck || typeof ck !== 'object') continue
-
-            const retail = ck.retail || ck.Retail || {}
-            const buylist = ck.buylist || ck.Buylist || {}
-
-            const normalRetail = getLatestPrice(retail.normal || retail.Normal)
-            const foilRetail = getLatestPrice(retail.foil || retail.Foil)
-            const normalBuylist = getLatestPrice(buylist.normal || buylist.Normal)
-
-            if (normalRetail !== null || foilRetail !== null) {
-              lookup.set(uuid.toLowerCase(), {
-                ckd_usd_price: normalRetail,
-                ckd_foil_price: foilRetail,
-                ckd_buy_price: normalBuylist,
-                source: 'cardkingdom_via_mtgjson',
-              })
-              ckCount++
-            }
-          }
-
-          console.log(`   ✅ Loaded ${ckCount} CardKingdom price entries`)
-          resolve(lookup)
-        } catch (e) {
-          reject(new Error(`Failed to parse MTGJSON: ${e.message}`))
-        }
-      })
-      gunzip.on('error', reject)
-      res.on('error', reject)
-    })
-
-    req.on('error', reject)
-    req.setTimeout(300000, () => { // 5 minute timeout for large file
-      req.destroy()
-      reject(new Error('MTGJSON request timed out'))
-    })
+  const toRecord = (rec) => ({
+    ckd_usd_price: rec.n ?? null,
+    ckd_foil_price: rec.f ?? null,
+    ckd_buy_price: rec.b ?? null,
+    source: 'cardkingdom_via_mtgjson',
   })
+
+  const byId = new Map()
+  const byName = new Map()
+  for (const [id, rec] of Object.entries(cache.prices || {})) byId.set(id.toLowerCase(), toRecord(rec))
+  for (const [name, rec] of Object.entries(cache.names || {})) byName.set(name.toLowerCase(), toRecord(rec))
+
+  console.log(`   ✅ Loaded ${byId.size} CK prices by Scryfall ID, ${byName.size} by name`)
+  if (cache._meta?.built) console.log(`   Cache built: ${cache._meta.built}`)
+
+  return {
+    size: byId.size,
+    // Name fallback covers DB printings CK doesn't stock (cheapest printing)
+    get(scryfallId, cardName) {
+      let rec = scryfallId ? byId.get(String(scryfallId).toLowerCase()) : undefined
+      if (!rec && cardName) rec = byName.get(String(cardName).toLowerCase())
+      return rec
+    },
+  }
 }
 
 // ============================================================================
@@ -276,11 +241,11 @@ async function processCard(card, priceLookup, exchangeRate) {
   }
 
   // Get CardKingdom price from MTGJSON lookup
-  const ckPrice = priceLookup.get(scryfallData.id.toLowerCase())
+  const ckPrice = priceLookup.get(scryfallData.id, scryfallData.name)
   
   if (ckPrice) {
     processedCard.ckd_usd_price = card.is_foil && ckPrice.ckd_foil_price ? ckPrice.ckd_foil_price : ckPrice.ckd_usd_price
-    processedCard.ckd_buy_price = ckPrice.ckd_buy_price
+    // ckd_buy_price omitted — column doesn't exist in the cards table yet
     processedCard.ckd_foil_price = ckPrice.ckd_foil_price
     processedCard.pricing_source = 'cardkingdom_via_mtgjson'
   } else {
@@ -347,15 +312,22 @@ async function upsertCard(cardData) {
 async function refreshPrices(priceLookup, exchangeRate, dryRun = false) {
   console.log('\n🔄 Refreshing prices for all existing cards...\n')
 
-  // Fetch all cards
-  const { data: cards, error } = await supabase
-    .from('cards')
-    .select('id, scryfall_id, card_name, is_foil, ckd_usd_price, pricing_source')
-    .order('card_name')
+  // Fetch all cards (paginated — supabase caps responses at 1000 rows)
+  const cards = []
+  for (let from = 0; ; from += 1000) {
+    const { data: page, error } = await supabase
+      .from('cards')
+      .select('id, scryfall_id, card_name, is_foil, ckd_usd_price, pricing_source')
+      .order('card_name')
+      .range(from, from + 999)
 
-  if (error) {
-    console.error('❌ Failed to fetch cards:', error.message)
-    process.exit(1)
+    if (error) {
+      console.error('❌ Failed to fetch cards:', error.message)
+      process.exit(1)
+    }
+    if (!page || page.length === 0) break
+    cards.push(...page)
+    if (page.length < 1000) break
   }
 
   console.log(`   Found ${cards.length} cards in database\n`)
@@ -367,7 +339,7 @@ async function refreshPrices(priceLookup, exchangeRate, dryRun = false) {
 
   for (let i = 0; i < cards.length; i++) {
     const card = cards[i]
-    const ckPrice = priceLookup.get(card.scryfall_id?.toLowerCase())
+    const ckPrice = priceLookup.get(card.scryfall_id, card.card_name)
 
     if (!ckPrice) {
       notFound++
@@ -386,7 +358,8 @@ async function refreshPrices(priceLookup, exchangeRate, dryRun = false) {
     const updateData = {
       ckd_usd_price: newPrice,
       ckd_foil_price: ckPrice.ckd_foil_price,
-      ckd_buy_price: ckPrice.ckd_buy_price,
+      // ckd_buy_price omitted — column doesn't exist in the cards table yet
+      // (buylist price is still served live by /api/pricing from the cache)
       usd_myr_rate: exchangeRate,
       myr_price_2_5: newPrice ? Math.round(newPrice * exchangeRate * 2.5 * 100) / 100 : null,
       myr_price_2_8: newPrice ? Math.round(newPrice * exchangeRate * 2.8 * 100) / 100 : null,
@@ -524,7 +497,7 @@ async function importCollection(csvPath, exchangeRate, priceLookup, dryRun = fal
 async function main() {
   const args = process.argv.slice(2)
   const dryRun = args.includes('--dry-run')
-  const refreshPrices = args.includes('--refresh-prices')
+  const doRefreshPrices = args.includes('--refresh-prices')
   const rateArg = args.findIndex(a => a === '--rate')
   const overrideRate = rateArg >= 0 ? parseFloat(args[rateArg + 1]) : null
 
@@ -541,7 +514,7 @@ async function main() {
     priceLookup = new Map()
   }
 
-  if (refreshPrices) {
+  if (doRefreshPrices) {
     await refreshPrices(priceLookup, exchangeRate, dryRun)
   } else {
     const csvPath = args.find(a => !a.startsWith('--') && a !== (overrideRate ? String(overrideRate) : ''))
