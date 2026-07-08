@@ -16,12 +16,12 @@ export default function Home() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [filters, setFilters] = useState({
     setCode: null,
-    rarity: null,
+    rarities: [],
     colors: [],
     cardType: null,
     minPrice: null,
     maxPrice: null,
-    isFoil: undefined,
+    isFoil: null, // null = all, true = foil only, false = non-foil only
     sortBy: 'newest',
     search: '',
   })
@@ -134,12 +134,12 @@ export default function Home() {
   const clearFilters = () => {
     setFilters({
       setCode: null,
-      rarity: null,
+      rarities: [],
       colors: [],
       cardType: null,
       minPrice: null,
       maxPrice: null,
-      isFoil: undefined,
+      isFoil: null,
       sortBy: 'newest',
       search: '',
     })
@@ -177,6 +177,8 @@ export default function Home() {
   const hasActiveFilters = Object.entries(filters).some(([key, v]) => {
     if (key === 'sortBy') return v !== 'newest'
     if (key === 'search') return v !== ''
+    if (key === 'isFoil') return v !== null
+    if (key === 'rarities') return v.length > 0
     return v !== null && v !== undefined && (Array.isArray(v) ? v.length > 0 : true)
   })
 

@@ -157,10 +157,10 @@ export const cardQueries = {
       .eq('is_available', true)
 
     if (filters.setCode) query = query.eq('set_code', filters.setCode)
-    if (filters.rarity) query = query.eq('rarity', filters.rarity)
-    if (filters.colors && filters.colors.length > 0) query = query.contains('colors', filters.colors)
+    if (filters.rarities && filters.rarities.length > 0) query = query.in('rarity', filters.rarities)
+    if (filters.colors && filters.colors.length > 0) query = query.overlaps('colors', filters.colors)
     if (filters.cardType) query = query.ilike('card_type', `%${filters.cardType}%`)
-    if (filters.isFoil !== undefined) query = query.eq('is_foil', filters.isFoil)
+    if (filters.isFoil !== undefined && filters.isFoil !== null) query = query.eq('is_foil', filters.isFoil)
     if (filters.minPrice) query = query.gte('myr_price_2_8', filters.minPrice)
     if (filters.maxPrice) query = query.lte('myr_price_2_8', filters.maxPrice)
     if (filters.search && filters.search.trim()) query = query.ilike('card_name', `%${filters.search.trim()}%`)

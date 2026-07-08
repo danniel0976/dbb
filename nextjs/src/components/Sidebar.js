@@ -44,21 +44,26 @@ export default function Sidebar({ filters, updateFilter, clearFilters, filterOpt
         </select>
       </div>
 
-      {/* Rarity Filter */}
+      {/* Rarity Filter - checkboxes for multi-select */}
       <div>
         <h3 className="text-sm font-semibold mb-2 text-gray-300">Rarity</h3>
-        <div className="space-y-2">
+        <div className="space-y-1">
           {rarityOrder.map((rarity) => (
             <label
               key={rarity}
-              className="flex items-center gap-2 cursor-pointer hover:bg-dbb-secondary p-2 rounded-lg transition-colors"
+              className="flex items-center gap-2 cursor-pointer hover:bg-dbb-secondary p-1.5 rounded-lg transition-colors"
             >
               <input
-                type="radio"
-                name="rarity"
-                checked={filters.rarity === rarity}
-                onChange={() => updateFilter('rarity', filters.rarity === rarity ? null : rarity)}
-                className="w-4 h-4 accent-dbb-accent"
+                type="checkbox"
+                checked={filters.rarities.includes(rarity)}
+                onChange={() => {
+                  const current = filters.rarities
+                  const next = current.includes(rarity)
+                    ? current.filter(r => r !== rarity)
+                    : [...current, rarity]
+                  updateFilter('rarities', next)
+                }}
+                className="w-4 h-4 accent-dbb-accent rounded"
               />
               <span className={`text-sm ${rarityColors[rarity]}`}>
                 {rarityLabels[rarity]}
@@ -68,7 +73,7 @@ export default function Sidebar({ filters, updateFilter, clearFilters, filterOpt
         </div>
       </div>
 
-      {/* Color Filter */}
+      {/* Color Filter - toggle buttons, OR matching */}
       <div>
         <h3 className="text-sm font-semibold mb-2 text-gray-300">Colors</h3>
         <div className="flex flex-wrap gap-2">
@@ -86,7 +91,7 @@ export default function Sidebar({ filters, updateFilter, clearFilters, filterOpt
                 transition-all duration-200
                 ${filters.colors.includes(color.code) 
                   ? 'ring-2 ring-dbb-accent ring-offset-2 ring-offset-dbb-primary scale-110' 
-                  : 'hover:scale-105'}
+                  : 'hover:scale-105 opacity-50'}
               `}
               title={color.name}
             >
@@ -94,6 +99,7 @@ export default function Sidebar({ filters, updateFilter, clearFilters, filterOpt
             </button>
           ))}
         </div>
+        <p className="text-xs text-gray-500 mt-1">Match cards with any selected color</p>
       </div>
 
       {/* Card Type Filter */}
@@ -113,29 +119,39 @@ export default function Sidebar({ filters, updateFilter, clearFilters, filterOpt
         </select>
       </div>
 
-      {/* Foil Filter */}
+      {/* Foil Filter - three options: All, Foil Only, Non-Foil Only */}
       <div>
         <h3 className="text-sm font-semibold mb-2 text-gray-300 flex items-center gap-2">
           <Sparkles className="w-4 h-4" />
           Foil
         </h3>
-        <div className="space-y-2">
-          <label className="flex items-center gap-2 cursor-pointer hover:bg-dbb-secondary p-2 rounded-lg transition-colors">
+        <div className="space-y-1">
+          <label className="flex items-center gap-2 cursor-pointer hover:bg-dbb-secondary p-1.5 rounded-lg transition-colors">
+            <input
+              type="radio"
+              name="foil"
+              checked={filters.isFoil === null}
+              onChange={() => updateFilter('isFoil', null)}
+              className="w-4 h-4 accent-dbb-accent"
+            />
+            <span className="text-sm">All</span>
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer hover:bg-dbb-secondary p-1.5 rounded-lg transition-colors">
             <input
               type="radio"
               name="foil"
               checked={filters.isFoil === true}
-              onChange={() => updateFilter('isFoil', filters.isFoil === true ? undefined : true)}
+              onChange={() => updateFilter('isFoil', true)}
               className="w-4 h-4 accent-dbb-accent"
             />
             <span className="text-sm">Foil Only</span>
           </label>
-          <label className="flex items-center gap-2 cursor-pointer hover:bg-dbb-secondary p-2 rounded-lg transition-colors">
+          <label className="flex items-center gap-2 cursor-pointer hover:bg-dbb-secondary p-1.5 rounded-lg transition-colors">
             <input
               type="radio"
               name="foil"
               checked={filters.isFoil === false}
-              onChange={() => updateFilter('isFoil', filters.isFoil === false ? undefined : false)}
+              onChange={() => updateFilter('isFoil', false)}
               className="w-4 h-4 accent-dbb-accent"
             />
             <span className="text-sm">Non-Foil Only</span>
