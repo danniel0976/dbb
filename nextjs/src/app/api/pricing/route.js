@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server'
 import { unzipSync } from 'zlib'
 
+// Force Node.js runtime (not Edge) — needed for zlib and large buffer operations
+export const runtime = 'nodejs'
+// Allow up to 60s for MTGJSON download (50MB gzipped file)
+export const maxDuration = 60
+
 // ============================================================================
 // MTGJSON AllPricesToday price cache
 // Fetches real CardKingdom prices (not Scryfall/TCGPlayer)

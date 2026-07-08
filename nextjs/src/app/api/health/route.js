@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server'
 
+// Force Node.js runtime
+export const runtime = 'nodejs'
+
 // Health check + Supabase keep-alive endpoint
 // Called by Vercel cron every 5 days to prevent Supabase free tier pause (7-day idle timeout)
 
