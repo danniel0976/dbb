@@ -6,7 +6,7 @@ import Sidebar from '../components/Sidebar'
 import CardGrid from '../components/CardGrid'
 import CardDetail from '../components/CardDetail'
 import LoadingSkeleton from '../components/LoadingSkeleton'
-import { Filter, Grid, X } from 'lucide-react'
+import { Filter, Grid, X, Search } from 'lucide-react'
 
 export default function Home() {
   const [cards, setCards] = useState([])
@@ -22,6 +22,8 @@ export default function Home() {
     minPrice: null,
     maxPrice: null,
     isFoil: undefined,
+    sortBy: 'newest',
+    search: '',
   })
   const [filterOptions, setFilterOptions] = useState({
     sets: [],
@@ -61,7 +63,7 @@ export default function Home() {
       }
       
       setCards(result.data || [])
-      setHasMore(result.data?.length === PAGE_SIZE) // More cards available if we got a full page
+      setHasMore(result.hasMore ?? result.data?.length === PAGE_SIZE)
     } catch (err) {
       console.error('Failed to load cards:', err)
       setError('Failed to load cards. Please check your connection.')
@@ -87,7 +89,7 @@ export default function Home() {
       if (result.data && result.data.length > 0) {
         setCards(prev => [...prev, ...result.data])
         setPage(nextPage)
-        setHasMore(result.data.length === PAGE_SIZE) // More cards available if we got a full page
+        setHasMore(result.hasMore ?? result.data.length === PAGE_SIZE)
       } else {
         setHasMore(false) // No more cards
       }
@@ -138,6 +140,8 @@ export default function Home() {
       minPrice: null,
       maxPrice: null,
       isFoil: undefined,
+      sortBy: 'newest',
+      search: '',
     })
   }
 
@@ -170,9 +174,11 @@ export default function Home() {
   }
 
   // Check if any filters are active
-  const hasActiveFilters = Object.values(filters).some(v => 
-    v !== null && v !== undefined && (Array.isArray(v) ? v.length > 0 : true)
-  )
+  const hasActiveFilters = Object.entries(filters).some(([key, v]) => {
+    if (key === 'sortBy') return v !== 'newest'
+    if (key === 'search') return v !== ''
+    return v !== null && v !== undefined && (Array.isArray(v) ? v.length > 0 : true)
+  })
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-dbb-primary to-dbb-secondary">
@@ -194,16 +200,35 @@ export default function Home() {
                 Magic: The Gathering Claim Sales
               </span>
             </div>
-            
-            {hasActiveFilters && (
-              <button
-                onClick={clearFilters}
-                className="flex items-center gap-2 text-sm text-dbb-accent hover:text-red-400 transition-colors"
-              >
-                <X className="w-4 h-4" />
-                Clear Filters
-              </button>
-            )}
+            <div className="flex items-center gap-3">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search cards..."
+                  value={filters.search}
+                  onChange={(e) => updateFilter('search', e.target.value)}
+                  className="w-48 sm:w-64 bg-dbb-secondary border border-gray-700 rounded-lg pl-10 pr-8 py-2 text-sm focus:border-dbb-accent focus:outline-none placeholder-gray-500"
+                />
+                {filters.search && (
+                  <button
+                    onClick={() => updateFilter('search', '')}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:text-red-400 transition-colors"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+              {hasActiveFilters && (
+                <button
+                  onClick={clearFilters}
+                  className="flex items-center gap-2 text-sm text-dbb-accent hover:text-red-400 transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                  Clear
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </header>
@@ -275,9 +300,22 @@ export default function Home() {
           ) : (
             <>
               <div className="mb-4 flex items-center justify-between">
-                <p className="text-sm text-gray-400">
-                  Showing {cards.length} card{cards.length !== 1 ? 's' : ''}
-                </p>
+                <div className="flex items-center gap-4">
+                  <p className="text-sm text-gray-400">
+                    Showing {cards.length} card{cards.length !== 1 ? 's' : ''}
+                  </p>
+                  <select
+                    value={filters.sortBy}
+                    onChange={(e) => updateFilter('sortBy', e.target.value)}
+                    className="bg-dbb-secondary border border-gray-700 rounded-lg px-3 py-1.5 text-sm focus:border-dbb-accent focus:outline-none"
+                  >
+                    <option value="newest">Newest</option>
+                    <option value="price_high">Price: High → Low</option>
+                    <option value="price_low">Price: Low → High</option>
+                    <option value="name_az">Name: A-Z</option>
+                    <option value="rarity">Rarity</option>
+                  </select>
+                </div>
                 {hasMore && (
                   <p className="text-xs text-gray-500">Scroll for more</p>
                 )}

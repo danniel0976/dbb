@@ -12,7 +12,6 @@
  * Options:
  *   --dry-run          Show what would be imported without writing to DB
  *   --refresh-prices   Re-fetch and update prices for all existing cards
- *   --rate <number>    Override exchange rate (default: live from API)
  */
 
 require('dotenv').config({ path: require('path').join(__dirname, '..', 'nextjs', '.env.local') })
@@ -26,7 +25,7 @@ const { createGunzip } = require('zlib')
 // Configuration
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
-const EXCHANGE_RATE_API = 'https://open.er-api.com/v6/latest/USD'
+// Exchange rate no longer needed — pricing is CKD × multiplier, no FX conversion
 const MTGJSON_PRICES_URL = 'https://mtgjson.com/api/v5/AllPricesToday.json.gz'
 const SCRYFALL_BASE = 'https://api.scryfall.com'
 const BATCH_SIZE = 10
@@ -42,27 +41,7 @@ if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
 // Initialize Supabase client with service role key for writes
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
-// ============================================================================
-// Exchange Rate
-// ============================================================================
-
-async function fetchExchangeRate() {
-  console.log('💱 Fetching live USD/MYR exchange rate...')
-  try {
-    const response = await fetch(EXCHANGE_RATE_API)
-    if (response.ok) {
-      const data = await response.json()
-      if (data.rates && data.rates.MYR) {
-        console.log(`   ✅ Live rate: 1 USD = ${data.rates.MYR} MYR`)
-        return data.rates.MYR
-      }
-    }
-  } catch (e) {
-    console.warn('   ⚠️  Failed to fetch live rate:', e.message)
-  }
-  console.log('   Using default rate: 1 USD = 4.70 MYR')
-  return 4.70
-}
+// Exchange rate removed — pricing is CKD × multiplier (2.5/2.8/3.0), no FX conversion needed
 
 // ============================================================================
 // MTGJSON Price Lookup
@@ -188,7 +167,7 @@ function parseManaboxCSV(csvPath) {
 // Process a single card (fetch from Scryfall + enrich with CK prices)
 // ============================================================================
 
-async function processCard(card, priceLookup, exchangeRate) {
+async function processCard(card, priceLookup) {
   // Fetch from Scryfall
   let scryfallData = null
   
@@ -308,7 +287,7 @@ async function upsertCard(cardData) {
 // Refresh prices for all existing cards
 // ============================================================================
 
-async function refreshPrices(priceLookup, exchangeRate, dryRun = false) {
+async function refreshPrices(priceLookup, dryRun = false) {
   console.log('\n🔄 Refreshing prices for all existing cards...\n')
 
   // Fetch all cards (paginated — supabase caps responses at 1000 rows)
@@ -316,7 +295,7 @@ async function refreshPrices(priceLookup, exchangeRate, dryRun = false) {
   for (let from = 0; ; from += 1000) {
     const { data: page, error } = await supabase
       .from('cards')
-      .select('id, scryfall_id, card_name, is_foil, ckd_usd_price, pricing_source')
+      .select('id, scryfall_id, card_name, is_foil, ckd_usd_price, myr_price_2_5, myr_price_2_8, myr_price_3_0, pricing_source')
       .order('card_name')
       .range(from, from + 999)
 
@@ -348,7 +327,15 @@ async function refreshPrices(priceLookup, exchangeRate, dryRun = false) {
 
     const newPrice = card.is_foil && ckPrice.ckd_foil_price ? ckPrice.ckd_foil_price : ckPrice.ckd_usd_price
 
-    if (Math.abs((card.ckd_usd_price || 0) - (newPrice || 0)) < 0.01 && card.pricing_source === 'cardkingdom_via_mtgjson') {
+    // Always recalculate MYR selling prices even if USD price unchanged
+    // (previous runs may have used wrong FX-based conversion)
+    const needsMyrUpdate = card.ckd_usd_price !== null && (
+      Math.abs(card.myr_price_2_5 - Math.round(card.ckd_usd_price * 2.5 * 2) / 2) > 0.01 ||
+      Math.abs(card.myr_price_2_8 - Math.round(card.ckd_usd_price * 2.8 * 2) / 2) > 0.01 ||
+      Math.abs(card.myr_price_3_0 - Math.round(card.ckd_usd_price * 3.0 * 2) / 2) > 0.01
+    )
+
+    if (Math.abs((card.ckd_usd_price || 0) - (newPrice || 0)) < 0.01 && card.pricing_source === 'cardkingdom_via_mtgjson' && !needsMyrUpdate) {
       unchanged++
       continue
     }
@@ -401,10 +388,10 @@ async function refreshPrices(priceLookup, exchangeRate, dryRun = false) {
 // Main: Import CSV
 // ============================================================================
 
-async function importCollection(csvPath, exchangeRate, priceLookup, dryRun = false) {
+async function importCollection(csvPath, priceLookup, dryRun = false) {
   console.log('🚀 Starting DBB Collection Import\n')
   console.log(`📁 CSV File: ${csvPath}`)
-  console.log(`💱 Exchange Rate: 1 USD = ${exchangeRate} MYR`)
+  console.log('💱 Pricing: CKD × multiplier (2.5/2.8/3.0), no FX conversion')
   if (dryRun) console.log('🔍 DRY RUN — no changes will be written\n')
 
   // Parse CSV
@@ -434,7 +421,7 @@ async function importCollection(csvPath, exchangeRate, priceLookup, dryRun = fal
 
     for (const card of batch) {
       try {
-        const processedCard = await processCard(card, priceLookup, exchangeRate)
+        const processedCard = await processCard(card, priceLookup)
 
         if (!processedCard.scryfall_id) {
           throw new Error('No Scryfall ID resolved')
@@ -495,11 +482,7 @@ async function main() {
   const args = process.argv.slice(2)
   const dryRun = args.includes('--dry-run')
   const doRefreshPrices = args.includes('--refresh-prices')
-  const rateArg = args.findIndex(a => a === '--rate')
-  const overrideRate = rateArg >= 0 ? parseFloat(args[rateArg + 1]) : null
-
-  // Get exchange rate
-  const exchangeRate = overrideRate || await fetchExchangeRate()
+  // --rate flag removed (no FX conversion needed, pricing is CKD × multiplier only)
 
   // Fetch MTGJSON prices
   let priceLookup
@@ -512,19 +495,19 @@ async function main() {
   }
 
   if (doRefreshPrices) {
-    await refreshPrices(priceLookup, exchangeRate, dryRun)
+    await refreshPrices(priceLookup, dryRun)
   } else {
-    const csvPath = args.find(a => !a.startsWith('--') && a !== (overrideRate ? String(overrideRate) : ''))
+    const csvPath = args.find(a => !a.startsWith('--'))
     if (!csvPath) {
-      console.log('Usage: node scripts/import-collection.js <path-to-csv> [--dry-run] [--rate <number>]')
-      console.log('       node scripts/import-collection.js --refresh-prices [--dry-run] [--rate <number>]')
+      console.log('Usage: node scripts/import-collection.js <path-to-csv> [--dry-run] [--refresh-prices]')
+,      console.log('       node scripts/import-collection.js --refresh-prices [--dry-run]')
       process.exit(1)
     }
     if (!fs.existsSync(csvPath)) {
       console.error(`❌ File not found: ${csvPath}`)
       process.exit(1)
     }
-    await importCollection(csvPath, exchangeRate, priceLookup, dryRun)
+    await importCollection(csvPath, priceLookup, dryRun)
   }
 }
 

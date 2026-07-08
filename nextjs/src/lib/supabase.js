@@ -148,8 +148,8 @@ export const enrichCardsWithImages = async (cards) => {
 
 export const cardQueries = {
   getAvailableCards: async (filters = {}, page = 1, pageSize = 24) => {
-    const start = (page - 1) * pageSize
-    const end = start + pageSize - 1
+    const sortBy = filters.sortBy || 'newest'
+    const isRaritySort = sortBy === 'rarity'
 
     let query = supabase
       .from('cards')
@@ -163,10 +163,43 @@ export const cardQueries = {
     if (filters.isFoil !== undefined) query = query.eq('is_foil', filters.isFoil)
     if (filters.minPrice) query = query.gte('myr_price_2_8', filters.minPrice)
     if (filters.maxPrice) query = query.lte('myr_price_2_8', filters.maxPrice)
+    if (filters.search && filters.search.trim()) query = query.ilike('card_name', `%${filters.search.trim()}%`)
 
-    const result = await query
-      .order('created_at', { ascending: false })
-      .range(start, end)
+    // Apply DB-level ordering
+    switch (sortBy) {
+      case 'price_high':
+        query = query.order('myr_price_2_8', { ascending: false, nullsFirst: false })
+        break
+      case 'price_low':
+        query = query.order('myr_price_2_8', { ascending: true, nullsFirst: false })
+        break
+      case 'name_az':
+        query = query.order('card_name', { ascending: true })
+        break
+      default: // 'newest'
+        query = query.order('created_at', { ascending: false })
+    }
+
+    if (isRaritySort) {
+      // Rarity sort needs client-side reordering — fetch all matching cards
+      const result = await query
+      if (result.data) {
+        const rarityOrder = { mythic: 1, rare: 2, uncommon: 3, common: 4 }
+        result.data.sort((a, b) => (rarityOrder[a.rarity] || 99) - (rarityOrder[b.rarity] || 99))
+        const total = result.data.length
+        const pageStart = (page - 1) * pageSize
+        const pageEnd = pageStart + pageSize
+        result.data = result.data.slice(pageStart, pageEnd)
+        result.hasMore = total > pageEnd
+        result.data = await enrichCardsWithImages(result.data)
+      }
+      return result
+    }
+
+    // DB-sorted pagination
+    const start = (page - 1) * pageSize
+    const end = start + pageSize - 1
+    const result = await query.range(start, end)
 
     if (result.data && result.data.length > 0) {
       result.data = await enrichCardsWithImages(result.data)

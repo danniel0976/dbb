@@ -206,7 +206,7 @@ export const mtgjsonAPI = {
 // Combined service for processing cards
 export const cardProcessingService = {
   // Process a single card entry
-  processCard: async (cardInput, priceLookup, exchangeRate = 4.70) => {
+  processCard: async (cardInput, priceLookup) => {
     try {
       // Fetch from Scryfall
       let scryfallData
@@ -265,7 +265,7 @@ export const cardProcessingService = {
   },
 
   // Process multiple cards with rate limiting
-  processBatch: async (cards, priceLookup, exchangeRate = 4.70, concurrency = 3) => {
+  processBatch: async (cards, priceLookup, concurrency = 3) => {
     const results = []
     const queue = [...cards]
     const inProgress = []
@@ -275,7 +275,7 @@ export const cardProcessingService = {
       while (inProgress.length < concurrency && queue.length > 0) {
         const card = queue.shift()
         const promise = cardProcessingService
-          .processCard(card, priceLookup, exchangeRate)
+          .processCard(card, priceLookup)
           .then(result => {
             results.push(result)
             const index = inProgress.indexOf(promise)
