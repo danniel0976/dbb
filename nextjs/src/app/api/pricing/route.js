@@ -3,9 +3,12 @@ import { NextResponse } from 'next/server'
 // ============================================================================
 // CardKingdom price lookup via pre-built price cache
 // Cache has two indexes:
-//   - "prices": scryfallId -> {n, f, b} (direct lookup)
+//   - "prices": scryfallId -> {n, f, b} (direct lookup by Scryfall ID)
 //   - "names": card_name_lower -> {n, f, b} (fallback for different printings)
-// No Scryfall fallback — if CK price is unavailable, return nulls.
+//
+// Pricing model: CKD USD × multiplier = selling price in RM
+// The multiplier IS the conversion. No separate USD→MYR step.
+// Example: CKD $0.99 × 3.0 = RM 2.97
 // ============================================================================
 
 export const runtime = 'nodejs'
@@ -14,17 +17,13 @@ export const maxDuration = 30
 const CACHE_BUCKET = 'price-cache'
 const CACHE_FILE = 'ck-prices.json'
 const CACHE_DURATION_MS = 24 * 60 * 60 * 1000 // 24 hours
-const EXCHANGE_RATE_API = 'https://open.er-api.com/v6/latest/USD'
-const DEFAULT_USD_MYR = 4.70
 
 let priceCache = null          // Map<scryfallId_lowercase, {n, f, b}>
 let namePriceCache = null      // Map<name_lower, {n, f, b}>
 let priceCacheTimestamp = 0
-let exchangeRate = DEFAULT_USD_MYR
-let exchangeRateTimestamp = 0
 
 // ============================================================================
-// Fetch price cache from Supabase Storage (compact, ~8-12MB)
+// Fetch price cache from Supabase Storage
 // ============================================================================
 
 async function fetchPriceCache() {
@@ -34,7 +33,6 @@ async function fetchPriceCache() {
     throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL env var')
   }
 
-  // Fetch from Supabase Storage public URL
   const cacheUrl = `${supabaseUrl}/storage/v1/object/public/${CACHE_BUCKET}/${CACHE_FILE}?t=${Date.now()}`
 
   console.log('[Pricing API] Fetching price cache from Supabase Storage...')
@@ -58,7 +56,6 @@ async function fetchPriceCache() {
   const nameMap = new Map()
 
   if (data.prices && data.names) {
-    // New format with separate name index
     for (const [id, prices] of Object.entries(data.prices)) {
       priceMap.set(id.toLowerCase(), prices)
     }
@@ -66,7 +63,6 @@ async function fetchPriceCache() {
       nameMap.set(name.toLowerCase(), prices)
     }
   } else {
-    // Old format (flat object of scryfallId -> prices)
     for (const [id, prices] of Object.entries(data)) {
       priceMap.set(id.toLowerCase(), prices)
     }
@@ -74,7 +70,6 @@ async function fetchPriceCache() {
 
   console.log(`[Pricing API] Loaded ${priceMap.size} CardKingdom prices by ID, ${nameMap.size} by name`)
 
-  // Store both caches
   priceCache = priceMap
   namePriceCache = nameMap
 
@@ -82,36 +77,12 @@ async function fetchPriceCache() {
 }
 
 // ============================================================================
-// Fetch live USD/MYR exchange rate
+// Calculate selling price: CKD × multiplier (no exchange rate)
 // ============================================================================
 
-async function fetchExchangeRate() {
-  try {
-    const response = await fetch(EXCHANGE_RATE_API, {
-      headers: { 'User-Agent': 'DansBizarreBazaar/1.0' },
-    })
-    if (response.ok) {
-      const data = await response.json()
-      if (data.rates && data.rates.MYR) {
-        exchangeRate = data.rates.MYR
-        exchangeRateTimestamp = Date.now()
-        console.log(`[Pricing API] Updated USD/MYR rate: ${exchangeRate}`)
-        return exchangeRate
-      }
-    }
-  } catch (e) {
-    console.error('[Pricing API] Failed to fetch exchange rate:', e.message)
-  }
-  return exchangeRate || DEFAULT_USD_MYR
-}
-
-// ============================================================================
-// Calculate MYR prices
-// ============================================================================
-
-function calculateMYR(usdPrice, rate) {
-  if (usdPrice === null || usdPrice === undefined) return null
-  return Math.round(usdPrice * rate * 100) / 100
+function sellPrice(ckdPrice, multiplier) {
+  if (ckdPrice === null || ckdPrice === undefined) return null
+  return Math.round(ckdPrice * multiplier * 100) / 100
 }
 
 // ============================================================================
@@ -123,7 +94,6 @@ export async function GET(request) {
   const scryfallId = searchParams.get('scryfallId')
   const cardName = searchParams.get('name')
   const forceRefresh = searchParams.get('refresh') === 'true'
-  const rate = parseFloat(searchParams.get('rate')) || exchangeRate || DEFAULT_USD_MYR
 
   // Ensure price cache is loaded
   const now = Date.now()
@@ -131,10 +101,6 @@ export async function GET(request) {
     try {
       await fetchPriceCache()
       priceCacheTimestamp = Date.now()
-      // Also refresh exchange rate if stale
-      if (!exchangeRateTimestamp || (now - exchangeRateTimestamp) > CACHE_DURATION_MS) {
-        await fetchExchangeRate()
-      }
     } catch (error) {
       console.error('[Pricing API] Failed to load price cache:', error.message)
       if (!priceCache) {
@@ -153,7 +119,6 @@ export async function GET(request) {
       pricesLoaded: priceCache ? priceCache.size : 0,
       namesLoaded: namePriceCache ? namePriceCache.size : 0,
       cacheAge: priceCacheTimestamp ? Math.round((Date.now() - priceCacheTimestamp) / 1000 / 60) : null,
-      exchangeRate: exchangeRate || DEFAULT_USD_MYR,
       source: 'cardkingdom_via_mtgjson',
       timestamp: new Date().toISOString(),
     }, {
@@ -180,18 +145,17 @@ export async function GET(request) {
 
   // If found in cache, return CardKingdom prices
   if (result) {
-    const usdMyr = rate || exchangeRate || DEFAULT_USD_MYR
     return NextResponse.json({
       ckd_usd_price: result.n ?? null,
       ckd_foil_price: result.f ?? null,
       ckd_buy_price: result.b ?? null,
-      myr_price_2_5: calculateMYR(result.n, usdMyr * 2.5),
-      myr_price_2_8: calculateMYR(result.n, usdMyr * 2.8),
-      myr_price_3_0: calculateMYR(result.n, usdMyr * 3.0),
-      myr_foil_price_2_5: calculateMYR(result.f, usdMyr * 2.5),
-      myr_foil_price_2_8: calculateMYR(result.f, usdMyr * 2.8),
-      myr_foil_price_3_0: calculateMYR(result.f, usdMyr * 3.0),
-      usd_myr_rate: usdMyr,
+      // Selling prices: CKD USD × multiplier (multiplier IS the conversion)
+      myr_price_2_5: sellPrice(result.n, 2.5),
+      myr_price_2_8: sellPrice(result.n, 2.8),
+      myr_price_3_0: sellPrice(result.n, 3.0),
+      myr_foil_price_2_5: sellPrice(result.f, 2.5),
+      myr_foil_price_2_8: sellPrice(result.f, 2.8),
+      myr_foil_price_3_0: sellPrice(result.f, 3.0),
       source,
       lastUpdated: new Date(priceCacheTimestamp).toISOString(),
     }, {
@@ -199,8 +163,7 @@ export async function GET(request) {
     })
   }
 
-  // No CK price available — return nulls (no Scryfall fallback)
-  const usdMyr = rate || exchangeRate || DEFAULT_USD_MYR
+  // No CK price available — return nulls
   return NextResponse.json({
     ckd_usd_price: null,
     ckd_foil_price: null,
@@ -211,7 +174,6 @@ export async function GET(request) {
     myr_foil_price_2_5: null,
     myr_foil_price_2_8: null,
     myr_foil_price_3_0: null,
-    usd_myr_rate: usdMyr,
     source: null,
     lastUpdated: null,
   }, {

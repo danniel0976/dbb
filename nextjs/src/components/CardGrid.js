@@ -102,7 +102,7 @@ function CardItem({ card, onClick }) {
           </div>
           <div className="text-dbb-accent font-bold text-sm mt-1">
             {priceUtils.formatMYR(card.myr_price_2_8)}
-            <span className="text-xs text-gray-500 ml-1">@2.8x</span>
+            <span className="text-xs text-gray-500 ml-1">@2.8×</span>
           </div>
         </div>
       </div>

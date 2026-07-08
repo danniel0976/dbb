@@ -65,23 +65,22 @@ export const enrichCardWithPricing = async (card) => {
     const pricing = await response.json()
 
     if (pricing) {
-      // The API now returns nulls for cards without CK prices (no Scryfall fallback)
-      // Use API values directly — nulls mean no price available
+      // The API returns nulls for cards without CK prices (no Scryfall fallback)
+      // Selling prices are CKD × multiplier — no separate exchange rate
       const enrichedData = {
         // CardKingdom USD prices (null if not available)
         ckd_usd_price: pricing.ckd_usd_price ?? null,
         ckd_foil_price: pricing.ckd_foil_price ?? null,
         ckd_buy_price: pricing.ckd_buy_price ?? null,
-        // Live MYR prices from API (null if no CK price)
+        // Selling prices: CKD × multiplier (no FX conversion)
         myr_price_2_5: pricing.myr_price_2_5 ?? null,
         myr_price_2_8: pricing.myr_price_2_8 ?? null,
         myr_price_3_0: pricing.myr_price_3_0 ?? null,
-        // Foil MYR prices
+        // Foil selling prices
         myr_foil_price_2_5: pricing.myr_foil_price_2_5 ?? null,
         myr_foil_price_2_8: pricing.myr_foil_price_2_8 ?? null,
         myr_foil_price_3_0: pricing.myr_foil_price_3_0 ?? null,
-        // Exchange rate and source tracking
-        usd_myr_rate: pricing.usd_myr_rate ?? card.usd_myr_rate,
+        // Source tracking
         pricing_source: pricing.source ?? null,
         pricing_last_updated: pricing.lastUpdated ?? null,
       }
@@ -213,8 +212,9 @@ export const cardQueries = {
 // ============================================================================
 
 export const priceUtils = {
-  calculateMYR: (usdPrice, multiplier, exchangeRate = 4.70) => {
-    return Math.round(usdPrice * exchangeRate * multiplier * 100) / 100
+  sellPrice: (ckdPrice, multiplier) => {
+    if (ckdPrice === null || ckdPrice === undefined) return null
+    return Math.round(ckdPrice * multiplier * 100) / 100
   },
   formatMYR: (price) => price === null || price === undefined ? 'N/A' : `RM ${price.toFixed(2)}`,
   formatUSD: (price) => price === null || price === undefined ? 'N/A' : `$${price.toFixed(2)}`,
@@ -225,7 +225,6 @@ export const generateCaption = (card, multiplier = 2.8) => {
   const selectedPrice = prices[multiplier.toString()] || card.myr_price_2_8
   const raritySymbol = { mythic: 'M', rare: 'R', uncommon: 'U', common: 'C' }[card.rarity] || 'C'
 
-  // Show pricing source label — CKD for CardKingdom, N/A for no price
   const hasPrice = card.ckd_usd_price !== null && card.ckd_usd_price !== undefined
   const sourceLabel = hasPrice ? 'CKD' : 'N/A'
 
@@ -233,7 +232,7 @@ export const generateCaption = (card, multiplier = 2.8) => {
 ${raritySymbol} ${card.collector_number?.padStart(4, '0') ?? '????'}
 ${card.set_code}
 ${sourceLabel}: ${priceUtils.formatUSD(card.ckd_usd_price)}
-${sourceLabel} 2.5 / 2.8 / 3.0: RM ${card.myr_price_2_5?.toFixed(2) || 'N/A'} / RM ${card.myr_price_2_8?.toFixed(2) || 'N/A'} / RM ${card.myr_price_3_0?.toFixed(2) || 'N/A'}
-Your price (${multiplier}x): ${priceUtils.formatMYR(selectedPrice)}
+${sourceLabel} 2.5×/2.8×/3.0×: ${priceUtils.formatMYR(card.myr_price_2_5)} / ${priceUtils.formatMYR(card.myr_price_2_8)} / ${priceUtils.formatMYR(card.myr_price_3_0)}
+Your price (${multiplier}×): ${priceUtils.formatMYR(selectedPrice)}
 ${card.is_foil ? '✨ FOIL ✨' : ''}`
 }

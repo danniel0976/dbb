@@ -257,12 +257,11 @@ async function processCard(card, priceLookup, exchangeRate) {
     processedCard.pricing_source = 'scryfall_market'
   }
 
-  // Calculate MYR prices
+  // Calculate selling prices: CKD × multiplier (no FX conversion)
   const basePrice = processedCard.ckd_usd_price
-  processedCard.usd_myr_rate = exchangeRate
-  processedCard.myr_price_2_5 = basePrice ? Math.round(basePrice * exchangeRate * 2.5 * 100) / 100 : null
-  processedCard.myr_price_2_8 = basePrice ? Math.round(basePrice * exchangeRate * 2.8 * 100) / 100 : null
-  processedCard.myr_price_3_0 = basePrice ? Math.round(basePrice * exchangeRate * 3.0 * 100) / 100 : null
+  processedCard.myr_price_2_5 = basePrice ? Math.round(basePrice * 2.5 * 100) / 100 : null
+  processedCard.myr_price_2_8 = basePrice ? Math.round(basePrice * 2.8 * 100) / 100 : null
+  processedCard.myr_price_3_0 = basePrice ? Math.round(basePrice * 3.0 * 100) / 100 : null
   processedCard.pricing_last_updated = new Date().toISOString()
 
   return processedCard
@@ -358,12 +357,10 @@ async function refreshPrices(priceLookup, exchangeRate, dryRun = false) {
     const updateData = {
       ckd_usd_price: newPrice,
       ckd_foil_price: ckPrice.ckd_foil_price,
-      // ckd_buy_price omitted — column doesn't exist in the cards table yet
-      // (buylist price is still served live by /api/pricing from the cache)
-      usd_myr_rate: exchangeRate,
-      myr_price_2_5: newPrice ? Math.round(newPrice * exchangeRate * 2.5 * 100) / 100 : null,
-      myr_price_2_8: newPrice ? Math.round(newPrice * exchangeRate * 2.8 * 100) / 100 : null,
-      myr_price_3_0: newPrice ? Math.round(newPrice * exchangeRate * 3.0 * 100) / 100 : null,
+      // Selling prices: CKD × multiplier (no FX conversion)
+      myr_price_2_5: newPrice ? Math.round(newPrice * 2.5 * 100) / 100 : null,
+      myr_price_2_8: newPrice ? Math.round(newPrice * 2.8 * 100) / 100 : null,
+      myr_price_3_0: newPrice ? Math.round(newPrice * 3.0 * 100) / 100 : null,
       pricing_source: 'cardkingdom_via_mtgjson',
       pricing_last_updated: new Date().toISOString(),
     }

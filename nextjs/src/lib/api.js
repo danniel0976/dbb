@@ -239,7 +239,7 @@ export const cardProcessingService = {
         cardInput.is_foil || false
       )
 
-      // Calculate MYR prices
+      // Calculate selling prices: CKD × multiplier (no exchange rate)
       const ckdUsdPrice = priceInfo?.ckd_usd_price || 0
       
       return {
@@ -249,10 +249,9 @@ export const cardProcessingService = {
         ckd_usd_price: ckdUsdPrice,
         ckd_buy_price: priceInfo?.ckd_buy_price || 0,
         ckd_foil_price: priceInfo?.ckd_foil_price || 0,
-        myr_price_2_5: ckdUsdPrice > 0 ? Math.round(ckdUsdPrice * exchangeRate * 2.5 * 100) / 100 : null,
-        myr_price_2_8: ckdUsdPrice > 0 ? Math.round(ckdUsdPrice * exchangeRate * 2.8 * 100) / 100 : null,
-        myr_price_3_0: ckdUsdPrice > 0 ? Math.round(ckdUsdPrice * exchangeRate * 3.0 * 100) / 100 : null,
-        usd_myr_rate: exchangeRate,
+        myr_price_2_5: ckdUsdPrice > 0 ? Math.round(ckdUsdPrice * 2.5 * 100) / 100 : null,
+        myr_price_2_8: ckdUsdPrice > 0 ? Math.round(ckdUsdPrice * 2.8 * 100) / 100 : null,
+        myr_price_3_0: ckdUsdPrice > 0 ? Math.round(ckdUsdPrice * 3.0 * 100) / 100 : null,
         pricing_source: 'cardkingdom_via_mtgjson',
       }
     } catch (error) {

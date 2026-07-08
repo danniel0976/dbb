@@ -33,6 +33,7 @@ export default function CardDetail({ card, onClose, onCopyCaption }) {
 
   const hasCKPrice = card.ckd_usd_price !== null && card.ckd_usd_price !== undefined
 
+  // Selling prices: CKD USD × multiplier
   const prices = hasCKPrice ? {
     2.5: card.myr_price_2_5,
     2.8: card.myr_price_2_8,
@@ -41,7 +42,7 @@ export default function CardDetail({ card, onClose, onCopyCaption }) {
 
   const selectedPrice = prices ? prices[multiplier] : null
 
-  // Foil prices (from live pricing API)
+  // Foil selling prices
   const hasCKFoilPrice = card.ckd_foil_price !== null && card.ckd_foil_price !== undefined
   const foilPrices = hasCKFoilPrice ? {
     2.5: card.myr_foil_price_2_5,
@@ -165,13 +166,13 @@ export default function CardDetail({ card, onClose, onCopyCaption }) {
               
               {hasCKPrice ? (
                 <>
-                  {/* USD Price */}
+                  {/* CKD USD Price */}
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-gray-400">CKD USD</span>
                     <span className="font-semibold">{priceUtils.formatUSD(card.ckd_usd_price)}</span>
                   </div>
 
-                  {/* Foil USD Price (if available) */}
+                  {/* CKD USD Foil Price */}
                   {hasCKFoilPrice && (
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-gray-400">CKD USD (Foil)</span>
@@ -179,7 +180,7 @@ export default function CardDetail({ card, onClose, onCopyCaption }) {
                     </div>
                   )}
 
-                  {/* MYR Multipliers */}
+                  {/* Selling Price Multipliers: CKD × multiplier */}
                   <div className="grid grid-cols-3 gap-2 pt-2 border-t border-gray-700">
                     {[2.5, 2.8, 3.0].map((mult) => (
                       <button
@@ -192,7 +193,7 @@ export default function CardDetail({ card, onClose, onCopyCaption }) {
                             : 'bg-dbb-secondary hover:bg-dbb-primary'}
                         `}
                       >
-                        <div className="text-xs opacity-75">{mult}x</div>
+                        <div className="text-xs opacity-75">{mult}×</div>
                         <div className="font-bold text-sm">
                           RM {prices[mult]?.toFixed(2) || 'N/A'}
                         </div>
@@ -200,12 +201,12 @@ export default function CardDetail({ card, onClose, onCopyCaption }) {
                     ))}
                   </div>
 
-                  {/* Foil MYR Prices (if available) */}
+                  {/* Foil Selling Prices */}
                   {hasCKFoilPrice && foilPrices && (
                     <div className="grid grid-cols-3 gap-2">
                       {[2.5, 2.8, 3.0].map((mult) => (
                         <div key={mult} className="p-2 rounded-lg text-center bg-yellow-900/20 border border-yellow-600/30">
-                          <div className="text-xs opacity-75 text-yellow-400">✨ {mult}x</div>
+                          <div className="text-xs opacity-75 text-yellow-400">✨ {mult}×</div>
                           <div className="font-bold text-sm text-yellow-400">
                             RM {foilPrices[mult]?.toFixed(2) || 'N/A'}
                           </div>
@@ -217,15 +218,14 @@ export default function CardDetail({ card, onClose, onCopyCaption }) {
                   {/* Selected Price Highlight */}
                   <div className="pt-2 border-t border-gray-700">
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-400">Your Price ({multiplier}x)</span>
+                      <span className="text-sm text-gray-400">Your Price ({multiplier}×)</span>
                       <span className="text-xl font-bold text-dbb-accent">
                         RM {selectedPrice?.toFixed(2) || 'N/A'}
                       </span>
                     </div>
                   </div>
 
-                  {/* Price source note */}
-                  <p className="text-xs text-gray-500">CardKingdom retail prices via MTGJSON</p>
+                  <p className="text-xs text-gray-500">CKD USD × {multiplier} multiplier</p>
                 </>
               ) : (
                 <div className="text-center py-4">
@@ -265,12 +265,9 @@ export default function CardDetail({ card, onClose, onCopyCaption }) {
             {/* Additional Info */}
             <div className="text-xs text-gray-500 space-y-1 pt-4 border-t border-gray-700">
               <div>Condition: {card.condition || 'NM'}</div>
-              {hasCKPrice && (
+              {hasCKPrice && card.pricing_source && (
                 <>
-                  <div>Exchange Rate: 1 USD = {card.usd_myr_rate?.toFixed(4) || '4.70'} MYR</div>
-                  {card.pricing_source && (
-                    <div>Price Source: {card.pricing_source}</div>
-                  )}
+                  <div>Price Source: {card.pricing_source}</div>
                   {card.pricing_last_updated && (
                     <div>Prices Updated: {new Date(card.pricing_last_updated).toLocaleString('en-MY')}</div>
                   )}
