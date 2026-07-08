@@ -1,18 +1,24 @@
 import { NextResponse } from 'next/server'
-import { unzipSync } from 'zlib'
-
-// Force Node.js runtime (not Edge) — needed for zlib and large buffer operations
-export const runtime = 'nodejs'
-// Allow up to 60s for MTGJSON download (50MB gzipped file)
-export const maxDuration = 60
 
 // ============================================================================
 // MTGJSON AllPricesToday price cache
 // Fetches real CardKingdom prices (not Scryfall/TCGPlayer)
 // Caches for 24 hours, refreshes on demand or via ?refresh=true
+//
+// MTGJSON format (as of v5.3):
+//   { "data": { "<uuid>": { "paper": { "cardkingdom": {
+//     "retail": { "normal": { "2026-07-07": 7.99 }, "foil": { "2026-07-07": 9.99 } },
+//     "buylist": { "normal": { "2026-07-07": 2.0 }, "foil": { "2026-07-07": 4.0 } },
+//     "currency": "USD"
+//   }}}}}
+//   Prices are nested under date keys — we take the latest date.
 // ============================================================================
 
-const MTGJSON_URL = 'https://mtgjson.com/api/v5/AllPricesToday.json.gz'
+// Force Node.js runtime — needed for streaming and large JSON parsing
+export const runtime = 'nodejs'
+export const maxDuration = 60
+
+const MTGJSON_URL = 'https://mtgjson.com/api/v5/AllPricesToday.json'
 const CACHE_DURATION_MS = 24 * 60 * 60 * 1000 // 24 hours
 const EXCHANGE_RATE_API = 'https://open.er-api.com/v6/latest/USD'
 const DEFAULT_USD_MYR = 4.70
@@ -23,62 +29,92 @@ let exchangeRate = DEFAULT_USD_MYR
 let exchangeRateTimestamp = 0
 
 // ============================================================================
-// Fetch and parse MTGJSON AllPricesToday (gzipped JSON)
-// Uses unzipSync on the array buffer — simplest approach for serverless
+// Extract the latest price from a date-keyed object like {"2026-07-07": 7.99, "2026-07-06": 7.50}
+// ============================================================================
+
+function getLatestPrice(dateObj) {
+  if (!dateObj || typeof dateObj !== 'object') return null
+  const dates = Object.keys(dateObj).sort()
+  if (dates.length === 0) return null
+  const val = dateObj[dates[dates.length - 1]]
+  return typeof val === 'number' ? val : parseFloat(val)
+}
+
+// ============================================================================
+// Extract CardKingdom prices from the MTGJSON card entry
+// ============================================================================
+
+function extractCKPrices(uuid, entry) {
+  const paper = entry.paper
+  if (!paper || typeof paper !== 'object') return null
+
+  const ck = paper.cardkingdom || paper.cardKingdom || paper.CardKingdom
+  if (!ck || typeof ck !== 'object') return null
+
+  const retail = ck.retail || ck.Retail || {}
+  const buylist = ck.buylist || ck.Buylist || {}
+
+  // Normal (non-foil) retail price
+  const normalRetail = getLatestPrice(retail.normal || retail.Normal)
+  // Foil retail price
+  const foilRetail = getLatestPrice(retail.foil || retail.Foil)
+  // Normal buylist price
+  const normalBuylist = getLatestPrice(buylist.normal || buylist.Normal)
+  // Foil buylist price
+  const foilBuylist = getLatestPrice(buylist.foil || buylist.Foil)
+
+  // Need at least one retail price
+  if (normalRetail === null && foilRetail === null) return null
+
+  return {
+    ckd_usd_price: normalRetail,
+    ckd_foil_price: foilRetail,
+    ckd_buy_price: normalBuylist,
+    ckd_buy_price_foil: foilBuylist,
+    source: 'cardkingdom_via_mtgjson',
+  }
+}
+
+// ============================================================================
+// Fetch and parse MTGJSON AllPricesToday
+// Uses streaming JSON parse to handle the large file (~200MB uncompressed)
 // ============================================================================
 
 async function fetchMTGJSONPrices() {
   console.log('[Pricing API] Fetching MTGJSON AllPricesToday...')
 
   const response = await fetch(MTGJSON_URL, {
-    headers: { 'User-Agent': 'DansBizarreBazaar/1.0' },
+    headers: { 'User-Agent': 'DansBizarreBazaar/1.0', 'Accept': 'application/json' },
   })
 
   if (!response.ok) {
     throw new Error(`MTGJSON responded with ${response.status}`)
   }
 
-  // Download the gzipped response as an ArrayBuffer, then decompress synchronously
-  const compressed = Buffer.from(await response.arrayBuffer())
-  const jsonStr = unzipSync(compressed).toString('utf8')
-  const data = JSON.parse(jsonStr)
+  // Parse the full JSON — AllPricesToday is ~200MB uncompressed
+  // but the uncompressed endpoint streams fine in Node.js serverless
+  console.log('[Pricing API] Parsing MTGJSON response...')
+  const data = await response.json()
 
   if (!data || !data.data) {
     throw new Error('MTGJSON response missing data field')
   }
 
-  // Build lookup map: scryfallId (lowercase) -> { ckd_usd_price, ckd_foil_price, ckd_buy_price }
+  // Build lookup map: scryfallId (lowercase) -> CK price object
   const lookup = new Map()
-  const entries = Object.entries(data.data)
+  let ckCount = 0
 
-  for (const [uuid, priceData] of entries) {
+  for (const [uuid, priceData] of Object.entries(data.data)) {
     if (!priceData || typeof priceData !== 'object') continue
 
-    // Try paper > cardKingdom first
-    const paper = priceData.paper || priceData.Paper
-    const ck = paper?.cardKingdom || paper?.CardKingdom
-    const ckFoil = paper?.cardKingdomFoil || paper?.CardKingdomFoil
-
-    if (ck || ckFoil) {
-      const retailPrice = parseFloat(ck?.retailPrice || ck?.RetailPrice) || null
-      const retailFoilPrice = parseFloat(ck?.retailFoilPrice || ck?.RetailFoilPrice) || null
-      const buyPrice = parseFloat(ck?.buyPrice || ck?.BuyPrice) || null
-
-      // If cardKingdomFoil has its own retail, prefer that for foil price
-      const finalFoilPrice = parseFloat(ckFoil?.retailPrice || ckFoil?.RetailPrice) || retailFoilPrice
-
-      if (retailPrice !== null || finalFoilPrice !== null) {
-        lookup.set(uuid.toLowerCase(), {
-          ckd_usd_price: retailPrice,
-          ckd_foil_price: finalFoilPrice,
-          ckd_buy_price: buyPrice,
-          source: 'cardkingdom_via_mtgjson',
-        })
-      }
+    const ckPrices = extractCKPrices(uuid, priceData)
+    if (ckPrices) {
+      lookup.set(uuid.toLowerCase(), ckPrices)
+      ckCount++
     }
   }
 
-  console.log(`[Pricing API] Loaded ${lookup.size} CardKingdom prices from MTGJSON`)
+  console.log(`[Pricing API] Loaded ${ckCount} CardKingdom prices from MTGJSON`)
   return lookup
 }
 
@@ -138,7 +174,7 @@ async function scryfallFallback(scryfallId, cardName, setName, collectorNumber) 
       ckd_foil_price: prices.usd_foil ? parseFloat(prices.usd_foil) : null,
       ckd_buy_price: null,
       source: 'scryfall_market',
-      note: 'Prices are TCGPlayer/market average, NOT CardKingdom. CardKingdom price not available.',
+      note: 'Prices are TCGPlayer/market average, NOT CardKingdom. CK price not available.',
       lastUpdated: card.updated_at || new Date().toISOString(),
     }
   } catch (error) {

@@ -89,30 +89,44 @@ async function fetchMTGJSONPrices() {
           const data = parsed.data || {}
           
           // Build CardKingdom price lookup
+          // MTGJSON v5.3 format: { uuid: { paper: { cardkingdom: { retail: { normal: { "2026-07-07": 7.99 } }, buylist: { ... } } } } }
+          // Prices are nested under date keys — we take the latest date
+          
+          function getLatestPrice(dateObj) {
+            if (!dateObj || typeof dateObj !== 'object') return null
+            const dates = Object.keys(dateObj).sort()
+            if (dates.length === 0) return null
+            const val = dateObj[dates[dates.length - 1]]
+            return typeof val === 'number' ? val : parseFloat(val)
+          }
+          
           const lookup = new Map()
           let ckCount = 0
           
           for (const [uuid, priceData] of Object.entries(data)) {
             if (!priceData || typeof priceData !== 'object') continue
 
-            const paper = priceData.paper || priceData.Paper
-            const ck = paper?.cardKingdom || paper?.CardKingdom
-            const ckFoil = paper?.cardKingdomFoil || paper?.CardKingdomFoil
+            const paper = priceData.paper
+            if (!paper || typeof paper !== 'object') continue
 
-            if (ck || ckFoil) {
-              const retailPrice = parseFloat(ck?.retailPrice || ck?.RetailPrice) || null
-              const foilPrice = parseFloat(ckFoil?.retailPrice || ckFoil?.RetailPrice) || parseFloat(ck?.retailFoilPrice || ck?.RetailFoilPrice) || null
-              const buyPrice = parseFloat(ck?.buyPrice || ck?.BuyPrice) || null
+            const ck = paper.cardkingdom || paper.cardKingdom || paper.CardKingdom
+            if (!ck || typeof ck !== 'object') continue
 
-              if (retailPrice !== null || foilPrice !== null) {
-                lookup.set(uuid.toLowerCase(), {
-                  ckd_usd_price: retailPrice,
-                  ckd_foil_price: foilPrice,
-                  ckd_buy_price: buyPrice,
-                  source: 'cardkingdom_via_mtgjson',
-                })
-                ckCount++
-              }
+            const retail = ck.retail || ck.Retail || {}
+            const buylist = ck.buylist || ck.Buylist || {}
+
+            const normalRetail = getLatestPrice(retail.normal || retail.Normal)
+            const foilRetail = getLatestPrice(retail.foil || retail.Foil)
+            const normalBuylist = getLatestPrice(buylist.normal || buylist.Normal)
+
+            if (normalRetail !== null || foilRetail !== null) {
+              lookup.set(uuid.toLowerCase(), {
+                ckd_usd_price: normalRetail,
+                ckd_foil_price: foilRetail,
+                ckd_buy_price: normalBuylist,
+                source: 'cardkingdom_via_mtgjson',
+              })
+              ckCount++
             }
           }
 
