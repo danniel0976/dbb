@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { unzipSync } from 'zlib'
 
 // ============================================================================
 // MTGJSON AllPricesToday price cache
@@ -18,21 +19,24 @@ let exchangeRateTimestamp = 0
 
 // ============================================================================
 // Fetch and parse MTGJSON AllPricesToday (gzipped JSON)
+// Uses unzipSync on the array buffer — simplest approach for serverless
 // ============================================================================
 
 async function fetchMTGJSONPrices() {
   console.log('[Pricing API] Fetching MTGJSON AllPricesToday...')
 
   const response = await fetch(MTGJSON_URL, {
-    headers: { 'Accept': 'application/json', 'User-Agent': 'DansBizarreBazaar/1.0' },
+    headers: { 'User-Agent': 'DansBizarreBazaar/1.0' },
   })
 
   if (!response.ok) {
     throw new Error(`MTGJSON responded with ${response.status}`)
   }
 
-  // The response is gzipped JSON — fetch() in Node 18+ auto-decompresses
-  const data = await response.json()
+  // Download the gzipped response as an ArrayBuffer, then decompress synchronously
+  const compressed = Buffer.from(await response.arrayBuffer())
+  const jsonStr = unzipSync(compressed).toString('utf8')
+  const data = JSON.parse(jsonStr)
 
   if (!data || !data.data) {
     throw new Error('MTGJSON response missing data field')
@@ -52,7 +56,7 @@ async function fetchMTGJSONPrices() {
 
     if (ck || ckFoil) {
       const retailPrice = parseFloat(ck?.retailPrice || ck?.RetailPrice) || null
-      const retailFoilPrice = parseFloat(ckFoil?.retailPrice || ckFoil?.RetailPrice) || parseFloat(ck?.retailFoilPrice || ck?.RetailFoilPrice) || null
+      const retailFoilPrice = parseFloat(ck?.retailFoilPrice || ck?.RetailFoilPrice) || null
       const buyPrice = parseFloat(ck?.buyPrice || ck?.BuyPrice) || null
 
       // If cardKingdomFoil has its own retail, prefer that for foil price
@@ -67,9 +71,6 @@ async function fetchMTGJSONPrices() {
         })
       }
     }
-
-    // Also check mtgo (not used, but skip)
-    // Also check paper > tcgplayer (as fallback reference)
   }
 
   console.log(`[Pricing API] Loaded ${lookup.size} CardKingdom prices from MTGJSON`)
