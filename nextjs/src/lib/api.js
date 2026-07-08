@@ -249,9 +249,9 @@ export const cardProcessingService = {
         ckd_usd_price: ckdUsdPrice,
         ckd_buy_price: priceInfo?.ckd_buy_price || 0,
         ckd_foil_price: priceInfo?.ckd_foil_price || 0,
-        myr_price_2_5: ckdUsdPrice > 0 ? Math.round(ckdUsdPrice * 2.5 * 100) / 100 : null,
-        myr_price_2_8: ckdUsdPrice > 0 ? Math.round(ckdUsdPrice * 2.8 * 100) / 100 : null,
-        myr_price_3_0: ckdUsdPrice > 0 ? Math.round(ckdUsdPrice * 3.0 * 100) / 100 : null,
+        myr_price_2_5: ckdUsdPrice > 0 ? Math.round(ckdUsdPrice * 2.5 * 2) / 2 : null,
+        myr_price_2_8: ckdUsdPrice > 0 ? Math.round(ckdUsdPrice * 2.8 * 2) / 2 : null,
+        myr_price_3_0: ckdUsdPrice > 0 ? Math.round(ckdUsdPrice * 3.0 * 2) / 2 : null,
         pricing_source: 'cardkingdom_via_mtgjson',
       }
     } catch (error) {

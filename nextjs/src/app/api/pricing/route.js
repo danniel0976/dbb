@@ -80,9 +80,11 @@ async function fetchPriceCache() {
 // Calculate selling price: CKD × multiplier (no exchange rate)
 // ============================================================================
 
+// Round to nearest RM 0.50: 1.48→1.50, 1.65→1.50, 1.77→2.00
 function sellPrice(ckdPrice, multiplier) {
   if (ckdPrice === null || ckdPrice === undefined) return null
-  return Math.round(ckdPrice * multiplier * 100) / 100
+  const raw = ckdPrice * multiplier
+  return Math.round(raw * 2) / 2
 }
 
 // ============================================================================

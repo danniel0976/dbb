@@ -214,7 +214,8 @@ export const cardQueries = {
 export const priceUtils = {
   sellPrice: (ckdPrice, multiplier) => {
     if (ckdPrice === null || ckdPrice === undefined) return null
-    return Math.round(ckdPrice * multiplier * 100) / 100
+    const raw = ckdPrice * multiplier
+    return Math.round(raw * 2) / 2
   },
   formatMYR: (price) => price === null || price === undefined ? 'N/A' : `RM ${price.toFixed(2)}`,
   formatUSD: (price) => price === null || price === undefined ? 'N/A' : `$${price.toFixed(2)}`,

@@ -259,9 +259,9 @@ async function processCard(card, priceLookup, exchangeRate) {
 
   // Calculate selling prices: CKD × multiplier (no FX conversion)
   const basePrice = processedCard.ckd_usd_price
-  processedCard.myr_price_2_5 = basePrice ? Math.round(basePrice * 2.5 * 100) / 100 : null
-  processedCard.myr_price_2_8 = basePrice ? Math.round(basePrice * 2.8 * 100) / 100 : null
-  processedCard.myr_price_3_0 = basePrice ? Math.round(basePrice * 3.0 * 100) / 100 : null
+  processedCard.myr_price_2_5 = basePrice ? Math.round(basePrice * 2.5 * 2) / 2 : null
+  processedCard.myr_price_2_8 = basePrice ? Math.round(basePrice * 2.8 * 2) / 2 : null
+  processedCard.myr_price_3_0 = basePrice ? Math.round(basePrice * 3.0 * 2) / 2 : null
   processedCard.pricing_last_updated = new Date().toISOString()
 
   return processedCard
@@ -358,9 +358,9 @@ async function refreshPrices(priceLookup, exchangeRate, dryRun = false) {
       ckd_usd_price: newPrice,
       ckd_foil_price: ckPrice.ckd_foil_price,
       // Selling prices: CKD × multiplier (no FX conversion)
-      myr_price_2_5: newPrice ? Math.round(newPrice * 2.5 * 100) / 100 : null,
-      myr_price_2_8: newPrice ? Math.round(newPrice * 2.8 * 100) / 100 : null,
-      myr_price_3_0: newPrice ? Math.round(newPrice * 3.0 * 100) / 100 : null,
+      myr_price_2_5: newPrice ? Math.round(newPrice * 2.5 * 2) / 2 : null,
+      myr_price_2_8: newPrice ? Math.round(newPrice * 2.8 * 2) / 2 : null,
+      myr_price_3_0: newPrice ? Math.round(newPrice * 3.0 * 2) / 2 : null,
       pricing_source: 'cardkingdom_via_mtgjson',
       pricing_last_updated: new Date().toISOString(),
     }
