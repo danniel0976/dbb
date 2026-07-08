@@ -64,25 +64,26 @@ export const enrichCardWithPricing = async (card) => {
 
     const pricing = await response.json()
 
-    if (pricing && !pricing.error) {
-      // The new API returns MYR prices directly — use them
+    if (pricing) {
+      // The API now returns nulls for cards without CK prices (no Scryfall fallback)
+      // Use API values directly — nulls mean no price available
       const enrichedData = {
-        // CardKingdom USD prices (real CK prices, not TCGPlayer)
-        ckd_usd_price: pricing.ckd_usd_price ?? card.ckd_usd_price,
-        ckd_foil_price: pricing.ckd_foil_price ?? card.ckd_foil_price,
-        ckd_buy_price: pricing.ckd_buy_price ?? card.ckd_buy_price,
-        // Live MYR prices from API
-        myr_price_2_5: pricing.myr_price_2_5 ?? card.myr_price_2_5,
-        myr_price_2_8: pricing.myr_price_2_8 ?? card.myr_price_2_8,
-        myr_price_3_0: pricing.myr_price_3_0 ?? card.myr_price_3_0,
+        // CardKingdom USD prices (null if not available)
+        ckd_usd_price: pricing.ckd_usd_price ?? null,
+        ckd_foil_price: pricing.ckd_foil_price ?? null,
+        ckd_buy_price: pricing.ckd_buy_price ?? null,
+        // Live MYR prices from API (null if no CK price)
+        myr_price_2_5: pricing.myr_price_2_5 ?? null,
+        myr_price_2_8: pricing.myr_price_2_8 ?? null,
+        myr_price_3_0: pricing.myr_price_3_0 ?? null,
         // Foil MYR prices
-        myr_foil_price_2_5: pricing.myr_foil_price_2_5,
-        myr_foil_price_2_8: pricing.myr_foil_price_2_8,
-        myr_foil_price_3_0: pricing.myr_foil_price_3_0,
+        myr_foil_price_2_5: pricing.myr_foil_price_2_5 ?? null,
+        myr_foil_price_2_8: pricing.myr_foil_price_2_8 ?? null,
+        myr_foil_price_3_0: pricing.myr_foil_price_3_0 ?? null,
         // Exchange rate and source tracking
         usd_myr_rate: pricing.usd_myr_rate ?? card.usd_myr_rate,
-        pricing_source: pricing.source ?? card.pricing_source,
-        pricing_last_updated: pricing.lastUpdated,
+        pricing_source: pricing.source ?? null,
+        pricing_last_updated: pricing.lastUpdated ?? null,
       }
 
       priceCache.set(cacheKey, enrichedData)
@@ -224,8 +225,9 @@ export const generateCaption = (card, multiplier = 2.8) => {
   const selectedPrice = prices[multiplier.toString()] || card.myr_price_2_8
   const raritySymbol = { mythic: 'M', rare: 'R', uncommon: 'U', common: 'C' }[card.rarity] || 'C'
 
-  // Show pricing source label
-  const sourceLabel = card.pricing_source === 'cardkingdom_via_mtgjson' ? 'CKD' : 'Market'
+  // Show pricing source label — CKD for CardKingdom, N/A for no price
+  const hasPrice = card.ckd_usd_price !== null && card.ckd_usd_price !== undefined
+  const sourceLabel = hasPrice ? 'CKD' : 'N/A'
 
   return `${card.card_name}
 ${raritySymbol} ${card.collector_number?.padStart(4, '0') ?? '????'}

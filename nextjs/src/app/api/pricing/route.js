@@ -5,7 +5,7 @@ import { NextResponse } from 'next/server'
 // Cache has two indexes:
 //   - "prices": scryfallId -> {n, f, b} (direct lookup)
 //   - "names": card_name_lower -> {n, f, b} (fallback for different printings)
-// Falls back to Scryfall for cards not in cache at all
+// No Scryfall fallback — if CK price is unavailable, return nulls.
 // ============================================================================
 
 export const runtime = 'nodejs'
@@ -106,45 +106,6 @@ async function fetchExchangeRate() {
 }
 
 // ============================================================================
-// Scryfall fallback for cards not in cache
-// ============================================================================
-
-async function scryfallFallback(scryfallId, cardName) {
-  let scryfallUrl
-  if (scryfallId) {
-    scryfallUrl = `https://api.scryfall.com/cards/${scryfallId}`
-  } else if (cardName) {
-    scryfallUrl = `https://api.scryfall.com/cards/named?exact=${encodeURIComponent(cardName)}`
-  } else {
-    return null
-  }
-
-  try {
-    const response = await fetch(scryfallUrl, {
-      headers: { 'Accept': 'application/json', 'User-Agent': 'DansBizarreBazaar/1.0' },
-      next: { revalidate: 86400 },
-    })
-
-    if (!response.ok) return null
-
-    const card = await response.json()
-    const prices = card.prices || {}
-
-    return {
-      ckd_usd_price: prices.usd ? parseFloat(prices.usd) : null,
-      ckd_foil_price: prices.usd_foil ? parseFloat(prices.usd_foil) : null,
-      ckd_buy_price: null,
-      source: 'scryfall_market',
-      note: 'Prices are TCGPlayer/market average, NOT CardKingdom. CK price not available.',
-      lastUpdated: card.updated_at || new Date().toISOString(),
-    }
-  } catch (error) {
-    console.error('[Pricing API] Scryfall fallback error:', error.message)
-    return null
-  }
-}
-
-// ============================================================================
 // Calculate MYR prices
 // ============================================================================
 
@@ -221,9 +182,9 @@ export async function GET(request) {
   if (result) {
     const usdMyr = rate || exchangeRate || DEFAULT_USD_MYR
     return NextResponse.json({
-      ckd_usd_price: result.n,
-      ckd_foil_price: result.f,
-      ckd_buy_price: result.b,
+      ckd_usd_price: result.n ?? null,
+      ckd_foil_price: result.f ?? null,
+      ckd_buy_price: result.b ?? null,
       myr_price_2_5: calculateMYR(result.n, usdMyr * 2.5),
       myr_price_2_8: calculateMYR(result.n, usdMyr * 2.8),
       myr_price_3_0: calculateMYR(result.n, usdMyr * 3.0),
@@ -238,23 +199,22 @@ export async function GET(request) {
     })
   }
 
-  // Fallback to Scryfall
-  const fallback = await scryfallFallback(scryfallId, cardName)
-  if (fallback) {
-    const usdMyr = rate || exchangeRate || DEFAULT_USD_MYR
-    return NextResponse.json({
-      ...fallback,
-      myr_price_2_5: calculateMYR(fallback.ckd_usd_price, usdMyr * 2.5),
-      myr_price_2_8: calculateMYR(fallback.ckd_usd_price, usdMyr * 2.8),
-      myr_price_3_0: calculateMYR(fallback.ckd_usd_price, usdMyr * 3.0),
-      usd_myr_rate: usdMyr,
-    }, {
-      headers: { 'Cache-Control': 'public, s-maxage=3600' }
-    })
-  }
-
-  return NextResponse.json(
-    { error: 'Card not found', ckd_usd_price: null },
-    { status: 404 }
-  )
+  // No CK price available — return nulls (no Scryfall fallback)
+  const usdMyr = rate || exchangeRate || DEFAULT_USD_MYR
+  return NextResponse.json({
+    ckd_usd_price: null,
+    ckd_foil_price: null,
+    ckd_buy_price: null,
+    myr_price_2_5: null,
+    myr_price_2_8: null,
+    myr_price_3_0: null,
+    myr_foil_price_2_5: null,
+    myr_foil_price_2_8: null,
+    myr_foil_price_3_0: null,
+    usd_myr_rate: usdMyr,
+    source: null,
+    lastUpdated: null,
+  }, {
+    headers: { 'Cache-Control': 'public, s-maxage=3600' }
+  })
 }
