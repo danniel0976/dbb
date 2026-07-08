@@ -54,7 +54,7 @@ export const enrichCardWithPricing = async (card) => {
 
   try {
     const response = await fetch(
-      `/api/pricing?scryfallId=${encodeURIComponent(card.scryfall_id)}`
+      `/api/pricing?scryfallId=${encodeURIComponent(card.scryfall_id)}&name=${encodeURIComponent(card.card_name || '')}`
     )
 
     if (!response.ok) {
