@@ -38,11 +38,16 @@ const CACHE_FILE = 'ck-prices.json'
 const MAP_LOCAL = path.join(__dirname, 'data', 'ck-uuid-map.json.gz')
 const MAP_STORAGE_URL = `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/ck-uuid-map.json.gz`
 const PRICES_URL = 'https://mtgjson.com/api/v5/AllPricesToday.json.gz'
+const MTGJSON_BASE = 'https://mtgjson.com/api/v5'
 const UA = 'Mozilla/5.0 (DBB price bot)'
 
 if (!SUPABASE_URL || !SERVICE_KEY) {
   console.error('Missing NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY')
   process.exit(1)
+}
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms))
 }
 
 function getLatestPrice(series) {
@@ -68,6 +73,68 @@ async function loadUuidMap() {
   }
   console.log('Local uuid map missing, fetching from Supabase Storage...')
   return fetchGzJson(MAP_STORAGE_URL)
+}
+
+// Per-set fallback: for cards not covered by the UUID map, fetch the set JSON
+// and pull prices directly from card.prices.paper.cardKingdom.
+// Processes one set at a time to stay well within VPS memory limits.
+async function fetchSetPrices(setCode, unmappedCards, prices, names) {
+  const url = `${MTGJSON_BASE}/${setCode.toUpperCase()}.json`
+  let setData
+  try {
+    const res = await fetch(url, { headers: { 'User-Agent': UA } })
+    if (!res.ok) {
+      process.stdout.write(`\n  ${setCode}: HTTP ${res.status}`)
+      return 0
+    }
+    setData = await res.json()
+  } catch (err) {
+    process.stdout.write(`\n  ${setCode}: ${err.message}`)
+    return 0
+  }
+
+  const cards = setData.data?.cards || []
+  const cardBySfId = new Map()
+  for (const card of cards) {
+    const sfId = (card.identifiers?.scryfallId || '').toLowerCase()
+    if (sfId) cardBySfId.set(sfId, card)
+  }
+
+  let filled = 0
+  for (const { scryfall_id, card_name } of unmappedCards) {
+    const sfId = scryfall_id.toLowerCase()
+    const card = cardBySfId.get(sfId)
+    if (!card) continue
+
+    // Per-set files use camelCase key; AllPricesToday uses lowercase. Handle both.
+    const ck = card.prices?.paper?.cardKingdom || card.prices?.paper?.cardkingdom
+    if (!ck) continue
+
+    const retail = ck.retail || {}
+    const buylist = ck.buylist || {}
+    const n = getLatestPrice(retail.normal)
+    const f = getLatestPrice(retail.foil)
+    const e = getLatestPrice(retail.etched)
+    const b = getLatestPrice(buylist.normal)
+    if (n === null && f === null && e === null && b === null) continue
+
+    const rec = {}
+    if (n !== null) rec.n = n
+    if (f !== null) rec.f = f
+    if (e !== null) rec.e = e
+    if (b !== null) rec.b = b
+    prices[sfId] = rec
+
+    if (card_name) {
+      const key = card_name.toLowerCase()
+      const cur = names[key]
+      if (!cur || (n !== null && (cur.n === undefined || n < cur.n))) {
+        names[key] = rec
+      }
+    }
+    filled++
+  }
+  return filled
 }
 
 async function main() {
@@ -115,11 +182,57 @@ async function main() {
     }
   }
 
+  // Verify coverage against the live DB (paginated — PostgREST caps at 1000/page)
+  // Done BEFORE building output so we can run the per-set fallback for unmapped cards.
+  console.log('Fetching DB cards for coverage check + per-set fallback...')
+  const dbCards = []
+  for (let offset = 0; ; offset += 1000) {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/cards?select=scryfall_id,card_name,set_code&limit=1000&offset=${offset}`,
+      { headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` } }
+    )
+    const page = await res.json()
+    if (!Array.isArray(page) || !page.length) break
+    dbCards.push(...page)
+    if (page.length < 1000) break
+  }
+  console.log(`DB cards: ${dbCards.length}`)
+
+  // Group DB cards with no price yet by set_code for per-set fallback
+  const unmappedBySet = new Map()
+  for (const card of dbCards) {
+    const sid = (card.scryfall_id || '').toLowerCase()
+    if (prices[sid]) continue
+    const setCode = (card.set_code || '').toUpperCase()
+    if (!setCode) continue
+    if (!unmappedBySet.has(setCode)) unmappedBySet.set(setCode, [])
+    unmappedBySet.get(setCode).push({ scryfall_id: sid, card_name: card.card_name })
+  }
+
+  if (unmappedBySet.size > 0) {
+    const totalUnmapped = Array.from(unmappedBySet.values()).reduce((s, v) => s + v.length, 0)
+    console.log(`Per-set fallback: ${totalUnmapped} unmapped DB cards across ${unmappedBySet.size} sets`)
+    let totalFilled = 0
+    let setsProcessed = 0
+    for (const [setCode, cards] of unmappedBySet) {
+      const filled = await fetchSetPrices(setCode, cards, prices, names)
+      if (filled > 0) totalFilled += filled
+      setsProcessed++
+      if (setsProcessed % 10 === 0) {
+        process.stdout.write(`\r  ${setsProcessed}/${unmappedBySet.size} sets, +${totalFilled} prices so far`)
+      }
+      await sleep(150) // rate limit
+    }
+    console.log(`\nPer-set fallback complete: +${totalFilled} prices across ${unmappedBySet.size} sets`)
+  } else {
+    console.log('Per-set fallback: all DB cards already covered by UUID map')
+  }
+
   const output = JSON.stringify({
     prices,
     names,
     _meta: {
-      source: 'cardkingdom via mtgjson AllPricesToday',
+      source: 'cardkingdom via mtgjson AllPricesToday + per-set fallback',
       built: new Date().toISOString(),
       ids: Object.keys(prices).length,
       names: Object.keys(names).length,
@@ -127,7 +240,7 @@ async function main() {
     },
   })
   console.log(`CK prices: ${Object.keys(prices).length} ids, ${Object.keys(names).length} names, ` +
-    `${unmapped} unmapped (new printings — rebuild uuid map on the MacBook if this grows), ` +
+    `${unmapped} unmapped UUIDs (new printings — rebuild uuid map on MacBook if this grows), ` +
     `${(output.length / 1024 / 1024).toFixed(1)} MB`)
 
   // Keep a repo-local copy as backup
@@ -151,18 +264,7 @@ async function main() {
   }
   console.log('Uploaded to Supabase Storage')
 
-  // Verify coverage against the live DB (paginated — PostgREST caps at 1000/page)
-  const dbCards = []
-  for (let offset = 0; ; offset += 1000) {
-    const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/cards?select=scryfall_id,card_name&limit=1000&offset=${offset}`,
-      { headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` } }
-    )
-    const page = await res.json()
-    if (!Array.isArray(page) || !page.length) break
-    dbCards.push(...page)
-    if (page.length < 1000) break
-  }
+  // Final coverage report
   let byId = 0, byName = 0, neither = 0
   const misses = []
   for (const card of dbCards) {

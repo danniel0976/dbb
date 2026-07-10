@@ -1,0 +1,129 @@
+{
+  "project": "DBB User Library System",
+  "status": "in_progress",
+  "started_utc": "2026-07-09T00:00:00Z",
+  "last_activity_utc": "2026-07-09T00:00:00Z",
+  "rate_limit_pause_utc": null,
+  "notes": "Building multi-user library system on top of existing DBB MTG card app. Stack: Next.js 14, Supabase Auth, Tailwind. No homepage - auth wall routes to /library.",
+  "tasks": [
+    {
+      "id": "T001",
+      "phase": "foundation",
+      "title": "Supabase schema: user_profiles, user_cards, binders, binder_cards",
+      "status": "pending",
+      "priority": 1,
+      "file": "dbb/supabase/migration-user-library.sql",
+      "notes": "RLS policies for all tables. user_cards references scryfall_id only — don't duplicate card data. Cache card_name, set_code, collector_number for fast queries."
+    },
+    {
+      "id": "T002",
+      "phase": "foundation",
+      "title": "Next.js Supabase server client + auth middleware",
+      "status": "pending",
+      "priority": 2,
+      "file": "dbb/nextjs/src/lib/supabase-server.js + middleware.js",
+      "notes": "Server-side Supabase client using @supabase/ssr. Middleware protects /library /profile routes. Unauthenticated → /login. Authenticated + visiting / → /library."
+    },
+    {
+      "id": "T003",
+      "phase": "auth",
+      "title": "Auth pages: /login, /register, /auth/confirm",
+      "status": "pending",
+      "priority": 3,
+      "file": "dbb/nextjs/src/app/(auth)/",
+      "notes": "DBB-branded. No social login yet. Email+password. After register: email confirm flow. After login: redirect to /library. Supabase email templates with DBB branding."
+    },
+    {
+      "id": "T004",
+      "phase": "library",
+      "title": "User library page /library — card grid with sort/filter/star/delete",
+      "status": "pending",
+      "priority": 4,
+      "file": "dbb/nextjs/src/app/library/",
+      "notes": "Fetch user_cards for logged-in user. Sort: name/set/added_at/starred. Filter: set/color/rarity/foil/condition/starred. Actions: star toggle, delete, add to binder. Empty state CTA to search+add cards."
+    },
+    {
+      "id": "T005",
+      "phase": "library",
+      "title": "Scryfall advanced search overlay for adding cards",
+      "status": "pending",
+      "priority": 5,
+      "file": "dbb/nextjs/src/components/CardSearchOverlay.js",
+      "notes": "Search Scryfall API (via existing /api/scryfall or new proxy). Show results with card image. Click → open AddCardModal with condition/foil/quantity/notes fields. POST to /api/library/cards."
+    },
+    {
+      "id": "T006",
+      "phase": "library",
+      "title": "Library API routes: /api/library/cards (CRUD)",
+      "status": "pending",
+      "priority": 6,
+      "file": "dbb/nextjs/src/app/api/library/",
+      "notes": "GET list, POST add, PATCH update (star/condition/notes), DELETE. Use Supabase server client with user session. Validate ownership before write."
+    },
+    {
+      "id": "T007",
+      "phase": "binders",
+      "title": "Binder collections: list, create, view, add/remove cards",
+      "status": "pending",
+      "priority": 7,
+      "file": "dbb/nextjs/src/app/library/binders/",
+      "notes": "Auto-create 'General' default binder on first login. /library/binders lists all binders. /library/binders/[id] shows cards in binder. Multi-select cards in library → add to binder."
+    },
+    {
+      "id": "T008",
+      "phase": "bulkupload",
+      "title": "ManaBox CSV bulk upload: parser + API endpoint",
+      "status": "pending",
+      "priority": 8,
+      "file": "dbb/nextjs/src/app/api/library/bulk-upload/route.js",
+      "notes": "ManaBox CSV columns: Name,Edition,Edition code,Collector number,Foil,Quantity,Purchase price,Misprint,Altered,Condition,Language,Purchase price currency. Map to user_cards. Batch Scryfall lookups by (set_code + collector_number) to get scryfall_id. Batch insert."
+    },
+    {
+      "id": "T009",
+      "phase": "bulkupload",
+      "title": "Bulk upload UI: CSV drop/select, preview table, binder assignment prompt",
+      "status": "pending",
+      "priority": 9,
+      "file": "dbb/nextjs/src/components/BulkUploadModal.js",
+      "notes": "Drag-and-drop or file picker. Parse CSV client-side for preview (first 10 rows shown). On confirm: POST to /api/library/bulk-upload. After success: modal asks 'Add to General binder or create new binder?'."
+    },
+    {
+      "id": "T010",
+      "phase": "profile",
+      "title": "User profile page /profile — summary stats + edit",
+      "status": "pending",
+      "priority": 10,
+      "file": "dbb/nextjs/src/app/profile/",
+      "notes": "Stats: total unique cards, total quantity, sets represented, top colors, starred count, binder count. Edit: display_name, avatar_url. Deactivate account option (soft delete: is_active=false in user_profiles, Supabase admin disable)."
+    },
+    {
+      "id": "T011",
+      "phase": "polish",
+      "title": "DBB-branded Supabase email templates",
+      "status": "pending",
+      "priority": 11,
+      "file": "dbb/supabase/email-templates/",
+      "notes": "Confirm signup, reset password, magic link. Use DBB color scheme (dbb-primary/accent from tailwind.config). Plain HTML, inline styles. Update via Supabase Dashboard > Auth > Email Templates."
+    },
+    {
+      "id": "T012",
+      "phase": "polish",
+      "title": "Navigation, layout shell, user menu",
+      "status": "pending",
+      "priority": 12,
+      "file": "dbb/nextjs/src/components/AppShell.js",
+      "notes": "Top nav: DBB logo, Library / Binders / Profile links, user avatar dropdown (Profile, Sign out). Mobile: hamburger. Wrap all authenticated pages. Current page /library keeps existing DBB dark theme."
+    }
+  ],
+  "completed": [],
+  "context": {
+    "repo": "/root/.openclaw",
+    "project_dir": "/root/.openclaw/workspace/dbb/nextjs",
+    "supabase_project": "mnyhpwqskzadkplnhbrx",
+    "vercel_project": "dbb-chippyandluke",
+    "deployed_url": "dbb.lovelikenotomorrow.com",
+    "github_repo": "danniel0976/dbb",
+    "tech_stack": "Next.js 14 App Router, Supabase, Tailwind CSS, lucide-react",
+    "manabox_csv_format": "Name,Edition,Edition code,Collector number,Foil,Quantity,Purchase price,Misprint,Altered,Condition,Language,Purchase price currency"
+  }
+}
