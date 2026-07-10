@@ -119,6 +119,31 @@ body {
   }
 }
 
+/* Foil card shimmer */
+.foil-card {
+  position: relative;
+}
+.foil-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    135deg,
+    transparent 30%,
+    rgba(180, 120, 255, 0.12) 45%,
+    rgba(100, 200, 255, 0.12) 55%,
+    transparent 70%
+  );
+  background-size: 200% 200%;
+  animation: foil-shine 4s infinite linear;
+  pointer-events: none;
+  border-radius: inherit;
+}
+@keyframes foil-shine {
+  0% { background-position: 200% 200%; }
+  100% { background-position: -200% -200%; }
+}
+
 /* Button styles */
 .btn-primary {
   background-color: #e94560;
