@@ -11,9 +11,10 @@ export async function GET(request) {
   const page = Math.max(1, parseInt(searchParams.get('page') || '1'))
   const sort = searchParams.get('sort') || 'newest'
   const q = searchParams.get('q') || ''
+  const binder_id = searchParams.get('binder_id') || undefined
 
   try {
-    const result = await getLibrary(user.id, { sort, q }, page, 48)
+    const result = await getLibrary(user.id, { sort, q, binder_id }, page, 48)
     return NextResponse.json(result)
   } catch (err) {
     console.error('getLibrary error:', err)

@@ -4,7 +4,7 @@ const DEFAULT_PAGE_SIZE = 48
 
 export async function getLibrary(userId, filters = {}, page = 1, pageSize = DEFAULT_PAGE_SIZE) {
   const supabase = await createClient()
-  const { sort = 'newest', q = '' } = filters
+  const { sort = 'newest', q = '', binder_id } = filters
 
   const from = (page - 1) * pageSize
   const to = from + pageSize - 1
@@ -13,6 +13,10 @@ export async function getLibrary(userId, filters = {}, page = 1, pageSize = DEFA
     .from('library_cards')
     .select('*, card_index!inner(*)', { count: 'exact' })
     .eq('user_id', userId)
+
+  if (binder_id) {
+    query = query.eq('binder_id', binder_id)
+  }
 
   if (q) {
     query = query.ilike('card_index.name', `%${q}%`)

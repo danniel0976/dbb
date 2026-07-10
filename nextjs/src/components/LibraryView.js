@@ -3,8 +3,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import LibraryCard from '@/components/LibraryCard'
 import CardDetailModal from '@/components/CardDetailModal'
+import BinderPicker from '@/components/BinderPicker'
 import { useToast } from '@/components/Toast'
-import { Search, SortAsc } from 'lucide-react'
+import { Search, SortAsc, CheckSquare, Square, X, Star, StarOff, Trash2, FolderOpen } from 'lucide-react'
 import Link from 'next/link'
 
 const SORTS = [
@@ -15,7 +16,7 @@ const SORTS = [
   { value: 'rarity', label: 'Rarity' },
 ]
 
-export default function LibraryView({ userId, initialData }) {
+export default function LibraryView({ userId, initialData, binders = [], binderId }) {
   const { toast } = useToast()
   const [cards, setCards] = useState(initialData?.cards || [])
   const [total, setTotal] = useState(initialData?.total || 0)
@@ -25,18 +26,36 @@ export default function LibraryView({ userId, initialData }) {
   const [sort, setSort] = useState('newest')
   const [q, setQ] = useState('')
   const [selectedCard, setSelectedCard] = useState(null)
+  const [activeBinder, setActiveBinder] = useState(binderId || '')
+
+  // Multi-select state
+  const [multiSelect, setMultiSelect] = useState(false)
+  const [selectedIds, setSelectedIds] = useState(new Set())
+  const [showBinderPicker, setShowBinderPicker] = useState(false)
 
   const sentinelRef = useRef(null)
   const searchTimeout = useRef(null)
   const currentSort = useRef(sort)
   const currentQ = useRef(q)
+  const currentBinder = useRef(activeBinder)
   const resetPending = useRef(false)
 
-  // Reload from page 1 when sort/search changes
-  const reload = useCallback(async (newSort, newQ) => {
+  const buildParams = useCallback((p = 1, overrides = {}) => {
+    const params = new URLSearchParams({
+      page: String(p),
+      sort: overrides.sort ?? currentSort.current,
+      q: overrides.q ?? currentQ.current,
+    })
+    const bId = overrides.binder ?? currentBinder.current
+    if (bId) params.set('binder_id', bId)
+    return params
+  }, [])
+
+  const reload = useCallback(async (overrides = {}) => {
     resetPending.current = true
+    setSelectedIds(new Set())
     try {
-      const params = new URLSearchParams({ page: '1', sort: newSort, q: newQ })
+      const params = buildParams(1, overrides)
       const res = await fetch(`/api/library?${params}`)
       if (!res.ok) return
       const data = await res.json()
@@ -49,12 +68,12 @@ export default function LibraryView({ userId, initialData }) {
     } finally {
       resetPending.current = false
     }
-  }, [toast])
+  }, [toast, buildParams])
 
   const handleSortChange = (newSort) => {
     setSort(newSort)
     currentSort.current = newSort
-    reload(newSort, currentQ.current)
+    reload({ sort: newSort })
   }
 
   const handleSearchChange = (newQ) => {
@@ -62,17 +81,22 @@ export default function LibraryView({ userId, initialData }) {
     currentQ.current = newQ
     clearTimeout(searchTimeout.current)
     searchTimeout.current = setTimeout(() => {
-      reload(currentSort.current, newQ)
+      reload({ q: newQ })
     }, 300)
   }
 
-  // Load next page
+  const handleBinderChange = (newBinder) => {
+    setActiveBinder(newBinder)
+    currentBinder.current = newBinder
+    reload({ binder: newBinder })
+  }
+
   const loadMore = useCallback(async () => {
     if (loadingMore || !hasMore || resetPending.current) return
     setLoadingMore(true)
     try {
       const nextPage = page + 1
-      const params = new URLSearchParams({ page: String(nextPage), sort: currentSort.current, q: currentQ.current })
+      const params = buildParams(nextPage)
       const res = await fetch(`/api/library?${params}`)
       if (!res.ok) return
       const data = await res.json()
@@ -84,16 +108,13 @@ export default function LibraryView({ userId, initialData }) {
     } finally {
       setLoadingMore(false)
     }
-  }, [loadingMore, hasMore, page, toast])
+  }, [loadingMore, hasMore, page, toast, buildParams])
 
-  // Infinite scroll observer
   useEffect(() => {
     const sentinel = sentinelRef.current
     if (!sentinel) return
     const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting) loadMore()
-      },
+      (entries) => { if (entries[0].isIntersecting) loadMore() },
       { rootMargin: '300px' }
     )
     observer.observe(sentinel)
@@ -103,7 +124,6 @@ export default function LibraryView({ userId, initialData }) {
   // Card actions
   const handleStar = useCallback(async (libraryRow) => {
     const newStarred = !libraryRow.starred
-    // Optimistic update
     setCards(prev => prev.map(c => c.id === libraryRow.id ? { ...c, starred: newStarred } : c))
     try {
       const res = await fetch(`/api/library/${libraryRow.id}`, {
@@ -113,7 +133,6 @@ export default function LibraryView({ userId, initialData }) {
       })
       if (!res.ok) throw new Error()
     } catch {
-      // Revert
       setCards(prev => prev.map(c => c.id === libraryRow.id ? { ...c, starred: libraryRow.starred } : c))
       toast('Failed to update star', 'error')
     }
@@ -141,6 +160,87 @@ export default function LibraryView({ userId, initialData }) {
     setTotal(t => t - 1)
   }, [])
 
+  // Multi-select helpers
+  const toggleSelect = useCallback((id) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }, [])
+
+  const selectAll = () => setSelectedIds(new Set(cards.map(c => c.id)))
+  const clearSelection = () => setSelectedIds(new Set())
+
+  const exitMultiSelect = () => {
+    setMultiSelect(false)
+    setSelectedIds(new Set())
+  }
+
+  const handleBulkStar = async (starred) => {
+    const ids = [...selectedIds]
+    if (!ids.length) return
+    try {
+      const res = await fetch('/api/library/bulk', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids, action: starred ? 'star' : 'unstar' }),
+      })
+      if (!res.ok) throw new Error()
+      setCards(prev => prev.map(c => selectedIds.has(c.id) ? { ...c, starred } : c))
+      toast(`${ids.length} card${ids.length !== 1 ? 's' : ''} ${starred ? 'starred' : 'unstarred'}`, 'success')
+      clearSelection()
+    } catch {
+      toast('Bulk update failed', 'error')
+    }
+  }
+
+  const handleBulkDelete = async () => {
+    const ids = [...selectedIds]
+    if (!ids.length) return
+    if (!confirm(`Delete ${ids.length} card${ids.length !== 1 ? 's' : ''}? This cannot be undone.`)) return
+    try {
+      const res = await fetch('/api/library/bulk', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids }),
+      })
+      if (!res.ok) throw new Error()
+      setCards(prev => prev.filter(c => !selectedIds.has(c.id)))
+      setTotal(t => t - ids.length)
+      toast(`${ids.length} card${ids.length !== 1 ? 's' : ''} deleted`, 'success')
+      clearSelection()
+    } catch {
+      toast('Bulk delete failed', 'error')
+    }
+  }
+
+  const handleBulkMove = async (targetBinder) => {
+    const ids = [...selectedIds]
+    setShowBinderPicker(false)
+    if (!ids.length) return
+    try {
+      const res = await fetch('/api/library/bulk', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids, action: 'move', binder_id: targetBinder.id }),
+      })
+      if (!res.ok) throw new Error()
+      // If we're viewing a specific binder, remove moved cards from view
+      if (activeBinder && activeBinder !== targetBinder.id) {
+        setCards(prev => prev.filter(c => !selectedIds.has(c.id)))
+        setTotal(t => t - ids.length)
+      }
+      toast(`${ids.length} card${ids.length !== 1 ? 's' : ''} moved to "${targetBinder.name}"`, 'success')
+      clearSelection()
+    } catch {
+      toast('Move failed', 'error')
+    }
+  }
+
+  const selectedCount = selectedIds.size
+
   return (
     <div>
       {/* Toolbar */}
@@ -167,13 +267,68 @@ export default function LibraryView({ userId, initialData }) {
             ))}
           </select>
         </div>
-        <div className="text-sm text-gray-500 ml-auto">
+
+        {/* Binder filter — only show when not on a binder-specific page */}
+        {!binderId && binders.length > 0 && (
+          <select
+            value={activeBinder}
+            onChange={(e) => handleBinderChange(e.target.value)}
+            className="bg-dbb-secondary border border-gray-700 rounded-lg px-3 py-2 text-sm focus:border-dbb-accent focus:outline-none"
+          >
+            <option value="">All binders</option>
+            {binders.map(b => (
+              <option key={b.id} value={b.id}>{b.name}</option>
+            ))}
+          </select>
+        )}
+
+        <div className="text-sm text-gray-500">
           {total} card{total !== 1 ? 's' : ''}
         </div>
+
+        {/* Multi-select toggle */}
+        <button
+          onClick={() => {
+            if (multiSelect) exitMultiSelect()
+            else setMultiSelect(true)
+          }}
+          title={multiSelect ? 'Exit multi-select' : 'Multi-select'}
+          className={`p-2 rounded-lg border transition-colors ${
+            multiSelect
+              ? 'border-dbb-accent text-dbb-accent bg-dbb-accent/10'
+              : 'border-gray-700 text-gray-400 hover:border-dbb-accent/50'
+          }`}
+        >
+          <CheckSquare className="w-4 h-4" />
+        </button>
+
         <button className="px-3 py-2 text-sm border border-gray-700 rounded-lg text-gray-400 hover:border-dbb-accent/50 transition-colors">
           Filters
         </button>
       </div>
+
+      {/* Multi-select header bar */}
+      {multiSelect && (
+        <div className="flex items-center gap-3 mb-4 px-4 py-2 bg-dbb-secondary/80 border border-gray-700 rounded-lg">
+          <button
+            onClick={selectAll}
+            className="text-xs text-dbb-accent hover:underline"
+          >
+            Select all ({cards.length})
+          </button>
+          {selectedCount > 0 && (
+            <button
+              onClick={clearSelection}
+              className="text-xs text-gray-400 hover:text-white"
+            >
+              Clear
+            </button>
+          )}
+          <span className="text-xs text-gray-500 ml-auto">
+            {selectedCount} selected
+          </span>
+        </div>
+      )}
 
       {/* Grid */}
       {cards.length === 0 ? (
@@ -192,17 +347,34 @@ export default function LibraryView({ userId, initialData }) {
         <>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
             {cards.map(card => (
-              <LibraryCard
-                key={card.id}
-                libraryRow={card}
-                onStar={handleStar}
-                onDelete={handleDelete}
-                onOpen={setSelectedCard}
-              />
+              <div key={card.id} className="relative">
+                {multiSelect && (
+                  <button
+                    onClick={() => toggleSelect(card.id)}
+                    className={`absolute top-2 left-2 z-10 w-6 h-6 rounded border-2 flex items-center justify-center transition-colors ${
+                      selectedIds.has(card.id)
+                        ? 'bg-dbb-accent border-dbb-accent text-white'
+                        : 'bg-dbb-primary/80 border-gray-500 hover:border-dbb-accent'
+                    }`}
+                  >
+                    {selectedIds.has(card.id) && (
+                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
+                    )}
+                  </button>
+                )}
+                <LibraryCard
+                  libraryRow={card}
+                  onStar={multiSelect ? undefined : handleStar}
+                  onDelete={multiSelect ? undefined : handleDelete}
+                  onOpen={multiSelect ? () => toggleSelect(card.id) : setSelectedCard}
+                  dimmed={multiSelect && selectedIds.size > 0 && !selectedIds.has(card.id)}
+                />
+              </div>
             ))}
           </div>
 
-          {/* Infinite scroll sentinel */}
           <div ref={sentinelRef} className="h-12 flex items-center justify-center mt-4">
             {loadingMore && (
               <span className="text-sm text-gray-500">Loading more...</span>
@@ -214,6 +386,49 @@ export default function LibraryView({ userId, initialData }) {
         </>
       )}
 
+      {/* Multi-select action bar (fixed bottom) */}
+      {multiSelect && selectedCount > 0 && (
+        <div className="fixed bottom-0 left-0 right-0 z-40 bg-dbb-primary border-t border-dbb-accent/30 shadow-2xl">
+          <div className="container mx-auto px-4 py-3 flex items-center gap-3 flex-wrap">
+            <span className="text-sm font-medium text-white">
+              {selectedCount} selected
+            </span>
+            <div className="flex items-center gap-2 ml-auto flex-wrap">
+              <button
+                onClick={() => handleBulkStar(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-600 rounded-lg text-gray-300 hover:border-dbb-gold hover:text-dbb-gold transition-colors"
+              >
+                <Star className="w-4 h-4" /> Star all
+              </button>
+              <button
+                onClick={() => handleBulkStar(false)}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-600 rounded-lg text-gray-300 hover:border-gray-400 transition-colors"
+              >
+                <StarOff className="w-4 h-4" /> Unstar all
+              </button>
+              <button
+                onClick={() => setShowBinderPicker(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-600 rounded-lg text-gray-300 hover:border-dbb-accent hover:text-dbb-accent transition-colors"
+              >
+                <FolderOpen className="w-4 h-4" /> Move to binder
+              </button>
+              <button
+                onClick={handleBulkDelete}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-red-800 rounded-lg text-red-400 hover:border-red-500 hover:text-red-300 transition-colors"
+              >
+                <Trash2 className="w-4 h-4" /> Delete all
+              </button>
+              <button
+                onClick={exitMultiSelect}
+                className="p-1.5 text-gray-500 hover:text-white transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Card detail modal */}
       {selectedCard && (
         <CardDetailModal
@@ -221,6 +436,14 @@ export default function LibraryView({ userId, initialData }) {
           onClose={() => setSelectedCard(null)}
           onSave={handleSaveFromModal}
           onDelete={handleDeleteFromModal}
+        />
+      )}
+
+      {/* Binder picker modal */}
+      {showBinderPicker && (
+        <BinderPicker
+          onSelect={handleBulkMove}
+          onClose={() => setShowBinderPicker(false)}
         />
       )}
     </div>

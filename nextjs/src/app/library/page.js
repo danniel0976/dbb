@@ -27,6 +27,7 @@ export default async function LibraryPage() {
             <h1 className="text-xl font-bold text-dbb-accent">DBB Library</h1>
             <nav className="hidden sm:flex items-center gap-3 text-sm text-gray-400">
               <Link href="/library" className="text-white font-medium">Library</Link>
+              <Link href="/binders" className="hover:text-white transition-colors">Binders</Link>
               <Link href="/import" className="hover:text-white transition-colors">Import</Link>
               <Link href="/bazaar" className="hover:text-white transition-colors">Bazaar</Link>
             </nav>
