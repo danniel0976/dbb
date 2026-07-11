@@ -1,11 +1,13 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import LibraryCard from '@/components/LibraryCard'
 import CardDetailModal from '@/components/CardDetailModal'
 import BinderPicker from '@/components/BinderPicker'
+import AdvancedSearchPanel, { buildFilterChips } from '@/components/AdvancedSearchPanel'
 import { useToast } from '@/components/Toast'
-import { Search, SortAsc, CheckSquare, Square, X, Star, StarOff, Trash2, FolderOpen } from 'lucide-react'
+import { Search, SortAsc, CheckSquare, X, Star, StarOff, Trash2, FolderOpen, Filter } from 'lucide-react'
 import Link from 'next/link'
 
 const SORTS = [
@@ -16,8 +18,76 @@ const SORTS = [
   { value: 'rarity', label: 'Rarity' },
 ]
 
+function parseInitialFilters(searchParams) {
+  const colorsStr = searchParams.get('colors') || ''
+  const colors = colorsStr ? colorsStr.split('') : []
+  const rarityStr = searchParams.get('rarity') || ''
+  const rarity = rarityStr ? rarityStr.split(',') : []
+  return {
+    colors: colors.length ? colors : [],
+    color_mode: searchParams.get('color_mode') || 'or',
+    type_line: searchParams.get('type_line') || '',
+    cmc_min: searchParams.get('cmc_min') || '',
+    cmc_max: searchParams.get('cmc_max') || '',
+    rarity: rarity.length ? rarity : [],
+    foil: searchParams.get('foil') || 'all',
+    starred: searchParams.get('starred') === '1',
+    set_code: searchParams.get('set') || '',
+    binder_id: searchParams.get('binder_id') || '',
+  }
+}
+
+function serializeFilters(filters, q, sort) {
+  const params = new URLSearchParams()
+  if (q) params.set('q', q)
+  if (sort && sort !== 'newest') params.set('sort', sort)
+  if (filters.colors && filters.colors.length) params.set('colors', filters.colors.join(''))
+  if (filters.colors && filters.colors.length && filters.color_mode && filters.color_mode !== 'or') {
+    params.set('color_mode', filters.color_mode)
+  }
+  if (filters.type_line) params.set('type_line', filters.type_line)
+  if (filters.cmc_min != null && filters.cmc_min !== '') params.set('cmc_min', filters.cmc_min)
+  if (filters.cmc_max != null && filters.cmc_max !== '') params.set('cmc_max', filters.cmc_max)
+  if (filters.rarity && filters.rarity.length) params.set('rarity', filters.rarity.join(','))
+  if (filters.foil && filters.foil !== 'all') params.set('foil', filters.foil)
+  if (filters.starred) params.set('starred', '1')
+  if (filters.set_code) params.set('set', filters.set_code)
+  if (filters.binder_id) params.set('binder_id', filters.binder_id)
+  return params
+}
+
+function hasActiveFilters(filters) {
+  return (
+    (filters.colors && filters.colors.length > 0) ||
+    !!filters.type_line ||
+    (filters.cmc_min != null && filters.cmc_min !== '') ||
+    (filters.cmc_max != null && filters.cmc_max !== '') ||
+    (filters.rarity && filters.rarity.length > 0) ||
+    (filters.foil && filters.foil !== 'all') ||
+    !!filters.starred ||
+    !!filters.set_code ||
+    !!filters.binder_id
+  )
+}
+
+const EMPTY_FILTERS = {
+  colors: [],
+  color_mode: 'or',
+  type_line: '',
+  cmc_min: '',
+  cmc_max: '',
+  rarity: [],
+  foil: 'all',
+  starred: false,
+  set_code: '',
+  binder_id: '',
+}
+
 export default function LibraryView({ userId, initialData, binders = [], binderId }) {
   const { toast } = useToast()
+  const router = useRouter()
+  const searchParams = useSearchParams()
+
   const [cards, setCards] = useState(initialData?.cards || [])
   const [total, setTotal] = useState(initialData?.total || 0)
   const [hasMore, setHasMore] = useState(initialData?.hasMore || false)
@@ -26,7 +96,8 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
   const [sort, setSort] = useState('newest')
   const [q, setQ] = useState('')
   const [selectedCard, setSelectedCard] = useState(null)
-  const [activeBinder, setActiveBinder] = useState(binderId || '')
+  const [advFilters, setAdvFilters] = useState(() => parseInitialFilters(searchParams))
+  const [showPanel, setShowPanel] = useState(false)
 
   // Multi-select state
   const [multiSelect, setMultiSelect] = useState(false)
@@ -37,25 +108,48 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
   const searchTimeout = useRef(null)
   const currentSort = useRef(sort)
   const currentQ = useRef(q)
-  const currentBinder = useRef(activeBinder)
+  const currentFilters = useRef(advFilters)
   const resetPending = useRef(false)
 
-  const buildParams = useCallback((p = 1, overrides = {}) => {
+  const buildApiParams = useCallback((p = 1, overrides = {}) => {
+    const f = overrides.filters ?? currentFilters.current
     const params = new URLSearchParams({
       page: String(p),
       sort: overrides.sort ?? currentSort.current,
       q: overrides.q ?? currentQ.current,
     })
-    const bId = overrides.binder ?? currentBinder.current
-    if (bId) params.set('binder_id', bId)
+    if (binderId) params.set('binder_id', binderId)
+
+    if (f.colors && f.colors.length) params.set('colors', f.colors.join(''))
+    if (f.colors && f.colors.length && f.color_mode && f.color_mode !== 'or') {
+      params.set('color_mode', f.color_mode)
+    }
+    if (f.type_line) params.set('type_line', f.type_line)
+    if (f.cmc_min != null && f.cmc_min !== '') params.set('cmc_min', String(f.cmc_min))
+    if (f.cmc_max != null && f.cmc_max !== '') params.set('cmc_max', String(f.cmc_max))
+    if (f.rarity && f.rarity.length) params.set('rarity', f.rarity.join(','))
+    if (f.foil && f.foil !== 'all') params.set('foil', f.foil)
+    if (f.starred) params.set('starred', '1')
+    if (f.set_code) params.set('set', f.set_code)
+    if (f.binder_id && !binderId) params.set('binder_id', f.binder_id)
+
     return params
-  }, [])
+  }, [binderId])
+
+  const pushUrl = useCallback((overrides = {}) => {
+    const urlParams = serializeFilters(
+      overrides.filters ?? currentFilters.current,
+      overrides.q ?? currentQ.current,
+      overrides.sort ?? currentSort.current
+    )
+    router.push(`?${urlParams}`, { scroll: false })
+  }, [router])
 
   const reload = useCallback(async (overrides = {}) => {
     resetPending.current = true
     setSelectedIds(new Set())
     try {
-      const params = buildParams(1, overrides)
+      const params = buildApiParams(1, overrides)
       const res = await fetch(`/api/library?${params}`)
       if (!res.ok) return
       const data = await res.json()
@@ -68,35 +162,62 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
     } finally {
       resetPending.current = false
     }
-  }, [toast, buildParams])
+  }, [toast, buildApiParams])
 
   const handleSortChange = (newSort) => {
     setSort(newSort)
     currentSort.current = newSort
+    pushUrl({ sort: newSort })
     reload({ sort: newSort })
   }
 
   const handleSearchChange = (newQ) => {
     setQ(newQ)
     currentQ.current = newQ
+    pushUrl({ q: newQ })
     clearTimeout(searchTimeout.current)
     searchTimeout.current = setTimeout(() => {
       reload({ q: newQ })
     }, 300)
   }
 
-  const handleBinderChange = (newBinder) => {
-    setActiveBinder(newBinder)
-    currentBinder.current = newBinder
-    reload({ binder: newBinder })
-  }
+  const handleFiltersChange = useCallback((newFilters) => {
+    setAdvFilters(newFilters)
+    currentFilters.current = newFilters
+    pushUrl({ filters: newFilters })
+    clearTimeout(searchTimeout.current)
+    searchTimeout.current = setTimeout(() => {
+      reload({ filters: newFilters })
+    }, 300)
+  }, [pushUrl, reload])
+
+  const handleRemoveChip = useCallback((key) => {
+    const patches = {
+      colors: { colors: [], color_mode: 'or' },
+      type_line: { type_line: '' },
+      cmc_min: { cmc_min: '' },
+      cmc_max: { cmc_max: '' },
+      rarity: { rarity: [] },
+      foil: { foil: 'all' },
+      starred: { starred: false },
+      set_code: { set_code: '' },
+      binder_id: { binder_id: '' },
+    }
+    if (patches[key]) {
+      handleFiltersChange({ ...currentFilters.current, ...patches[key] })
+    }
+  }, [handleFiltersChange])
+
+  const handleClearAllFilters = useCallback(() => {
+    handleFiltersChange({ ...EMPTY_FILTERS })
+  }, [handleFiltersChange])
 
   const loadMore = useCallback(async () => {
     if (loadingMore || !hasMore || resetPending.current) return
     setLoadingMore(true)
     try {
       const nextPage = page + 1
-      const params = buildParams(nextPage)
+      const params = buildApiParams(nextPage)
       const res = await fetch(`/api/library?${params}`)
       if (!res.ok) return
       const data = await res.json()
@@ -108,7 +229,7 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
     } finally {
       setLoadingMore(false)
     }
-  }, [loadingMore, hasMore, page, toast, buildParams])
+  }, [loadingMore, hasMore, page, toast, buildApiParams])
 
   useEffect(() => {
     const sentinel = sentinelRef.current
@@ -227,8 +348,7 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
         body: JSON.stringify({ ids, action: 'move', binder_id: targetBinder.id }),
       })
       if (!res.ok) throw new Error()
-      // If we're viewing a specific binder, remove moved cards from view
-      if (activeBinder && activeBinder !== targetBinder.id) {
+      if (binderId && binderId !== targetBinder.id) {
         setCards(prev => prev.filter(c => !selectedIds.has(c.id)))
         setTotal(t => t - ids.length)
       }
@@ -240,11 +360,14 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
   }
 
   const selectedCount = selectedIds.size
+  const activeChips = buildFilterChips(advFilters, binders, [])
+  const filterActive = hasActiveFilters(advFilters)
+  const activeFilterCount = activeChips.length
 
   return (
     <div>
       {/* Toolbar */}
-      <div className="flex flex-wrap items-center gap-3 mb-6">
+      <div className="flex flex-wrap items-center gap-3 mb-3">
         <div className="relative flex-1 min-w-48">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
           <input
@@ -268,20 +391,6 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
           </select>
         </div>
 
-        {/* Binder filter — only show when not on a binder-specific page */}
-        {!binderId && binders.length > 0 && (
-          <select
-            value={activeBinder}
-            onChange={(e) => handleBinderChange(e.target.value)}
-            className="bg-dbb-secondary border border-gray-700 rounded-lg px-3 py-2 text-sm focus:border-dbb-accent focus:outline-none"
-          >
-            <option value="">All binders</option>
-            {binders.map(b => (
-              <option key={b.id} value={b.id}>{b.name}</option>
-            ))}
-          </select>
-        )}
-
         <div className="text-sm text-gray-500">
           {total} card{total !== 1 ? 's' : ''}
         </div>
@@ -302,10 +411,58 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
           <CheckSquare className="w-4 h-4" />
         </button>
 
-        <button className="px-3 py-2 text-sm border border-gray-700 rounded-lg text-gray-400 hover:border-dbb-accent/50 transition-colors">
+        {/* Filters button */}
+        <button
+          onClick={() => setShowPanel(v => !v)}
+          className={`flex items-center gap-1.5 px-3 py-2 text-sm border rounded-lg transition-colors ${
+            showPanel || filterActive
+              ? 'border-dbb-accent text-dbb-accent bg-dbb-accent/10'
+              : 'border-gray-700 text-gray-400 hover:border-dbb-accent/50'
+          }`}
+        >
+          <Filter className="w-4 h-4" />
           Filters
+          {activeFilterCount > 0 && (
+            <span className="ml-1 bg-dbb-accent text-white text-xs font-bold rounded-full w-4 h-4 flex items-center justify-center">
+              {activeFilterCount}
+            </span>
+          )}
         </button>
       </div>
+
+      {/* Active filter chips */}
+      {activeChips.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 mb-3">
+          {activeChips.map(chip => (
+            <button
+              key={chip.key}
+              onClick={() => handleRemoveChip(chip.key)}
+              className="flex items-center gap-1 px-2.5 py-0.5 text-xs bg-dbb-accent/10 border border-dbb-accent/40 text-dbb-accent rounded-full hover:bg-dbb-accent/20 transition-colors"
+            >
+              {chip.label}
+              <X className="w-3 h-3 ml-0.5" />
+            </button>
+          ))}
+          <button
+            onClick={handleClearAllFilters}
+            className="text-xs text-gray-500 hover:text-gray-300 underline transition-colors"
+          >
+            Clear all
+          </button>
+        </div>
+      )}
+
+      {/* Advanced search panel */}
+      {showPanel && (
+        <AdvancedSearchPanel
+          open={showPanel}
+          onClose={() => setShowPanel(false)}
+          filters={advFilters}
+          onFiltersChange={handleFiltersChange}
+          binders={binders}
+          binderId={binderId}
+        />
+      )}
 
       {/* Multi-select header bar */}
       {multiSelect && (
@@ -334,14 +491,30 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
       {cards.length === 0 ? (
         <div className="text-center py-24">
           <div className="text-5xl mb-4">📦</div>
-          <h2 className="text-xl font-semibold mb-2 text-gray-300">Your library is empty</h2>
-          <p className="text-gray-500 mb-6">Import your ManaBox collection to get started.</p>
-          <Link
-            href="/import"
-            className="inline-block btn-primary px-6 py-2 rounded-lg"
-          >
-            Import your ManaBox collection →
-          </Link>
+          <h2 className="text-xl font-semibold mb-2 text-gray-300">
+            {filterActive || q ? 'No cards match your filters' : 'Your library is empty'}
+          </h2>
+          <p className="text-gray-500 mb-6">
+            {filterActive || q
+              ? 'Try adjusting your search or removing some filters.'
+              : 'Import your ManaBox collection to get started.'}
+          </p>
+          {!filterActive && !q && (
+            <Link
+              href="/import"
+              className="inline-block btn-primary px-6 py-2 rounded-lg"
+            >
+              Import your ManaBox collection →
+            </Link>
+          )}
+          {(filterActive || q) && (
+            <button
+              onClick={handleClearAllFilters}
+              className="inline-block px-6 py-2 rounded-lg border border-gray-600 text-gray-400 hover:border-dbb-accent hover:text-dbb-accent transition-colors"
+            >
+              Clear all filters
+            </button>
+          )}
         </div>
       ) : (
         <>
