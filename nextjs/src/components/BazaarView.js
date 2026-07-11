@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { Grid, Filter, X, Search, Loader2 } from 'lucide-react'
 import Sidebar from '@/components/Sidebar'
 import BazaarCard from '@/components/BazaarCard'
+import BazaarDetailModal from '@/components/BazaarDetailModal'
 import LoadingSkeleton from '@/components/LoadingSkeleton'
 
 const INITIAL_FILTERS = {
@@ -29,6 +30,7 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [filters, setFilters] = useState(INITIAL_FILTERS)
   const [filterOptions] = useState(initialFilterOptions || { sets: [], rarities: [], cardTypes: [] })
+  const [selectedListing, setSelectedListing] = useState(null)
 
   const PAGE_SIZE = 24
   const searchTimeout = useRef(null)
@@ -115,6 +117,11 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
     if (Array.isArray(v)) return v.length > 0
     return v !== null && v !== undefined
   })
+
+  // Phase 11 will wire this to add-to-cart; for now log the selection
+  const handleSelectListing = (listing) => {
+    console.log('[Phase 11 hook] onSelectListing:', listing)
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-dbb-primary to-dbb-secondary">
@@ -257,7 +264,11 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
             <>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 gap-4">
                 {listings.map(listing => (
-                  <BazaarCard key={listing.id} listing={listing} />
+                  <BazaarCard
+                    key={listing.id}
+                    listing={listing}
+                    onClick={() => setSelectedListing(listing)}
+                  />
                 ))}
               </div>
               <div id="bazaar-sentinel" className="h-20 flex items-center justify-center py-4">
@@ -274,6 +285,14 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
           )}
         </main>
       </div>
+
+      {selectedListing && (
+        <BazaarDetailModal
+          listing={selectedListing}
+          onClose={() => setSelectedListing(null)}
+          onSelectListing={handleSelectListing}
+        />
+      )}
     </div>
   )
 }

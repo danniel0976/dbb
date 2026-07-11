@@ -60,7 +60,7 @@ export async function GET(request) {
       .select(`
         id, user_id, multiplier, status, created_at,
         library_cards!inner(
-          id, scryfall_id, foil, condition, language, quantity,
+          id, scryfall_id, foil, condition, quantity,
           card_index!inner(
             name, set_code, set_name, collector_number, rarity, type_line, colors, cmc
           )

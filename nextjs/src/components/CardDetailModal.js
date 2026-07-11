@@ -184,7 +184,6 @@ export default function CardDetailModal({ libraryRow, onClose, onSave, onDelete 
   const [quantity, setQuantity] = useState(libraryRow.quantity)
   const [condition, setCondition] = useState(libraryRow.condition)
   const [foil, setFoil] = useState(libraryRow.foil)
-  const [language, setLanguage] = useState(libraryRow.language)
   const [starred, setStarred] = useState(libraryRow.starred)
 
   const ci = libraryRow.card_index
@@ -214,7 +213,7 @@ export default function CardDetailModal({ libraryRow, onClose, onSave, onDelete 
       const res = await fetch(`/api/library/${libraryRow.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ quantity, condition, foil, language, starred }),
+        body: JSON.stringify({ quantity, condition, foil, starred }),
       })
       if (!res.ok) throw new Error('Save failed')
       const { card } = await res.json()
@@ -353,18 +352,6 @@ export default function CardDetailModal({ libraryRow, onClose, onSave, onDelete 
                     <option key={f} value={f}>{f.charAt(0).toUpperCase() + f.slice(1)}</option>
                   ))}
                 </select>
-              </div>
-
-              {/* Language */}
-              <div className="flex items-center gap-3">
-                <label className="text-sm text-gray-400 w-24">Language</label>
-                <input
-                  type="text"
-                  value={language}
-                  onChange={(e) => setLanguage(e.target.value.toLowerCase().slice(0, 5))}
-                  placeholder="en"
-                  className="w-24 bg-dbb-secondary border border-gray-700 rounded px-3 py-1.5 text-sm focus:border-dbb-accent focus:outline-none"
-                />
               </div>
 
               {/* Star */}

@@ -15,7 +15,7 @@ const RARITY_COLORS = {
   common: 'text-gray-400',
 }
 
-export default function BazaarCard({ listing }) {
+export default function BazaarCard({ listing, onClick }) {
   const lc = listing.library_cards
   const ci = lc?.card_index
   const [imageUrl, setImageUrl] = useState(null)
@@ -72,7 +72,13 @@ export default function BazaarCard({ listing }) {
   const rarityColor = RARITY_COLORS[ci?.rarity] || 'text-gray-400'
 
   return (
-    <div className="group relative bg-dbb-secondary border border-gray-700/50 rounded-xl overflow-hidden hover:border-dbb-accent/50 transition-colors">
+    <div
+      className="group relative bg-dbb-secondary border border-gray-700/50 rounded-xl overflow-hidden hover:border-dbb-accent/50 transition-colors cursor-pointer"
+      onClick={onClick}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onClick?.() }}
+    >
       {/* Card image */}
       <div className="relative aspect-[2/3] bg-dbb-primary">
         {imageUrl ? (

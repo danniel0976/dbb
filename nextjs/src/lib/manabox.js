@@ -39,9 +39,6 @@ function parseRow(rawRow) {
   const condRaw = (rawRow['Condition'] || '').trim().toLowerCase()
   const condition = CONDITION_MAP[condRaw] || 'NM'
 
-  const langRaw = (rawRow['Language'] || 'en').trim().toLowerCase()
-  const language = langRaw.length >= 2 && langRaw.length <= 5 ? langRaw : 'en'
-
   const priceRaw = (rawRow['Purchase price'] || '').trim()
   const purchase_price = priceRaw && !isNaN(parseFloat(priceRaw)) ? parseFloat(priceRaw) : null
 
@@ -59,7 +56,6 @@ function parseRow(rawRow) {
     quantity,
     foil,
     condition,
-    language,
     purchase_price,
     purchase_currency,
     date_added,
@@ -74,7 +70,7 @@ function aggregateRows(rows) {
 
   for (const row of rows) {
     if (row._skip) continue
-    const key = `${row.scryfall_id}|${row.foil}|${row.condition}|${row.language}`
+    const key = `${row.scryfall_id}|${row.foil}|${row.condition}`
     if (map.has(key)) {
       const existing = map.get(key)
       existing.quantity = Math.min(9999, existing.quantity + row.quantity)

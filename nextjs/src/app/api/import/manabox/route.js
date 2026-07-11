@@ -166,7 +166,6 @@ export async function POST(request) {
       quantity: r.quantity,
       foil: r.foil,
       condition: r.condition,
-      language: r.language,
       purchase_price: r.purchase_price,
       purchase_currency: r.purchase_currency,
       date_added: r.date_added,
