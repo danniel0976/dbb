@@ -37,11 +37,19 @@ export async function POST(request) {
   }
 
   const file = formData.get('file')
-  const destination = formData.get('destination') || 'general'
-  const binderName = (formData.get('binderName') || 'Imported Collection').trim()
+  const binderName = (formData.get('binderName') || '').trim()
+
+  // Reject any attempt to target an existing binder
+  if (formData.get('binder_id')) {
+    return NextResponse.json({ error: 'Imports must go into a new binder' }, { status: 400 })
+  }
 
   if (!file || typeof file === 'string') {
     return NextResponse.json({ error: 'No file uploaded' }, { status: 400 })
+  }
+
+  if (!binderName) {
+    return NextResponse.json({ error: 'Binder name is required' }, { status: 400 })
   }
 
   const bytes = await file.arrayBuffer()
@@ -68,32 +76,17 @@ export async function POST(request) {
 
   const db = makeServiceClient()
 
-  // Resolve or create binder
-  let binderId, resolvedBinderName
-  if (destination === 'new' && binderName) {
-    const { data: newBinder, error: binderErr } = await db
-      .from('binders')
-      .insert({ user_id: user.id, name: binderName })
-      .select('id, name')
-      .single()
-    if (binderErr) {
-      return NextResponse.json({ error: 'Failed to create binder: ' + binderErr.message }, { status: 500 })
-    }
-    binderId = newBinder.id
-    resolvedBinderName = newBinder.name
-  } else {
-    const { data: defaultBinder, error: defaultErr } = await db
-      .from('binders')
-      .select('id, name')
-      .eq('user_id', user.id)
-      .eq('is_default', true)
-      .single()
-    if (defaultErr || !defaultBinder) {
-      return NextResponse.json({ error: 'Could not find default binder' }, { status: 500 })
-    }
-    binderId = defaultBinder.id
-    resolvedBinderName = defaultBinder.name
+  // Every import creates a fresh binder
+  const { data: newBinder, error: binderErr } = await db
+    .from('binders')
+    .insert({ user_id: user.id, name: binderName })
+    .select('id, name')
+    .single()
+  if (binderErr) {
+    return NextResponse.json({ error: 'Failed to create binder: ' + binderErr.message }, { status: 500 })
   }
+  const binderId = newBinder.id
+  const resolvedBinderName = newBinder.name
 
   // Find IDs not yet in card_index — batch the query to avoid URL length limits
   const allIds = [...new Set(aggregated.map(r => r.scryfall_id))]

@@ -60,11 +60,15 @@ function downloadSkippedCSV(skipped) {
 }
 
 export default function ImportWizard() {
+  const defaultBinderName = () => {
+    const d = new Date()
+    return `Import ${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  }
+
   const [step, setStep] = useState(1)
   const [file, setFile] = useState(null)
   const [preview, setPreview] = useState(null)
-  const [destination, setDestination] = useState('general')
-  const [binderName, setBinderName] = useState('')
+  const [binderName, setBinderName] = useState(defaultBinderName)
   const [uploading, setUploading] = useState(false)
   const [result, setResult] = useState(null)
   const [error, setError] = useState(null)
@@ -102,10 +106,7 @@ export default function ImportWizard() {
 
     const fd = new FormData()
     fd.append('file', file)
-    fd.append('destination', destination)
-    if (destination === 'new' && binderName.trim()) {
-      fd.append('binderName', binderName.trim())
-    }
+    fd.append('binderName', binderName.trim())
 
     try {
       const res = await fetch('/api/import/manabox', { method: 'POST', body: fd })
@@ -130,8 +131,7 @@ export default function ImportWizard() {
     setStep(1)
     setFile(null)
     setPreview(null)
-    setDestination('general')
-    setBinderName('')
+    setBinderName(defaultBinderName())
     setResult(null)
     setError(null)
     setSkippedOpen(false)
@@ -255,61 +255,27 @@ export default function ImportWizard() {
         </div>
       )}
 
-      {/* Step 2: Destination */}
+      {/* Step 2: Name binder */}
       {step === 2 && (
         <div className="space-y-6">
           <div>
-            <h2 className="text-xl font-bold text-white mb-1">Choose Destination</h2>
+            <h2 className="text-xl font-bold text-white mb-1">Name Your Binder</h2>
             <p className="text-gray-400 text-sm">
               <span className="text-white">{file?.name}</span> · {preview?.total?.toLocaleString()} rows
             </p>
           </div>
 
-          <div className="space-y-3">
-            <label className={`flex items-start gap-4 p-4 rounded-xl border cursor-pointer transition-colors ${
-              destination === 'general' ? 'border-dbb-accent bg-dbb-accent/10' : 'border-gray-700 hover:border-gray-600'
-            }`}>
-              <input
-                type="radio"
-                name="destination"
-                value="general"
-                checked={destination === 'general'}
-                onChange={() => setDestination('general')}
-                className="mt-0.5 accent-dbb-accent"
-              />
-              <div>
-                <p className="text-white font-medium">Add to General binder</p>
-                <p className="text-gray-400 text-sm">Merge all cards into your default collection binder.</p>
-              </div>
-            </label>
-
-            <label className={`flex items-start gap-4 p-4 rounded-xl border cursor-pointer transition-colors ${
-              destination === 'new' ? 'border-dbb-accent bg-dbb-accent/10' : 'border-gray-700 hover:border-gray-600'
-            }`}>
-              <input
-                type="radio"
-                name="destination"
-                value="new"
-                checked={destination === 'new'}
-                onChange={() => setDestination('new')}
-                className="mt-0.5 accent-dbb-accent"
-              />
-              <div className="flex-1">
-                <p className="text-white font-medium">Create new binder</p>
-                <p className="text-gray-400 text-sm">Import into a brand-new binder with a custom name.</p>
-                {destination === 'new' && (
-                  <input
-                    type="text"
-                    placeholder="Binder name"
-                    value={binderName}
-                    onChange={e => setBinderName(e.target.value)}
-                    className="mt-3 w-full bg-gray-800 border border-gray-600 focus:border-dbb-accent rounded-lg px-3 py-2 text-white placeholder-gray-500 text-sm outline-none transition-colors"
-                    maxLength={60}
-                    autoFocus
-                  />
-                )}
-              </div>
-            </label>
+          <div className="p-4 rounded-xl border border-dbb-accent/40 bg-dbb-accent/5">
+            <label className="block text-sm font-medium text-gray-300 mb-2">Binder name</label>
+            <input
+              type="text"
+              value={binderName}
+              onChange={e => setBinderName(e.target.value)}
+              className="w-full bg-dbb-primary border border-gray-600 focus:border-dbb-accent rounded-lg px-3 py-2 text-white placeholder-gray-500 text-sm outline-none transition-colors"
+              maxLength={60}
+              autoFocus
+            />
+            <p className="mt-3 text-xs text-gray-500">Each import creates a new binder. You can merge binders later.</p>
           </div>
 
           {error && (
@@ -327,7 +293,7 @@ export default function ImportWizard() {
               Back
             </button>
             <button
-              disabled={uploading || (destination === 'new' && !binderName.trim())}
+              disabled={uploading || !binderName.trim()}
               onClick={handleImport}
               className="flex-[2] py-3 bg-dbb-accent hover:bg-dbb-accent/80 disabled:bg-gray-700 disabled:text-gray-500 text-white font-medium rounded-xl transition-colors flex items-center justify-center gap-2"
             >

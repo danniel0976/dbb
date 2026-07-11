@@ -31,30 +31,28 @@ export async function GET(request) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+  const t0 = Date.now()
+
+  // Single query: binders + exact card count via PostgREST resource embedding
   const { data: binders, error } = await supabase
     .from('binders')
-    .select('id, name, is_default, created_at')
+    .select('id, name, is_default, created_at, library_cards(count)')
     .eq('user_id', user.id)
     .order('created_at')
+
+  const elapsed = Date.now() - t0
+  console.log(`GET /api/binders db query: ${elapsed}ms`)
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  // Get card counts per binder
-  const { data: counts } = await supabase
-    .from('library_cards')
-    .select('binder_id')
-    .eq('user_id', user.id)
-
-  const countMap = {}
-  for (const row of (counts || [])) {
-    countMap[row.binder_id] = (countMap[row.binder_id] || 0) + 1
-  }
-
   const bindersWithCounts = (binders || []).map(b => ({
-    ...b,
-    card_count: countMap[b.id] || 0,
+    id: b.id,
+    name: b.name,
+    is_default: b.is_default,
+    created_at: b.created_at,
+    card_count: b.library_cards?.[0]?.count ?? 0,
   }))
 
   return NextResponse.json({ binders: bindersWithCounts })

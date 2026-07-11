@@ -2,9 +2,87 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
-import { BookOpen, Plus, Pencil, Trash2, Check, X, Loader2 } from 'lucide-react'
+import { BookOpen, Plus, Pencil, Trash2, Check, X, Loader2, GitMerge, ChevronDown } from 'lucide-react'
 
-function BinderCard({ binder, onRename, onDelete }) {
+function MergeModal({ source, binders, onConfirm, onClose }) {
+  const targets = binders.filter(b => b.id !== source.id)
+  const [targetId, setTargetId] = useState(targets[0]?.id || '')
+  const [merging, setMerging] = useState(false)
+
+  const target = binders.find(b => b.id === targetId)
+
+  const handleConfirm = async () => {
+    if (!targetId) return
+    setMerging(true)
+    await onConfirm(source.id, targetId)
+    setMerging(false)
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <div className="bg-dbb-secondary border border-gray-700 rounded-2xl w-full max-w-md p-6 shadow-xl">
+        <div className="flex items-center justify-between mb-5">
+          <h3 className="text-lg font-bold text-white">Merge binder</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-white"><X className="w-5 h-5" /></button>
+        </div>
+
+        <div className="space-y-4">
+          <div>
+            <p className="text-sm text-gray-400 mb-1">Source binder</p>
+            <p className="text-white font-medium">
+              {source.name} <span className="text-gray-500 font-normal">({source.card_count} card{source.card_count !== 1 ? 's' : ''})</span>
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm text-gray-400 mb-1">Merge into</label>
+            {targets.length === 0 ? (
+              <p className="text-gray-500 text-sm">No other binders available.</p>
+            ) : (
+              <div className="relative">
+                <select
+                  value={targetId}
+                  onChange={e => setTargetId(e.target.value)}
+                  className="w-full appearance-none bg-dbb-primary border border-gray-600 focus:border-dbb-accent rounded-lg px-3 py-2 text-white text-sm outline-none pr-8"
+                >
+                  {targets.map(b => (
+                    <option key={b.id} value={b.id}>{b.name} ({b.card_count} cards)</option>
+                  ))}
+                </select>
+                <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+              </div>
+            )}
+          </div>
+
+          {target && (
+            <div className="p-3 bg-yellow-900/20 border border-yellow-700/40 rounded-lg text-sm text-yellow-200">
+              Merge <span className="font-semibold">"{source.name}"</span> ({source.card_count} cards) into <span className="font-semibold">"{target.name}"</span>? <span className="font-semibold">"{source.name}"</span> will be deleted after merging.
+            </div>
+          )}
+        </div>
+
+        <div className="flex gap-3 mt-6">
+          <button
+            onClick={onClose}
+            className="flex-1 py-2.5 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-xl text-sm font-medium transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            disabled={merging || !targetId || targets.length === 0}
+            onClick={handleConfirm}
+            className="flex-[2] py-2.5 bg-dbb-accent hover:bg-dbb-accent/80 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-xl text-sm font-medium transition-colors flex items-center justify-center gap-2"
+          >
+            {merging ? <Loader2 className="w-4 h-4 animate-spin" /> : <GitMerge className="w-4 h-4" />}
+            {merging ? 'Merging…' : 'Merge & delete source'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function BinderCard({ binder, onRename, onDelete, onMerge }) {
   const [editing, setEditing] = useState(false)
   const [name, setName] = useState(binder.name)
   const [saving, setSaving] = useState(false)
@@ -78,6 +156,13 @@ function BinderCard({ binder, onRename, onDelete }) {
           </button>
         )}
         <button
+          onClick={() => onMerge(binder)}
+          title="Merge into another binder"
+          className="p-1.5 text-gray-400 hover:text-blue-400 border border-gray-700 hover:border-blue-800 rounded-lg transition-colors"
+        >
+          <GitMerge className="w-4 h-4" />
+        </button>
+        <button
           onClick={() => onDelete(binder)}
           disabled={binder.is_default}
           title={binder.is_default ? 'Cannot delete the default binder' : 'Delete binder'}
@@ -97,6 +182,7 @@ export default function BindersPage() {
   const [newName, setNewName] = useState('')
   const [showCreate, setShowCreate] = useState(false)
   const [error, setError] = useState(null)
+  const [mergeSource, setMergeSource] = useState(null)
 
   const fetchBinders = useCallback(async () => {
     try {
@@ -154,6 +240,25 @@ export default function BindersPage() {
     }
   }
 
+  const handleMerge = async (sourceId, targetId) => {
+    try {
+      const res = await fetch('/api/binders/merge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ source_id: sourceId, target_id: targetId }),
+      })
+      if (!res.ok) {
+        const d = await res.json()
+        throw new Error(d.error || 'Merge failed')
+      }
+      setMergeSource(null)
+      await fetchBinders()
+    } catch (e) {
+      setError(e.message)
+      setMergeSource(null)
+    }
+  }
+
   const handleDelete = async (binder) => {
     const count = binder.card_count || 0
     const msg = count > 0
@@ -174,6 +279,14 @@ export default function BindersPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-dbb-primary to-dbb-secondary">
+      {mergeSource && (
+        <MergeModal
+          source={mergeSource}
+          binders={binders}
+          onConfirm={handleMerge}
+          onClose={() => setMergeSource(null)}
+        />
+      )}
       <header className="sticky top-0 z-40 bg-dbb-primary/95 backdrop-blur border-b border-dbb-accent/20">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
@@ -280,6 +393,7 @@ export default function BindersPage() {
                 binder={b}
                 onRename={handleRename}
                 onDelete={handleDelete}
+                onMerge={setMergeSource}
               />
             ))}
           </div>
