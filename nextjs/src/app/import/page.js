@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabaseServer'
 import { redirect } from 'next/navigation'
 import ImportWizard from '@/components/ImportWizard'
-import Link from 'next/link'
+import DBBNav from '@/components/DBBNav'
 
 export const metadata = { title: 'Import Collection — DBB' }
 
@@ -12,31 +12,7 @@ export default async function ImportPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-dbb-primary to-dbb-secondary">
-      <header className="sticky top-0 z-40 bg-dbb-primary/95 backdrop-blur border-b border-dbb-accent/20">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <h1 className="text-xl font-bold text-dbb-accent">DBB Library</h1>
-            <nav className="hidden sm:flex items-center gap-3 text-sm text-gray-400">
-              <Link href="/library" className="hover:text-white transition-colors">Library</Link>
-              <Link href="/binders" className="hover:text-white transition-colors">Binders</Link>
-              <Link href="/import" className="text-white font-medium">Import</Link>
-              <Link href="/bazaar" className="hover:text-white transition-colors">Bazaar</Link>
-              <Link href="/profile" className="hover:text-white transition-colors">Profile</Link>
-            </nav>
-          </div>
-          <div className="flex items-center gap-3">
-            <span className="text-xs text-gray-500 hidden sm:inline">{user.email}</span>
-            <form action="/api/auth/signout" method="POST">
-              <button
-                type="submit"
-                className="text-sm text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 rounded-lg px-3 py-1.5 transition-colors"
-              >
-                Sign out
-              </button>
-            </form>
-          </div>
-        </div>
-      </header>
+      <DBBNav userEmail={user.email} />
 
       <main className="container mx-auto px-4 py-10">
         <div className="mb-8">

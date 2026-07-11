@@ -1,355 +1,87 @@
-'use client'
+import { createClient as createAuthClient } from '@/lib/supabaseServer'
+import { createClient as createServiceClient } from '@supabase/supabase-js'
+import DBBNav from '@/components/DBBNav'
+import BazaarView from '@/components/BazaarView'
+import CollectionValue from '@/components/CollectionValue'
 
-import { useState, useEffect, useCallback } from 'react'
-import { supabase, cardQueries, priceUtils, generateCaption } from '../../lib/supabase'
-import Sidebar from '../../components/Sidebar'
-import CardGrid from '../../components/CardGrid'
-import CardDetail from '../../components/CardDetail'
-import LoadingSkeleton from '../../components/LoadingSkeleton'
-import { Filter, Grid, X, Search } from 'lucide-react'
+export const metadata = { title: 'Bazaar — DBB' }
 
-export default function Home() {
-  const [cards, setCards] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
-  const [selectedCard, setSelectedCard] = useState(null)
-  const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [filters, setFilters] = useState({
-    setCode: null,
-    rarities: [],
-    colors: [],
-    cardType: null,
-    minPrice: null,
-    maxPrice: null,
-    isFoil: null, // null = all, true = foil only, false = non-foil only
-    sortBy: 'newest',
-    search: '',
-  })
-  const [filterOptions, setFilterOptions] = useState({
-    sets: [],
-    rarities: [],
-    cardTypes: [],
-  })
-  // Pagination state
-  const [page, setPage] = useState(1)
-  const [hasMore, setHasMore] = useState(true)
-  const [loadingMore, setLoadingMore] = useState(false)
-  const [totalCards, setTotalCards] = useState(0)
-  const PAGE_SIZE = 24
+function makeServiceClient() {
+  return createServiceClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY
+  )
+}
 
-  // Load filter options
-  useEffect(() => {
-    const loadFilterOptions = async () => {
-      try {
-        const options = await cardQueries.getFilterOptions()
-        setFilterOptions(options)
-      } catch (err) {
-        console.error('Failed to load filter options:', err)
-      }
-    }
-    loadFilterOptions()
-  }, [])
+export default async function BazaarPage() {
+  // Auth (optional — bazaar is public but shows more when logged in)
+  const authClient = await createAuthClient()
+  const { data: { user } } = await authClient.auth.getUser().catch(() => ({ data: { user: null } }))
 
-  // Load cards with filters (initial load)
-  const loadCards = useCallback(async () => {
-    setLoading(true)
-    setError(null)
-    setPage(1) // Reset to first page when filters change
+  // Fetch initial listings using service role so the JOIN works server-side
+  // regardless of whether the viewer is authenticated.
+  let initialData = null
+  let filterOptions = { sets: [], rarities: [], cardTypes: [] }
 
-    try {
-      const result = await cardQueries.getAvailableCards(filters, 1, PAGE_SIZE)
+  try {
+    const sc = makeServiceClient()
 
-      if (result.error) {
-        throw result.error
+    const { data: listings, error, count } = await sc
+      .from('listings')
+      .select(`
+        id, user_id, multiplier, status, created_at,
+        library_cards!inner(
+          id, scryfall_id, foil, condition, language, quantity,
+          card_index!inner(
+            name, set_code, set_name, collector_number, rarity, type_line, colors, cmc
+          )
+        )
+      `, { count: 'exact' })
+      .eq('status', 'active')
+      .order('created_at', { ascending: false })
+      .range(0, 23)
+
+    if (!error && listings) {
+      // Fetch seller display names
+      const userIds = [...new Set(listings.map(l => l.user_id))]
+      let sellerMap = {}
+      if (userIds.length > 0) {
+        const { data: profiles } = await sc
+          .from('profiles')
+          .select('id, display_name')
+          .in('id', userIds)
+        for (const p of profiles || []) sellerMap[p.id] = p.display_name
       }
 
-      setCards(result.data || [])
-      setHasMore(result.hasMore ?? result.data?.length === PAGE_SIZE)
-      setTotalCards(result.total ?? result.data?.length ?? 0)
-    } catch (err) {
-      console.error('Failed to load cards:', err)
-      setError('Failed to load cards. Please check your connection.')
-    } finally {
-      setLoading(false)
-    }
-  }, [filters])
+      const enriched = listings.map(l => ({ ...l, seller_name: sellerMap[l.user_id] || null }))
+      const total = count || 0
+      initialData = { listings: enriched, total, hasMore: 24 < total, page: 1 }
 
-  // Load more cards (for infinite scroll)
-  const loadMoreCards = useCallback(async () => {
-    if (loadingMore || !hasMore || loading) return
-
-    setLoadingMore(true)
-
-    try {
-      const nextPage = page + 1
-      const result = await cardQueries.getAvailableCards(filters, nextPage, PAGE_SIZE)
-
-      if (result.error) {
-        throw result.error
+      // Build filter options from active listings
+      const setMap = {}
+      const raritySet = new Set()
+      for (const l of listings) {
+        const ci = l.library_cards?.card_index
+        if (ci?.set_code) setMap[ci.set_code] = ci.set_name || ci.set_code
+        if (ci?.rarity) raritySet.add(ci.rarity)
       }
-
-      if (result.data && result.data.length > 0) {
-        setCards(prev => [...prev, ...result.data])
-        setPage(nextPage)
-        setHasMore(result.hasMore ?? result.data.length === PAGE_SIZE)
-      } else {
-        setHasMore(false) // No more cards
+      filterOptions = {
+        sets: Object.entries(setMap).map(([code, name]) => ({ code, name })),
+        rarities: [...raritySet],
+        cardTypes: [],
       }
-    } catch (err) {
-      console.error('Failed to load more cards:', err)
-    } finally {
-      setLoadingMore(false)
     }
-  }, [filters, page, hasMore, loading, loadingMore])
-
-  // Infinite scroll hook
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting && !loadingMore && hasMore) {
-          loadMoreCards()
-        }
-      },
-      { threshold: 0.5, rootMargin: '200px' }
-    )
-
-    const sentinel = document.getElementById('scroll-sentinel')
-    if (sentinel) observer.observe(sentinel)
-
-    return () => observer.disconnect()
-  }, [loadingMore, hasMore, loadMoreCards])
-
-  // Initial load and filter changes
-  useEffect(() => {
-    loadCards()
-  }, [loadCards])
-
-  // Handle filter changes
-  const updateFilter = (key, value) => {
-    setFilters(prev => ({
-      ...prev,
-      [key]: value,
-    }))
+  } catch {
+    // listings table not yet created — render empty gracefully
   }
-
-  // Clear all filters
-  const clearFilters = () => {
-    setFilters({
-      setCode: null,
-      rarities: [],
-      colors: [],
-      cardType: null,
-      minPrice: null,
-      maxPrice: null,
-      isFoil: null,
-      sortBy: 'newest',
-      search: '',
-    })
-  }
-
-  // Handle card selection
-  const handleCardClick = (card) => {
-    setSelectedCard(card)
-  }
-
-  // Close card detail
-  const closeCardDetail = () => {
-    setSelectedCard(null)
-  }
-
-  // Copy caption to clipboard
-  const copyCaption = async (card, multiplier) => {
-    try {
-      const caption = generateCaption(card, multiplier)
-      await navigator.clipboard.writeText(caption)
-
-      // Show toast notification
-      const toast = document.createElement('div')
-      toast.className = 'toast fixed bottom-4 right-4 bg-dbb-accent text-white px-6 py-3 rounded-lg shadow-lg z-50'
-      toast.textContent = 'Caption copied!'
-      document.body.appendChild(toast)
-
-      setTimeout(() => toast.remove(), 2000)
-    } catch (err) {
-      console.error('Failed to copy caption:', err)
-    }
-  }
-
-  // Check if any filters are active
-  const hasActiveFilters = Object.entries(filters).some(([key, v]) => {
-    if (key === 'sortBy') return v !== 'newest'
-    if (key === 'search') return v !== ''
-    if (key === 'isFoil') return v !== null
-    if (key === 'rarities') return v.length > 0
-    return v !== null && v !== undefined && (Array.isArray(v) ? v.length > 0 : true)
-  })
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-dbb-primary to-dbb-secondary">
-      {/* Header */}
-      <header className="sticky top-0 z-40 bg-dbb-primary/95 backdrop-blur border-b border-dbb-accent/20">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <button
-                onClick={() => setSidebarOpen(!sidebarOpen)}
-                className="lg:hidden p-2 hover:bg-dbb-secondary rounded-lg transition-colors"
-              >
-                <Filter className="w-6 h-6" />
-              </button>
-              <h1 className="text-2xl font-bold text-dbb-accent">
-                MTG Bazaar
-              </h1>
-              <span className="text-sm text-gray-400 hidden sm:inline">
-                Magic: The Gathering Claim Sales
-              </span>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Search cards..."
-                  value={filters.search}
-                  onChange={(e) => updateFilter('search', e.target.value)}
-                  className="w-48 sm:w-64 bg-dbb-secondary border border-gray-700 rounded-lg pl-10 pr-8 py-2 text-sm focus:border-dbb-accent focus:outline-none placeholder-gray-500"
-                />
-                {filters.search && (
-                  <button
-                    onClick={() => updateFilter('search', '')}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:text-red-400 transition-colors"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                )}
-              </div>
-              {hasActiveFilters && (
-                <button
-                  onClick={clearFilters}
-                  className="flex items-center gap-2 text-sm text-dbb-accent hover:text-red-400 transition-colors"
-                >
-                  <X className="w-4 h-4" />
-                  Clear
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      </header>
-
-      <div className="flex">
-        {/* Sidebar - Desktop */}
-        <aside className="hidden lg:block w-72 fixed left-0 top-[73px] bottom-0 overflow-y-auto border-r border-dbb-accent/10 bg-dbb-primary/50">
-          <Sidebar
-            filters={filters}
-            updateFilter={updateFilter}
-            clearFilters={clearFilters}
-            filterOptions={filterOptions}
-          />
-        </aside>
-
-        {/* Sidebar - Mobile Overlay */}
-        {sidebarOpen && (
-          <>
-            <div
-              className="fixed inset-0 bg-black/50 z-40 lg:hidden"
-              onClick={() => setSidebarOpen(false)}
-            />
-            <aside className="fixed left-0 top-0 bottom-0 w-80 z-50 lg:hidden sidebar-transition">
-              <div className="h-full bg-dbb-primary overflow-y-auto">
-                <div className="p-4 border-b border-dbb-accent/10 flex items-center justify-between">
-                  <h2 className="text-lg font-semibold">Filters</h2>
-                  <button
-                    onClick={() => setSidebarOpen(false)}
-                    className="p-2 hover:bg-dbb-secondary rounded-lg"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-                <Sidebar
-                  filters={filters}
-                  updateFilter={updateFilter}
-                  clearFilters={clearFilters}
-                  filterOptions={filterOptions}
-                />
-              </div>
-            </aside>
-          </>
-        )}
-
-        {/* Main Content */}
-        <main className="flex-1 lg:ml-72 p-4 lg:p-6">
-          {loading ? (
-            <LoadingSkeleton count={12} />
-          ) : error ? (
-            <div className="text-center py-12">
-              <p className="text-red-400 mb-4">{error}</p>
-              <button onClick={loadCards} className="btn-primary">
-                Try Again
-              </button>
-            </div>
-          ) : cards.length === 0 ? (
-            <div className="text-center py-12">
-              <Grid className="w-16 h-16 mx-auto mb-4 text-gray-600" />
-              <h2 className="text-xl font-semibold mb-2">No Cards Found</h2>
-              <p className="text-gray-400 mb-4">
-                Try adjusting your filters or check back later for new arrivals.
-              </p>
-              {hasActiveFilters && (
-                <button onClick={clearFilters} className="btn-primary">
-                  Clear All Filters
-                </button>
-              )}
-            </div>
-          ) : (
-            <>
-              <div className="mb-4 flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <p className="text-sm text-gray-400">
-                    Showing {cards.length} of {totalCards} card{totalCards !== 1 ? 's' : ''}
-                  </p>
-                  <select
-                    value={filters.sortBy}
-                    onChange={(e) => updateFilter('sortBy', e.target.value)}
-                    className="bg-dbb-secondary border border-gray-700 rounded-lg px-3 py-1.5 text-sm focus:border-dbb-accent focus:outline-none"
-                  >
-                    <option value="newest">Newest</option>
-                    <option value="price_high">Price: High → Low</option>
-                    <option value="price_low">Price: Low → High</option>
-                    <option value="name_az">Name: A-Z</option>
-                    <option value="rarity">Rarity</option>
-                  </select>
-                </div>
-                {hasMore && (
-                  <p className="text-xs text-gray-500">Scroll for more</p>
-                )}
-              </div>
-              <CardGrid
-                cards={cards}
-                onCardClick={handleCardClick}
-              />
-              {/* Scroll sentinel for infinite scroll */}
-              <div id="scroll-sentinel" className="h-20 flex items-center justify-center py-4">
-                {loadingMore && (
-                  <div className="text-gray-400 text-sm">Loading more cards...</div>
-                )}
-                {!hasMore && cards.length > 0 && (
-                  <div className="text-gray-500 text-sm">No more cards</div>
-                )}
-              </div>
-            </>
-          )}
-        </main>
-      </div>
-
-      {/* Card Detail Modal */}
-      {selectedCard && (
-        <CardDetail
-          card={selectedCard}
-          onClose={closeCardDetail}
-          onCopyCaption={copyCaption}
-        />
-      )}
+      <DBBNav
+        userEmail={user?.email}
+        extra={user ? <CollectionValue /> : null}
+      />
+      <BazaarView initialData={initialData} filterOptions={filterOptions} />
     </div>
   )
 }

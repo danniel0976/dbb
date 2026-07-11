@@ -7,7 +7,7 @@ import CardDetailModal from '@/components/CardDetailModal'
 import BinderPicker from '@/components/BinderPicker'
 import AdvancedSearchPanel, { buildFilterChips } from '@/components/AdvancedSearchPanel'
 import { useToast } from '@/components/Toast'
-import { Search, SortAsc, CheckSquare, X, Star, StarOff, Trash2, FolderOpen, Filter } from 'lucide-react'
+import { Search, SortAsc, CheckSquare, X, Star, StarOff, Trash2, FolderOpen, Filter, Tag } from 'lucide-react'
 import Link from 'next/link'
 
 const SORTS = [
@@ -103,6 +103,9 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
   const [multiSelect, setMultiSelect] = useState(false)
   const [selectedIds, setSelectedIds] = useState(new Set())
   const [showBinderPicker, setShowBinderPicker] = useState(false)
+  const [showListPicker, setShowListPicker] = useState(false)
+  const [listMultiplier, setListMultiplier] = useState(2.5)
+  const [listing, setListing] = useState(false)
 
   const sentinelRef = useRef(null)
   const searchTimeout = useRef(null)
@@ -359,6 +362,30 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
     }
   }
 
+  const handleBulkList = async () => {
+    const ids = [...selectedIds]
+    setShowListPicker(false)
+    setListing(true)
+    try {
+      const items = ids.map(id => {
+        const card = cards.find(c => c.id === id)
+        return { library_card_id: id, multiplier: listMultiplier }
+      })
+      const res = await fetch('/api/listings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items }),
+      })
+      if (!res.ok) throw new Error()
+      toast(`${ids.length} card${ids.length !== 1 ? 's' : ''} listed on Bazaar`, 'success')
+      clearSelection()
+    } catch {
+      toast('Failed to list cards on Bazaar', 'error')
+    } finally {
+      setListing(false)
+    }
+  }
+
   const selectedCount = selectedIds.size
   const activeChips = buildFilterChips(advFilters, binders, [])
   const filterActive = hasActiveFilters(advFilters)
@@ -586,6 +613,12 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
                 <FolderOpen className="w-4 h-4" /> Move to binder
               </button>
               <button
+                onClick={() => setShowListPicker(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-600 rounded-lg text-gray-300 hover:border-green-500 hover:text-green-400 transition-colors"
+              >
+                <Tag className="w-4 h-4" /> List on Bazaar
+              </button>
+              <button
                 onClick={handleBulkDelete}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-red-800 rounded-lg text-red-400 hover:border-red-500 hover:text-red-300 transition-colors"
               >
@@ -618,6 +651,52 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
           onSelect={handleBulkMove}
           onClose={() => setShowBinderPicker(false)}
         />
+      )}
+
+      {/* Bazaar list picker modal */}
+      {showListPicker && (
+        <div
+          className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
+          onClick={(e) => { if (e.target === e.currentTarget) setShowListPicker(false) }}
+        >
+          <div className="bg-dbb-primary border border-dbb-accent/30 rounded-xl max-w-sm w-full p-6 shadow-2xl">
+            <h3 className="text-lg font-bold mb-1">List on Bazaar</h3>
+            <p className="text-sm text-gray-400 mb-4">
+              Choose a multiplier for {selectedCount} selected card{selectedCount !== 1 ? 's' : ''}.
+              Price = CKD USD × multiplier, rounded to nearest RM 0.50.
+            </p>
+            <div className="flex gap-3 mb-6">
+              {[2.5, 2.8, 3.0].map(m => (
+                <button
+                  key={m}
+                  onClick={() => setListMultiplier(m)}
+                  className={`flex-1 py-3 rounded-lg border text-sm font-semibold transition-colors ${
+                    listMultiplier === m
+                      ? 'border-dbb-accent bg-dbb-accent/10 text-dbb-accent'
+                      : 'border-gray-700 text-gray-400 hover:border-dbb-accent/50'
+                  }`}
+                >
+                  ×{m}
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={handleBulkList}
+                disabled={listing}
+                className="flex-1 py-2 bg-dbb-accent hover:bg-red-600 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+              >
+                {listing ? 'Listing...' : 'Confirm'}
+              </button>
+              <button
+                onClick={() => setShowListPicker(false)}
+                className="px-4 py-2 text-sm text-gray-400 hover:text-white border border-gray-700 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
