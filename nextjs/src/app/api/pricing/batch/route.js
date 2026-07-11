@@ -10,7 +10,7 @@ export const maxDuration = 30
 //
 // Multiplier math (reusable for Phase 8 bazaar listings):
 //   MYR price = CKD USD × multiplier, rounded to nearest RM 0.50
-//   Multipliers: 2.5 / 2.8 / 3.0 (Dan's selling tiers)
+//   Multipliers: 2.5 / 2.8 / 3.0 (DBB marketplace tiers)
 export async function POST(request) {
   try {
     const body = await request.json()

@@ -292,7 +292,7 @@ export default function ProfilePage() {
             <div className="flex items-start gap-4">
               <div className="flex-1">
                 <p className="text-sm text-white font-medium mb-1">Deactivate account</p>
-                <p className="text-xs text-gray-500">Disables your account. You can contact Dan to restore it.</p>
+                <p className="text-xs text-gray-500">Disables your account. Contact support to restore it.</p>
               </div>
               <button
                 onClick={() => setShowDeactivate(true)}
@@ -306,7 +306,7 @@ export default function ProfilePage() {
               <div className="flex items-start gap-2 p-3 bg-red-900/20 border border-red-800 rounded-lg">
                 <AlertTriangle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
                 <p className="text-sm text-red-300">
-                  This will immediately lock your account. Your data is kept — contact Dan to reactivate.
+                  This will immediately lock your account. Your data is kept — contact support to reactivate.
                 </p>
               </div>
               <p className="text-xs text-gray-500">Type <span className="text-gray-300 font-mono">deactivate</span> to confirm:</p>
