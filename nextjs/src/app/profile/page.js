@@ -235,12 +235,19 @@ export default function ProfilePage() {
             />
             <StatTile
               icon={<DollarSign className="w-5 h-5 text-dbb-accent" />}
-              label="Est. value (USD)"
+              label="Est. value"
               value={
                 valueLoading
                   ? <span className="inline-flex items-center gap-1 text-gray-400"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading…</span>
                   : value != null
-                    ? `$${value.total_usd.toFixed(2)}`
+                    ? (
+                      <span>
+                        <span className="text-white">${value.total_usd.toFixed(2)}</span>
+                        <span className="block text-sm text-gray-400 font-normal mt-0.5">
+                          RM {(value.total_myr ?? value.total_usd * 3).toFixed(2)} <span className="text-gray-600 text-xs">@3.0</span>
+                        </span>
+                      </span>
+                    )
                     : '—'
               }
             />

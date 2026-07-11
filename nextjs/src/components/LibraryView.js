@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import LibraryCard from '@/components/LibraryCard'
 import CardDetailModal from '@/components/CardDetailModal'
@@ -145,8 +145,11 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
       overrides.q ?? currentQ.current,
       overrides.sort ?? currentSort.current
     )
+    // Preserve the ?binder= param managed by BinderRail
+    const binderParam = searchParams.get('binder')
+    if (binderParam) urlParams.set('binder', binderParam)
     router.push(`?${urlParams}`, { scroll: false })
-  }, [router])
+  }, [router, searchParams])
 
   const reload = useCallback(async (overrides = {}) => {
     resetPending.current = true
@@ -233,6 +236,16 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
       setLoadingMore(false)
     }
   }, [loadingMore, hasMore, page, toast, buildApiParams])
+
+  // Auto-fetch on mount when no server-prefetched data (e.g. after binder switch)
+  const didAutoFetch = useRef(false)
+  useEffect(() => {
+    if (didAutoFetch.current) return
+    didAutoFetch.current = true
+    if (!initialData?.cards?.length) {
+      reload()
+    }
+  }, [reload]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const sentinel = sentinelRef.current

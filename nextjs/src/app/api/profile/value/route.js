@@ -18,7 +18,7 @@ export async function GET() {
 
   if (cardsError) return NextResponse.json({ error: cardsError.message }, { status: 500 })
   if (!cards || cards.length === 0) {
-    return NextResponse.json({ total_usd: 0, priced_count: 0, total_count: 0 })
+    return NextResponse.json({ total_usd: 0, total_myr: 0, priced_count: 0, total_count: 0 })
   }
 
   try {
@@ -45,8 +45,10 @@ export async function GET() {
     }
   }
 
+  const totalUsdRounded = Math.round(totalUsd * 100) / 100
   return NextResponse.json({
-    total_usd: Math.round(totalUsd * 100) / 100,
+    total_usd: totalUsdRounded,
+    total_myr: Math.round(totalUsdRounded * 3.0 * 100) / 100,
     priced_count: pricedCount,
     total_count: cards.length,
   })
