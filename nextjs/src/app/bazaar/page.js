@@ -81,7 +81,7 @@ export default async function BazaarPage() {
         userEmail={user?.email}
         extra={user ? <CollectionValue /> : null}
       />
-      <BazaarView initialData={initialData} filterOptions={filterOptions} />
+      <BazaarView initialData={initialData} filterOptions={filterOptions} userId={user?.id || null} />
     </div>
   )
 }

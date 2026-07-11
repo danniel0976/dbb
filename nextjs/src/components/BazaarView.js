@@ -1,11 +1,12 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Grid, Filter, X, Search, Loader2 } from 'lucide-react'
+import { Grid, Filter, X, Search, Loader2, ShoppingCart } from 'lucide-react'
 import Sidebar from '@/components/Sidebar'
 import BazaarCard from '@/components/BazaarCard'
 import BazaarDetailModal from '@/components/BazaarDetailModal'
 import LoadingSkeleton from '@/components/LoadingSkeleton'
+import { useToast } from '@/components/Toast'
 
 const INITIAL_FILTERS = {
   setCode: null,
@@ -19,7 +20,7 @@ const INITIAL_FILTERS = {
   search: '',
 }
 
-export default function BazaarView({ initialData, filterOptions: initialFilterOptions }) {
+export default function BazaarView({ initialData, filterOptions: initialFilterOptions, userId }) {
   const [listings, setListings] = useState(initialData?.listings || [])
   const [total, setTotal] = useState(initialData?.total || 0)
   const [hasMore, setHasMore] = useState(initialData?.hasMore || false)
@@ -31,6 +32,7 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
   const [filters, setFilters] = useState(INITIAL_FILTERS)
   const [filterOptions] = useState(initialFilterOptions || { sets: [], rarities: [], cardTypes: [] })
   const [selectedListing, setSelectedListing] = useState(null)
+  const { toast } = useToast()
 
   const PAGE_SIZE = 24
   const searchTimeout = useRef(null)
@@ -118,9 +120,36 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
     return v !== null && v !== undefined
   })
 
-  // Phase 11 will wire this to add-to-cart; for now log the selection
-  const handleSelectListing = (listing) => {
-    console.log('[Phase 11 hook] onSelectListing:', listing)
+  const handleSelectListing = async (listing) => {
+    if (!userId) {
+      toast('Sign in to add items to your cart', 'info')
+      return
+    }
+    try {
+      const res = await fetch('/api/cart', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ listing_id: listing.id }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        if (res.status === 403) {
+          toast('Cannot add your own listing to cart', 'error')
+        } else if (res.status === 409) {
+          toast('Listing is no longer available', 'error')
+        } else {
+          toast(data?.error || 'Failed to add to cart', 'error')
+        }
+        return
+      }
+      if (data?.already) {
+        toast('Already in your cart', 'info')
+      } else {
+        toast('Added to cart!', 'success')
+      }
+    } catch {
+      toast('Failed to add to cart', 'error')
+    }
   }
 
   return (

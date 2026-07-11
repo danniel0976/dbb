@@ -24,7 +24,7 @@ export async function middleware(request) {
   const { data: { user } } = await supabase.auth.getUser()
   const { pathname } = request.nextUrl
 
-  const protectedPrefixes = ['/library', '/binders', '/profile', '/import', '/api/import']
+  const protectedPrefixes = ['/library', '/binders', '/profile', '/import', '/cart', '/api/import']
   const authPrefixes = ['/login', '/register']
   const isProtected = protectedPrefixes.some(p => pathname.startsWith(p))
   const isAuthPage = authPrefixes.some(p => pathname.startsWith(p))

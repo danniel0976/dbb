@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { useState, useEffect } from 'react'
 
 const NAV_LINKS = [
   { href: '/library', label: 'Library' },
@@ -9,6 +10,24 @@ const NAV_LINKS = [
   { href: '/import', label: 'Import' },
   { href: '/profile', label: 'Profile' },
 ]
+
+function CartBadge() {
+  const [count, setCount] = useState(null)
+
+  useEffect(() => {
+    fetch('/api/cart/count')
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data?.count > 0) setCount(data.count) })
+      .catch(() => {})
+  }, [])
+
+  if (!count) return null
+  return (
+    <span className="ml-1 inline-flex items-center justify-center min-w-[18px] h-[18px] text-[10px] font-bold bg-dbb-accent text-white rounded-full px-1">
+      {count > 99 ? '99+' : count}
+    </span>
+  )
+}
 
 export default function DBBNav({ userEmail, extra }) {
   const pathname = usePathname()
@@ -32,6 +51,19 @@ export default function DBBNav({ userEmail, extra }) {
                 {label}
               </Link>
             ))}
+            {userEmail && (
+              <Link
+                href="/cart"
+                className={`flex items-center ${
+                  pathname?.startsWith('/cart')
+                    ? 'text-white font-medium'
+                    : 'hover:text-white transition-colors'
+                }`}
+              >
+                Cart
+                <CartBadge />
+              </Link>
+            )}
           </nav>
         </div>
         <div className="flex items-center gap-3">
