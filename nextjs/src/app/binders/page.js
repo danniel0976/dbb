@@ -183,6 +183,7 @@ export default function BindersPage() {
               <Link href="/binders" className="text-white font-medium">Binders</Link>
               <Link href="/import" className="hover:text-white transition-colors">Import</Link>
               <Link href="/bazaar" className="hover:text-white transition-colors">Bazaar</Link>
+              <Link href="/profile" className="hover:text-white transition-colors">Profile</Link>
             </nav>
           </div>
           <form action="/api/auth/signout" method="POST">

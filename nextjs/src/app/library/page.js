@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabaseServer'
 import { getLibrary } from '@/lib/libraryQueries'
 import LibraryView from '@/components/LibraryView'
+import CollectionValue from '@/components/CollectionValue'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 
@@ -30,9 +31,11 @@ export default async function LibraryPage() {
               <Link href="/binders" className="hover:text-white transition-colors">Binders</Link>
               <Link href="/import" className="hover:text-white transition-colors">Import</Link>
               <Link href="/bazaar" className="hover:text-white transition-colors">Bazaar</Link>
+              <Link href="/profile" className="hover:text-white transition-colors">Profile</Link>
             </nav>
           </div>
           <div className="flex items-center gap-3">
+            <CollectionValue />
             <span className="text-xs text-gray-500 hidden sm:inline">{user.email}</span>
             <form action="/api/auth/signout" method="POST">
               <button

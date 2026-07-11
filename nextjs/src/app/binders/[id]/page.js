@@ -41,6 +41,7 @@ export default async function BinderPage({ params }) {
               <Link href="/binders" className="hover:text-white transition-colors">Binders</Link>
               <Link href="/import" className="hover:text-white transition-colors">Import</Link>
               <Link href="/bazaar" className="hover:text-white transition-colors">Bazaar</Link>
+              <Link href="/profile" className="hover:text-white transition-colors">Profile</Link>
             </nav>
           </div>
           <form action="/api/auth/signout" method="POST">

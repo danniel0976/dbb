@@ -18,8 +18,10 @@ export default async function ImportPage() {
             <h1 className="text-xl font-bold text-dbb-accent">DBB Library</h1>
             <nav className="hidden sm:flex items-center gap-3 text-sm text-gray-400">
               <Link href="/library" className="hover:text-white transition-colors">Library</Link>
+              <Link href="/binders" className="hover:text-white transition-colors">Binders</Link>
               <Link href="/import" className="text-white font-medium">Import</Link>
               <Link href="/bazaar" className="hover:text-white transition-colors">Bazaar</Link>
+              <Link href="/profile" className="hover:text-white transition-colors">Profile</Link>
             </nav>
           </div>
           <div className="flex items-center gap-3">
