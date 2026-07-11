@@ -6,8 +6,9 @@ import LibraryCard from '@/components/LibraryCard'
 import CardDetailModal from '@/components/CardDetailModal'
 import BinderPicker from '@/components/BinderPicker'
 import AdvancedSearchPanel, { buildFilterChips } from '@/components/AdvancedSearchPanel'
+import AddCardModal from '@/components/AddCardModal'
 import { useToast } from '@/components/Toast'
-import { Search, SortAsc, CheckSquare, X, Star, StarOff, Trash2, FolderOpen, Filter, Tag } from 'lucide-react'
+import { Search, SortAsc, CheckSquare, X, Star, StarOff, Trash2, FolderOpen, Filter, Tag, PlusCircle } from 'lucide-react'
 import Link from 'next/link'
 
 const SORTS = [
@@ -106,6 +107,7 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
   const [showListPicker, setShowListPicker] = useState(false)
   const [listMultiplier, setListMultiplier] = useState(2.5)
   const [listing, setListing] = useState(false)
+  const [showAddCard, setShowAddCard] = useState(false)
 
   const sentinelRef = useRef(null)
   const searchTimeout = useRef(null)
@@ -468,6 +470,16 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
             </span>
           )}
         </button>
+
+        {/* Add card button */}
+        <button
+          onClick={() => setShowAddCard(true)}
+          className="flex items-center gap-1.5 px-3 py-2 text-sm border border-gray-700 text-gray-400 rounded-lg hover:border-dbb-accent/50 hover:text-dbb-accent transition-colors"
+          title="Add individual card"
+        >
+          <PlusCircle className="w-4 h-4" />
+          Add card
+        </button>
       </div>
 
       {/* Active filter chips */}
@@ -540,12 +552,21 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
               : 'Import your ManaBox collection to get started.'}
           </p>
           {!filterActive && !q && (
-            <Link
-              href="/import"
-              className="inline-block btn-primary px-6 py-2 rounded-lg"
-            >
-              Import your ManaBox collection →
-            </Link>
+            <div className="flex flex-col sm:flex-row items-center gap-3 justify-center">
+              <Link
+                href="/import"
+                className="inline-block btn-primary px-6 py-2 rounded-lg"
+              >
+                Import collection →
+              </Link>
+              <button
+                onClick={() => setShowAddCard(true)}
+                className="inline-flex items-center gap-2 px-6 py-2 rounded-lg border border-gray-600 text-gray-400 hover:border-dbb-accent hover:text-dbb-accent transition-colors"
+              >
+                <PlusCircle className="w-4 h-4" />
+                Add a card
+              </button>
+            </div>
           )}
           {(filterActive || q) && (
             <button
@@ -655,6 +676,23 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
           onClose={() => setSelectedCard(null)}
           onSave={handleSaveFromModal}
           onDelete={handleDeleteFromModal}
+        />
+      )}
+
+      {/* Add card modal */}
+      {showAddCard && (
+        <AddCardModal
+          binders={binders}
+          onClose={() => setShowAddCard(false)}
+          onAdded={(info) => {
+            toast(
+              info.inserted > 0
+                ? `Added ${info.card_name} to library`
+                : `Merged ${info.card_name} quantity`,
+              'success'
+            )
+            reload()
+          }}
         />
       )}
 
