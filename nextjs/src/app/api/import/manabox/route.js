@@ -88,18 +88,21 @@ export async function POST(request) {
   const binderId = newBinder.id
   const resolvedBinderName = newBinder.name
 
-  // Find IDs not yet in card_index — batch the query to avoid URL length limits
+  // Find IDs not yet in card_index — parallel batches to avoid both URL length limits
+  // and sequential round-trip latency (~100ms/batch × N batches → all parallel)
   const allIds = [...new Set(aggregated.map(r => r.scryfall_id))]
 
-  const existingSet = new Set()
-  for (let i = 0; i < allIds.length; i += 200) {
-    const batch = allIds.slice(i, i + 200)
-    const { data: batchExisting } = await db
-      .from('card_index')
-      .select('scryfall_id')
-      .in('scryfall_id', batch)
-    if (batchExisting) batchExisting.forEach(r => existingSet.add(r.scryfall_id))
-  }
+  const batches = []
+  for (let i = 0; i < allIds.length; i += 200) batches.push(allIds.slice(i, i + 200))
+
+  const existingResults = await Promise.all(
+    batches.map(batch =>
+      db.from('card_index').select('scryfall_id').in('scryfall_id', batch)
+    )
+  )
+  const existingSet = new Set(
+    existingResults.flatMap(({ data }) => (data || []).map(r => r.scryfall_id))
+  )
   const toHydrate = allIds.filter(id => !existingSet.has(id))
 
   // Hydrate card_index from Scryfall

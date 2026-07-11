@@ -63,7 +63,7 @@ function percentile(sorted, p) {
   return sorted[idx]
 }
 
-async function measure(label, fn) {
+async function measure(label, fn, budget = 500) {
   const times = []
   for (let i = 0; i < N; i++) {
     const t0 = performance.now()
@@ -78,11 +78,10 @@ async function measure(label, fn) {
   times.sort((a, b) => a - b)
   const p50 = percentile(times, 0.5)
   const p95 = percentile(times, 0.95)
-  const budget = 500
   const ok = p95 < budget
   console.log(`${ok ? '✓' : '✗'} ${label}`)
   console.log(`  p50=${p50.toFixed(0)}ms  p95=${p95.toFixed(0)}ms  budget=${budget}ms`)
-  return { label, p50, p95, ok }
+  return { label, p50, p95, budget, ok }
 }
 
 const results = []
@@ -142,11 +141,165 @@ if (bindersCheck?.[0]) {
   ))
 }
 
+// ── Phase 13 additions ────────────────────────────────────────────────────────
+
+console.log('\n--- Phase 13: catalog search, cart, bazaar, import ---\n')
+
+// Catalog search — budget is 300ms per Phase 13 spec (tighter than library)
+results.push(await measure('GET /api/catalog/search (name ILIKE "Lightning")', () =>
+  supabase
+    .from('card_index')
+    .select('scryfall_id, name, set_code, set_name, collector_number, rarity, colors, type_line, cmc, mana_cost', { count: 'exact' })
+    .ilike('name', '%Lightning%')
+    .order('name').order('set_code').order('collector_number')
+    .range(0, 19),
+  300
+))
+
+results.push(await measure('GET /api/catalog/search (name ILIKE + rarity filter)', () =>
+  supabase
+    .from('card_index')
+    .select('scryfall_id, name, set_code, set_name, collector_number, rarity, colors, type_line, cmc, mana_cost', { count: 'exact' })
+    .ilike('name', '%Bolt%')
+    .eq('rarity', 'common')
+    .order('name').order('set_code').order('collector_number')
+    .range(0, 19),
+  300
+))
+
+// Cart query — full join (same 500ms budget as other list endpoints)
+results.push(await measure('GET /api/cart (full join, all items)', () =>
+  supabase
+    .from('cart_items')
+    .select(`
+      id, created_at,
+      listings(
+        id, user_id, multiplier, status,
+        library_cards(
+          id, scryfall_id, foil, condition,
+          card_index(name, set_code, set_name, collector_number, rarity, type_line)
+        )
+      )
+    `)
+    .eq('user_id', userId)
+    .order('created_at', { ascending: true })
+))
+
+// Bazaar listings query — page 1, newest sort
+results.push(await measure('GET /api/listings (bazaar active, page 1, newest)', () =>
+  supabase
+    .from('listings')
+    .select(`
+      id, user_id, multiplier, status, created_at,
+      library_cards!inner(
+        id, scryfall_id, foil, condition, quantity,
+        card_index!inner(
+          name, set_code, set_name, collector_number, rarity, type_line, colors, cmc
+        )
+      )
+    `, { count: 'exact' })
+    .eq('status', 'active')
+    .order('created_at', { ascending: false })
+    .range(0, 23)
+))
+
+// Bazaar name-search (tests ILIKE on joined table through PostgREST)
+results.push(await measure('GET /api/listings (bazaar, search="Lightning")', () =>
+  supabase
+    .from('listings')
+    .select(`
+      id, user_id, multiplier, status, created_at,
+      library_cards!inner(
+        id, scryfall_id, foil, condition, quantity,
+        card_index!inner(
+          name, set_code, set_name, collector_number, rarity, type_line, colors, cmc
+        )
+      )
+    `, { count: 'exact' })
+    .eq('status', 'active')
+    .ilike('library_cards.card_index.name', '%Lightning%')
+    .order('created_at', { ascending: false })
+    .range(0, 23)
+))
+
+// Import: card_index batch-check (simulates the "which IDs already exist?" step)
+const { data: sampleCards } = await supabase
+  .from('card_index')
+  .select('scryfall_id')
+  .limit(200)
+
+const sampleIds = (sampleCards || []).map(c => c.scryfall_id)
+
+if (sampleIds.length >= 100) {
+  results.push(await measure('Import: card_index batch-check (200 IDs, IN clause)', () =>
+    supabase
+      .from('card_index')
+      .select('scryfall_id')
+      .in('scryfall_id', sampleIds)
+  ))
+}
+
+// Import: RPC import_library_cards (10 rows all-merge — idempotent, won't change data)
+const { data: libSample } = await supabase
+  .from('library_cards')
+  .select('scryfall_id, foil, condition, language, quantity, purchase_price, purchase_currency, date_added, binder_id')
+  .eq('user_id', userId)
+  .limit(10)
+
+if (libSample?.[0] && bindersCheck?.[0]) {
+  const rpcBatch = libSample.map(c => ({
+    scryfall_id: c.scryfall_id,
+    quantity: c.quantity,
+    foil: c.foil,
+    condition: c.condition,
+    language: c.language || 'en',
+    purchase_price: c.purchase_price,
+    purchase_currency: c.purchase_currency,
+    date_added: c.date_added,
+  }))
+  results.push(await measure('Import: RPC import_library_cards (10 rows, merge path)', () =>
+    supabase.rpc('import_library_cards', {
+      p_user_id: userId,
+      p_binder_id: bindersCheck[0].id,
+      p_rows: rpcBatch,
+    })
+  ))
+}
+
+// Import: larger RPC chunk (100 rows) to gauge throughput
+if (libSample && libSample.length >= 10) {
+  const { data: libLarge } = await supabase
+    .from('library_cards')
+    .select('scryfall_id, foil, condition, language, quantity, purchase_price, purchase_currency, date_added')
+    .eq('user_id', userId)
+    .limit(100)
+
+  if (libLarge?.length >= 20 && bindersCheck?.[0]) {
+    const largeBatch = libLarge.map(c => ({
+      scryfall_id: c.scryfall_id,
+      quantity: c.quantity,
+      foil: c.foil,
+      condition: c.condition,
+      language: c.language || 'en',
+      purchase_price: c.purchase_price,
+      purchase_currency: c.purchase_currency,
+      date_added: c.date_added,
+    }))
+    results.push(await measure('Import: RPC import_library_cards (100 rows, merge path)', () =>
+      supabase.rpc('import_library_cards', {
+        p_user_id: userId,
+        p_binder_id: bindersCheck[0].id,
+        p_rows: largeBatch,
+      })
+    ))
+  }
+}
+
 console.log('\n=== Summary ===')
 const passed = results.filter(r => r.ok).length
 const failed = results.filter(r => !r.ok).length
 console.log(`Passed: ${passed}/${results.length}  Failed: ${failed}/${results.length}`)
 if (failed > 0) {
-  console.log('\nSlow queries (p95 >= 500ms):')
-  results.filter(r => !r.ok).forEach(r => console.log(`  - ${r.label}: p95=${r.p95.toFixed(0)}ms`))
+  console.log('\nSlow queries (p95 >= budget):')
+  results.filter(r => !r.ok).forEach(r => console.log(`  - ${r.label}: p95=${r.p95.toFixed(0)}ms  budget=${r.budget}ms`))
 }
