@@ -3,6 +3,21 @@
 import { useState, useEffect, useCallback } from 'react'
 import { X, Loader2, User } from 'lucide-react'
 
+function relativeTime(isoString, future = false) {
+  if (!isoString) return null
+  const diffMs = new Date(isoString).getTime() - Date.now()
+  const abs = Math.abs(diffMs)
+  const mins = Math.floor(abs / 60000)
+  const hours = Math.floor(abs / 3600000)
+  const days = Math.floor(abs / 86400000)
+  let label
+  if (abs < 60000) label = 'just now'
+  else if (mins < 60) label = `${mins}m`
+  else if (hours < 24) label = `${hours}h ${mins % 60}m`
+  else label = `${days}d`
+  return future ? (diffMs > 0 ? `in ${label}` : 'expired') : `${label} ago`
+}
+
 const FOIL_BADGES = {
   foil: { label: 'Foil', cls: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' },
   etched: { label: 'Etched', cls: 'bg-purple-500/20 text-purple-400 border-purple-500/30' },
@@ -205,12 +220,13 @@ export default function BazaarDetailModal({ listing, onClose, onSelectListing })
                     return (
                       <div
                         key={s.id}
-                        className={`flex items-center justify-between gap-2 p-2.5 rounded-lg border transition-colors ${
+                        className={`flex flex-col gap-1.5 p-2.5 rounded-lg border transition-colors ${
                           isSelected
                             ? 'border-dbb-accent bg-dbb-accent/10'
                             : 'border-gray-700 bg-dbb-secondary hover:border-gray-600'
                         }`}
                       >
+                        <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2 min-w-0 flex-1">
                           <User className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
                           <span className="text-sm text-gray-300 truncate max-w-[120px]">
@@ -238,7 +254,7 @@ export default function BazaarDetailModal({ listing, onClose, onSelectListing })
                               setSelectedListingId(s.id)
                               onSelectListing(s)
                             }}
-                            className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${
+                            className={`px-3 py-1.5 text-xs font-medium rounded transition-colors flex-shrink-0 ${
                               isSelected
                                 ? 'bg-dbb-accent text-white'
                                 : 'bg-gray-700 hover:bg-dbb-accent text-gray-300 hover:text-white'
@@ -247,6 +263,15 @@ export default function BazaarDetailModal({ listing, onClose, onSelectListing })
                             {isSelected ? 'Selected' : 'Select'}
                           </button>
                         </div>
+                        </div>
+                        {/* Listed-at / expires-in timestamps */}
+                        {(s.created_at || s.expires_at) && (
+                          <p className="text-[10px] text-gray-600 pl-0.5">
+                            {s.created_at && `listed ${relativeTime(s.created_at, false)}`}
+                            {s.created_at && s.expires_at && ' · '}
+                            {s.expires_at && `expires ${relativeTime(s.expires_at, true)}`}
+                          </p>
+                        )}
                       </div>
                     )
                   })}

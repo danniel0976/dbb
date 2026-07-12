@@ -106,6 +106,7 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
   const [showBinderPicker, setShowBinderPicker] = useState(false)
   const [showListPicker, setShowListPicker] = useState(false)
   const [listMultiplier, setListMultiplier] = useState(2.5)
+  const [listDuration, setListDuration] = useState(24)
   const [listing, setListing] = useState(false)
   const [showAddCard, setShowAddCard] = useState(false)
 
@@ -395,10 +396,11 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
     setShowListPicker(false)
     setListing(true)
     try {
-      const items = ids.map(id => {
-        const card = cards.find(c => c.id === id)
-        return { library_card_id: id, multiplier: listMultiplier }
-      })
+      const items = ids.map(id => ({
+        library_card_id: id,
+        multiplier: listMultiplier,
+        duration_hours: listDuration,
+      }))
       const res = await fetch('/api/listings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -726,10 +728,11 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
           <div className="bg-dbb-primary border border-dbb-accent/30 rounded-xl max-w-sm w-full p-6 shadow-2xl">
             <h3 className="text-lg font-bold mb-1">List on Bazaar</h3>
             <p className="text-sm text-gray-400 mb-4">
-              Choose a multiplier for {selectedCount} selected card{selectedCount !== 1 ? 's' : ''}.
-              Price = CKD USD × multiplier, rounded to nearest RM 0.50.
+              {selectedCount} card{selectedCount !== 1 ? 's' : ''} · Price = CKD USD × multiplier
             </p>
-            <div className="flex gap-3 mb-6">
+
+            <p className="text-xs text-gray-500 mb-1.5 font-medium">Multiplier</p>
+            <div className="flex gap-3 mb-4">
               {[2.5, 2.8, 3.0].map(m => (
                 <button
                   key={m}
@@ -744,6 +747,24 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
                 </button>
               ))}
             </div>
+
+            <p className="text-xs text-gray-500 mb-1.5 font-medium">Duration (max 24h)</p>
+            <div className="flex gap-2 mb-6">
+              {[1, 3, 6, 12, 24].map(h => (
+                <button
+                  key={h}
+                  onClick={() => setListDuration(h)}
+                  className={`flex-1 py-2 rounded-lg border text-xs font-medium transition-colors ${
+                    listDuration === h
+                      ? 'border-dbb-accent bg-dbb-accent/10 text-dbb-accent'
+                      : 'border-gray-700 text-gray-500 hover:border-gray-500'
+                  }`}
+                >
+                  {h}h
+                </button>
+              ))}
+            </div>
+
             <div className="flex gap-3">
               <button
                 onClick={handleBulkList}

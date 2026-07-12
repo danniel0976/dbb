@@ -23,7 +23,7 @@ export async function GET() {
       .select(`
         id, created_at,
         listings(
-          id, user_id, multiplier, status,
+          id, user_id, multiplier, status, expires_at,
           library_cards(
             id, scryfall_id, foil, condition,
             card_index(name, set_code, set_name, collector_number, rarity, type_line)
@@ -54,10 +54,12 @@ export async function GET() {
       for (const p of profiles || []) sellerMap[p.id] = p.display_name
     }
 
+    const now = new Date()
     const items = (data || []).map(ci => {
       const listing = ci.listings
       const lc = listing?.library_cards
-      const isAvailable = listing?.status === 'active'
+      const notExpired = !listing?.expires_at || new Date(listing.expires_at) > now
+      const isAvailable = listing?.status === 'active' && notExpired
       const ckdUsd = (lc?.scryfall_id && lc?.foil)
         ? lookupPrice(lc.scryfall_id, lc.foil)
         : null
@@ -111,7 +113,7 @@ export async function POST(request) {
   // Verify listing exists, is active, and doesn't belong to the current user
   const { data: listing, error: listingErr } = await authClient
     .from('listings')
-    .select('id, user_id, status')
+    .select('id, user_id, status, expires_at')
     .eq('id', listing_id)
     .maybeSingle()
 
@@ -125,6 +127,11 @@ export async function POST(request) {
 
   if (listing.status !== 'active') {
     return NextResponse.json({ error: 'Listing is no longer available' }, { status: 409 })
+  }
+
+  // Check expiry if column exists
+  if (listing.expires_at && new Date(listing.expires_at) <= new Date()) {
+    return NextResponse.json({ error: 'Listing has expired' }, { status: 409 })
   }
 
   try {

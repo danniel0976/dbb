@@ -4,6 +4,12 @@ import { createClient as createServiceClient } from '@supabase/supabase-js'
 
 export const runtime = 'nodejs'
 
+const VALID_MULTIPLIERS = [2.5, 2.8, 3.0]
+const VALID_DURATIONS = [1, 3, 6, 12, 24]
+const MAX_DURATION_HOURS = 24
+// Postgres "undefined column" error — expires_at column not yet migrated
+const UNDEF_COLUMN = '42703'
+
 function makeServiceClient() {
   return createServiceClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -13,7 +19,7 @@ function makeServiceClient() {
 
 // GET /api/listings
 // ?library_card_id=<uuid>  → return listing for that card (owner or null)
-// ?status=active&page=N&sort=X&search=Y&...  → bazaar browsing (service role, public)
+// ?status=active&page=N&...  → bazaar browsing (service role, public)
 export async function GET(request) {
   const { searchParams } = new URL(request.url)
   const library_card_id = searchParams.get('library_card_id')
@@ -27,7 +33,7 @@ export async function GET(request) {
     try {
       const { data, error } = await authClient
         .from('listings')
-        .select('id, multiplier, status, created_at')
+        .select('id, multiplier, status, created_at, expires_at')
         .eq('library_card_id', library_card_id)
         .eq('user_id', user.id)
         .maybeSingle()
@@ -35,30 +41,40 @@ export async function GET(request) {
       if (error) throw error
       return NextResponse.json({ listing: data || null })
     } catch {
-      return NextResponse.json({ listing: null })
+      // Fallback without expires_at if column doesn't exist yet
+      try {
+        const authClient2 = await createAuthClient()
+        const { data } = await authClient2
+          .from('listings')
+          .select('id, multiplier, status, created_at')
+          .eq('library_card_id', library_card_id)
+          .eq('user_id', user.id)
+          .maybeSingle()
+        return NextResponse.json({ listing: data || null })
+      } catch {
+        return NextResponse.json({ listing: null })
+      }
     }
   }
 
-  // Bazaar browsing — use service role so we can join across RLS-protected tables
+  // Bazaar browsing — service role so we can join across RLS-protected tables
   const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10))
   const PAGE_SIZE = 24
   const sort = searchParams.get('sort') || 'newest'
   const search = (searchParams.get('search') || '').trim()
   const setCode = searchParams.get('setCode') || null
-  const isFoil = searchParams.get('isFoil') // 'true'/'false'/null
-  const rarities = (searchParams.get('rarities') || '')
-    .split(',').filter(Boolean)
-  const colors = (searchParams.get('colors') || '')
-    .split(',').filter(Boolean)
+  const isFoil = searchParams.get('isFoil')
+  const rarities = (searchParams.get('rarities') || '').split(',').filter(Boolean)
+  const colors = (searchParams.get('colors') || '').split(',').filter(Boolean)
   const cardType = searchParams.get('cardType') || null
 
   const sc = makeServiceClient()
 
-  try {
-    let query = sc
+  const buildQuery = (withExpiry) => {
+    let q = sc
       .from('listings')
       .select(`
-        id, user_id, multiplier, status, created_at,
+        id, user_id, multiplier, status, created_at, expires_at,
         library_cards!inner(
           id, scryfall_id, foil, condition, quantity,
           card_index!inner(
@@ -68,60 +84,35 @@ export async function GET(request) {
       `, { count: 'exact' })
       .eq('status', 'active')
 
-    // Text search on card name
-    if (search) {
-      query = query.ilike('library_cards.card_index.name', `%${search}%`)
-    }
+    if (withExpiry) q = q.gt('expires_at', new Date().toISOString())
 
-    // Set filter
-    if (setCode) {
-      query = query.eq('library_cards.card_index.set_code', setCode)
-    }
+    if (search) q = q.ilike('library_cards.card_index.name', `%${search}%`)
+    if (setCode) q = q.eq('library_cards.card_index.set_code', setCode)
+    if (rarities.length > 0) q = q.in('library_cards.card_index.rarity', rarities)
+    if (isFoil === 'true') q = q.neq('library_cards.foil', 'normal')
+    else if (isFoil === 'false') q = q.eq('library_cards.foil', 'normal')
+    if (colors.length > 0) q = q.overlaps('library_cards.card_index.colors', colors)
+    if (cardType) q = q.ilike('library_cards.card_index.type_line', `%${cardType}%`)
 
-    // Rarity filter
-    if (rarities.length > 0) {
-      query = query.in('library_cards.card_index.rarity', rarities)
-    }
-
-    // Foil filter
-    if (isFoil === 'true') {
-      query = query.neq('library_cards.foil', 'normal')
-    } else if (isFoil === 'false') {
-      query = query.eq('library_cards.foil', 'normal')
-    }
-
-    // Color filter (overlaps — card must contain at least one of the selected colors)
-    if (colors.length > 0) {
-      query = query.overlaps('library_cards.card_index.colors', colors)
-    }
-
-    // Type filter
-    if (cardType) {
-      query = query.ilike('library_cards.card_index.type_line', `%${cardType}%`)
-    }
-
-    // Sort
-    if (sort === 'name_az') {
-      query = query.order('library_cards.card_index.name', { ascending: true })
-    } else if (sort === 'rarity') {
-      query = query.order('library_cards.card_index.rarity', { ascending: false })
-    } else if (sort === 'price_high') {
-      query = query.order('multiplier', { ascending: false })
-    } else if (sort === 'price_low') {
-      query = query.order('multiplier', { ascending: true })
-    } else {
-      // newest
-      query = query.order('created_at', { ascending: false })
-    }
+    if (sort === 'name_az') q = q.order('library_cards.card_index.name', { ascending: true })
+    else if (sort === 'rarity') q = q.order('library_cards.card_index.rarity', { ascending: false })
+    else if (sort === 'price_high') q = q.order('multiplier', { ascending: false })
+    else if (sort === 'price_low') q = q.order('multiplier', { ascending: true })
+    else q = q.order('created_at', { ascending: false })
 
     const from = (page - 1) * PAGE_SIZE
-    const to = from + PAGE_SIZE - 1
-    query = query.range(from, to)
+    q = q.range(from, from + PAGE_SIZE - 1)
+    return q
+  }
 
-    const { data, error, count } = await query
+  try {
+    let result = await buildQuery(true)
+    if (result.error?.code === UNDEF_COLUMN) {
+      result = await buildQuery(false)
+    }
+    const { data, error, count } = result
     if (error) throw error
 
-    // Fetch seller display names
     const userIds = [...new Set((data || []).map(l => l.user_id))]
     let sellerMap = {}
     if (userIds.length > 0) {
@@ -138,12 +129,8 @@ export async function GET(request) {
     }))
 
     const total = count || 0
-    return NextResponse.json({
-      listings,
-      total,
-      hasMore: from + PAGE_SIZE < total,
-      page,
-    })
+    const from = (page - 1) * PAGE_SIZE
+    return NextResponse.json({ listings, total, hasMore: from + PAGE_SIZE < total, page })
   } catch (err) {
     console.error('[GET /api/listings]', err?.message || err)
     return NextResponse.json({ listings: [], total: 0, hasMore: false, page: 1 })
@@ -151,7 +138,9 @@ export async function GET(request) {
 }
 
 // POST /api/listings
-// Body: { library_card_id, multiplier }  OR  { items: [{library_card_id, multiplier}] }
+// Body: { library_card_id, multiplier, duration_hours }
+//    OR { items: [{library_card_id, multiplier, duration_hours}], duration_hours }
+// duration_hours is REQUIRED (1 | 3 | 6 | 12 | 24); max 24h enforced server-side
 export async function POST(request) {
   const authClient = await createAuthClient()
   const { data: { user }, error: authError } = await authClient.auth.getUser()
@@ -166,18 +155,28 @@ export async function POST(request) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
   }
 
-  // Normalise to array
+  // Normalise to array; top-level duration_hours applies to all items if not per-item
+  const topDuration = body.duration_hours
   const items = body.items
-    ? body.items
-    : [{ library_card_id: body.library_card_id, multiplier: body.multiplier }]
+    ? body.items.map(i => ({ ...i, duration_hours: i.duration_hours ?? topDuration }))
+    : [{ library_card_id: body.library_card_id, multiplier: body.multiplier, duration_hours: topDuration }]
 
-  const valid = [2.5, 2.8, 3.0]
   for (const item of items) {
     if (!item.library_card_id) {
       return NextResponse.json({ error: 'library_card_id required' }, { status: 400 })
     }
-    if (!valid.includes(Number(item.multiplier))) {
+    if (!VALID_MULTIPLIERS.includes(Number(item.multiplier))) {
       return NextResponse.json({ error: 'multiplier must be 2.5, 2.8 or 3.0' }, { status: 400 })
+    }
+    const dur = Number(item.duration_hours)
+    if (!dur || !VALID_DURATIONS.includes(dur)) {
+      return NextResponse.json(
+        { error: 'duration_hours required and must be 1, 3, 6, 12, or 24' },
+        { status: 400 }
+      )
+    }
+    if (dur > MAX_DURATION_HOURS) {
+      return NextResponse.json({ error: 'Maximum listing duration is 24 hours' }, { status: 400 })
     }
   }
 
@@ -199,23 +198,33 @@ export async function POST(request) {
     return NextResponse.json({ error: 'One or more cards not found in your library' }, { status: 403 })
   }
 
-  // Upsert listings (handles already-listed cards gracefully)
+  const now = Date.now()
   const rows = items.map(item => ({
     user_id: user.id,
     library_card_id: item.library_card_id,
     multiplier: Number(item.multiplier),
     status: 'active',
+    expires_at: new Date(now + Number(item.duration_hours) * 3600 * 1000).toISOString(),
   }))
 
-  const { data, error } = await authClient
+  // Try with expires_at; fall back if column not yet migrated
+  let result = await authClient
     .from('listings')
     .upsert(rows, { onConflict: 'library_card_id' })
     .select()
 
-  if (error) {
-    console.error('[POST /api/listings]', error.message)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+  if (result.error?.code === UNDEF_COLUMN) {
+    const rowsNoExpiry = rows.map(({ expires_at: _, ...r }) => r)
+    result = await authClient
+      .from('listings')
+      .upsert(rowsNoExpiry, { onConflict: 'library_card_id' })
+      .select()
   }
 
-  return NextResponse.json({ listings: data }, { status: 201 })
+  if (result.error) {
+    console.error('[POST /api/listings]', result.error.message)
+    return NextResponse.json({ error: result.error.message }, { status: 500 })
+  }
+
+  return NextResponse.json({ listings: result.data }, { status: 201 })
 }

@@ -3,6 +3,8 @@ import { createClient as createServiceClient } from '@supabase/supabase-js'
 
 export const runtime = 'nodejs'
 
+const UNDEF_COLUMN = '42703'
+
 function makeServiceClient() {
   return createServiceClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -11,7 +13,7 @@ function makeServiceClient() {
 }
 
 // GET /api/listings/card/[scryfallId]
-// Returns all active listings for a specific scryfall_id (bazaar detail / seller selection)
+// Returns all active (non-expired) listings for a specific scryfall_id (bazaar detail / seller selection)
 export async function GET(request, { params }) {
   const { scryfallId } = await params
 
@@ -21,11 +23,11 @@ export async function GET(request, { params }) {
 
   const sc = makeServiceClient()
 
-  try {
-    const { data, error } = await sc
+  const runQuery = async (withExpiry) => {
+    let q = sc
       .from('listings')
       .select(`
-        id, user_id, multiplier, status, created_at,
+        id, user_id, multiplier, status, created_at, expires_at,
         library_cards!inner(
           id, scryfall_id, foil, condition, quantity,
           card_index!inner(
@@ -37,9 +39,19 @@ export async function GET(request, { params }) {
       .eq('library_cards.scryfall_id', scryfallId)
       .order('created_at', { ascending: true })
 
-    if (error) throw error
+    if (withExpiry) q = q.gt('expires_at', new Date().toISOString())
 
-    const userIds = [...new Set((data || []).map(l => l.user_id))]
+    return q
+  }
+
+  try {
+    let result = await runQuery(true)
+    if (result.error?.code === UNDEF_COLUMN) {
+      result = await runQuery(false)
+    }
+    if (result.error) throw result.error
+
+    const userIds = [...new Set((result.data || []).map(l => l.user_id))]
     let sellerMap = {}
     if (userIds.length > 0) {
       const { data: profiles } = await sc
@@ -49,7 +61,7 @@ export async function GET(request, { params }) {
       for (const p of profiles || []) sellerMap[p.id] = p.display_name
     }
 
-    const listings = (data || []).map(l => ({
+    const listings = (result.data || []).map(l => ({
       ...l,
       seller_name: sellerMap[l.user_id] || null,
     }))
