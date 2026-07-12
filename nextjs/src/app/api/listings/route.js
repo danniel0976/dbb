@@ -198,6 +198,22 @@ export async function POST(request) {
     return NextResponse.json({ error: 'One or more cards not found in your library' }, { status: 403 })
   }
 
+  // Photo gate — every card being listed must have a photo
+  const sc2 = makeServiceClient()
+  const { data: photoRows } = await sc2
+    .from('card_photos')
+    .select('library_card_id')
+    .in('library_card_id', libraryCardIds)
+
+  const photoSet = new Set((photoRows || []).map(p => p.library_card_id))
+  const missingPhotos = libraryCardIds.filter(id => !photoSet.has(id))
+  if (missingPhotos.length > 0) {
+    return NextResponse.json(
+      { error: 'A real-life card photo is required before listing. Please photograph your card first.', missing_photos: missingPhotos },
+      { status: 422 }
+    )
+  }
+
   const now = Date.now()
   const rows = items.map(item => ({
     user_id: user.id,

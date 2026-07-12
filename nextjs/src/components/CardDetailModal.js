@@ -3,7 +3,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { getCardById, getImageUrl } from '@/lib/scryfall'
 import { useToast } from '@/components/Toast'
-import { X, Star, Minus, Plus, Trash2, Tag, Loader2 } from 'lucide-react'
+import CameraCapture from '@/components/CameraCapture'
+import { X, Star, Minus, Plus, Trash2, Tag, Loader2, Camera, RotateCcw } from 'lucide-react'
 
 const MULTIPLIERS = [2.5, 2.8, 3.0]
 const DURATION_OPTIONS = [
@@ -29,7 +30,89 @@ function relativeTime(isoString, future = false) {
   return future ? (diffMs > 0 ? `in ${label}` : 'expired') : `${label} ago`
 }
 
-function ListingSection({ libraryRow }) {
+// PhotoSection — shows current card photo + camera capture for owner
+function PhotoSection({ libraryRow, listing, onPhotoChange }) {
+  const { toast } = useToast()
+  const [photoUrl, setPhotoUrl] = useState(undefined) // undefined=loading, null=none, string=url
+  const [showCamera, setShowCamera] = useState(false)
+
+  const isActiveListing = listing && listing.status === 'active' &&
+    (!listing.expires_at || new Date(listing.expires_at) > new Date())
+
+  useEffect(() => {
+    fetch(`/api/photos/${libraryRow.id}`)
+      .then(r => r.status === 404 ? null : r.ok ? r.json() : null)
+      .then(data => {
+        const url = data?.url || null
+        setPhotoUrl(url)
+        onPhotoChange?.(!!url)
+      })
+      .catch(() => { setPhotoUrl(null); onPhotoChange?.(false) })
+  }, [libraryRow.id])
+
+  const handleUploaded = (url) => {
+    setPhotoUrl(url)
+    setShowCamera(false)
+    toast('Photo saved', 'success')
+    onPhotoChange?.(true)
+  }
+
+  if (photoUrl === undefined) {
+    return (
+      <div className="pt-2 border-t border-gray-700">
+        <div className="flex items-center gap-2 text-xs text-gray-600">
+          <Loader2 className="w-3 h-3 animate-spin" /> Loading photo...
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="pt-2 border-t border-gray-700 space-y-2">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-medium text-gray-400">Card photo</p>
+        {photoUrl && !isActiveListing && !showCamera && (
+          <button
+            onClick={() => setShowCamera(true)}
+            className="flex items-center gap-1 text-xs text-gray-500 hover:text-white transition-colors"
+          >
+            <RotateCcw className="w-3 h-3" /> Retake
+          </button>
+        )}
+        {photoUrl && isActiveListing && (
+          <span className="text-xs text-gray-600">Unlist to retake</span>
+        )}
+      </div>
+
+      {showCamera ? (
+        <CameraCapture
+          libraryCardId={libraryRow.id}
+          onUploaded={handleUploaded}
+          onCancel={() => setShowCamera(false)}
+        />
+      ) : photoUrl ? (
+        <img
+          src={photoUrl}
+          alt="Card photo"
+          className="w-full max-h-40 object-cover rounded-lg border border-gray-700"
+        />
+      ) : (
+        <div className="space-y-2">
+          <p className="text-xs text-gray-600">No photo yet — required before listing.</p>
+          <button
+            onClick={() => setShowCamera(true)}
+            className="flex items-center justify-center gap-2 w-full py-2 border border-dashed border-gray-600 hover:border-dbb-accent text-gray-400 hover:text-dbb-accent rounded-lg text-xs transition-colors"
+          >
+            <Camera className="w-4 h-4" />
+            Take Photo
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ListingSection({ libraryRow, hasPhoto }) {
   const { toast } = useToast()
   const [listing, setListing] = useState(undefined) // undefined = loading, null = not listed
   const [showPicker, setShowPicker] = useState(false)
@@ -38,6 +121,7 @@ function ListingSection({ libraryRow }) {
   const [durationHours, setDurationHours] = useState(24)
   const [pricePreview, setPricePreview] = useState(null)
   const [submitting, setSubmitting] = useState(false)
+  const [photoRequired, setPhotoRequired] = useState(false)
 
   // Load listing status (including expired ones owned by this user)
   useEffect(() => {
@@ -142,9 +226,49 @@ function ListingSection({ libraryRow }) {
     (listing.expires_at && new Date(listing.expires_at) <= new Date())
   )
 
+  // Not listed yet — show a "List on Bazaar" button (not the picker right away)
+  if (!listing && !showPicker) {
+    return (
+      <div className="pt-2 border-t border-gray-700">
+        <button
+          onClick={() => {
+            if (!hasPhoto) { setPhotoRequired(true) } else { setShowPicker(true) }
+          }}
+          className="flex items-center justify-center gap-2 w-full py-1.5 border border-gray-700 hover:border-dbb-accent text-gray-400 hover:text-dbb-accent rounded-lg text-xs font-medium transition-colors"
+        >
+          <Tag className="w-3 h-3" />
+          List on Bazaar
+        </button>
+        {photoRequired && !hasPhoto && (
+          <p className="text-xs text-amber-400 mt-1.5">
+            A card photo is required before listing. Take a photo above first.
+          </p>
+        )}
+      </div>
+    )
+  }
+
   // Show picker for new listing or relist
   if (!listing || (showPicker && !isExpired) || (isRelist && isExpired)) {
     const isRelisting = isExpired && isRelist
+
+    // Photo gate — shouldn't happen (button above checks), but block at render level too
+    if (!hasPhoto) {
+      return (
+        <div className="pt-2 border-t border-gray-700 space-y-2">
+          <p className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded px-2 py-1.5">
+            A card photo is required before listing. Please take a photo above.
+          </p>
+          <button
+            onClick={() => { setShowPicker(false); setIsRelist(false); setPhotoRequired(false) }}
+            className="text-xs text-gray-500 hover:text-white transition-colors"
+          >
+            Cancel
+          </button>
+        </div>
+      )
+    }
+
     return (
       <div className="pt-2 border-t border-gray-700">
         <div className="space-y-3">
@@ -283,11 +407,21 @@ export default function CardDetailModal({ libraryRow, onClose, onSave, onDelete 
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [hasPhoto, setHasPhoto] = useState(false)
+  const [currentListing, setCurrentListing] = useState(undefined)
 
   const [quantity, setQuantity] = useState(libraryRow.quantity)
   const [condition, setCondition] = useState(libraryRow.condition)
   const [foil, setFoil] = useState(libraryRow.foil)
   const [starred, setStarred] = useState(libraryRow.starred)
+
+  // Load listing status for PhotoSection (needed to block retake while listed)
+  useEffect(() => {
+    fetch(`/api/listings?library_card_id=${libraryRow.id}`)
+      .then(r => r.ok ? r.json() : { listing: null })
+      .then(data => setCurrentListing(data.listing || null))
+      .catch(() => setCurrentListing(null))
+  }, [libraryRow.id])
 
   const ci = libraryRow.card_index
 
@@ -474,8 +608,15 @@ export default function CardDetailModal({ libraryRow, onClose, onSave, onDelete 
               </div>
             </div>
 
+            {/* Card photo */}
+            <PhotoSection
+              libraryRow={libraryRow}
+              listing={currentListing}
+              onPhotoChange={setHasPhoto}
+            />
+
             {/* Bazaar listing */}
-            <ListingSection libraryRow={libraryRow} />
+            <ListingSection libraryRow={libraryRow} hasPhoto={hasPhoto} />
 
             {/* Actions */}
             <div className="flex items-center justify-between pt-2 border-t border-gray-700">
