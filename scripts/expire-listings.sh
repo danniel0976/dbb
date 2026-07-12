@@ -42,6 +42,9 @@ BODY="$(echo "$RESPONSE" | head -n-1)"
 if [[ "$HTTP_CODE" -ge 200 && "$HTTP_CODE" -lt 300 ]]; then
   COUNT="$(echo "$BODY" | grep -o '"id":' | wc -l | tr -d ' ')"
   echo "[$(date -u +%H:%M:%S)] expire-listings: ${COUNT} listing(s) expired (HTTP ${HTTP_CODE})"
+elif echo "$BODY" | grep -q '"42703"'; then
+  # migration-009 not applied yet — no expires_at column, nothing to sweep
+  echo "[$(date -u +%H:%M:%S)] expire-listings: skipped (migration-009 pending)"
 else
   echo "[$(date -u +%H:%M:%S)] expire-listings: ERROR — HTTP ${HTTP_CODE}: ${BODY}" >&2
   exit 1
