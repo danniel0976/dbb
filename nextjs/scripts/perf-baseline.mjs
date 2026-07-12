@@ -1,10 +1,22 @@
 #!/usr/bin/env node
 /**
  * DBB performance baseline — calls Supabase directly (no Next.js server needed).
- * Usage: node scripts/perf-baseline.mjs [--email user@example.com] [--n 10]
  *
- * Reports p50 and p95 latency for the key library endpoints.
- * Budget: p95 < 500ms for all list endpoints.
+ * ISOLATION GUARANTEE (Phase 17):
+ *   Mutating benchmarks (import RPC) run ONLY against the dedicated perf-test account
+ *   (perf-test@dbb-internal.test). The script creates a temporary binder for each run,
+ *   tears it down after, and asserts zero net rows remain. It HARD-REFUSES to mutate
+ *   any other account.
+ *
+ * Usage:
+ *   node scripts/perf-baseline.mjs [--email read@example.com] [--n 10]
+ *
+ *   --email   Optional: use this user's data for READ-ONLY benchmarks (bigger datasets =
+ *             more realistic latencies). Mutating benchmarks still use perf-test.
+ *   --n       Iterations per query (default 10).
+ *
+ * Reports p50 and p95 latency.
+ * Budget: p95 < 500ms for list endpoints; < 300ms for catalog search.
  */
 
 import { createClient } from '@supabase/supabase-js'
@@ -12,9 +24,12 @@ import { readFileSync } from 'fs'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 
+// ── Constants ─────────────────────────────────────────────────────────────────
+const PERF_TEST_EMAIL = 'perf-test@dbb-internal.test'
+
 const __dir = dirname(fileURLToPath(import.meta.url))
 
-// Parse .env.local
+// ── Env ───────────────────────────────────────────────────────────────────────
 function parseEnv(src) {
   const env = {}
   for (const line of src.split('\n')) {
@@ -40,24 +55,49 @@ const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
   auth: { persistSession: false },
 })
 
-// Parse args
+// ── Args ──────────────────────────────────────────────────────────────────────
 const args = process.argv.slice(2)
-const emailArg = args[args.indexOf('--email') + 1] || 'danielhairiemir@gmail.com'
+const emailIdx = args.indexOf('--email')
+const readEmailArg = emailIdx !== -1 ? args[emailIdx + 1] : null
 const nArg = parseInt(args[args.indexOf('--n') + 1]) || 10
 const N = Math.max(1, nArg)
 
-// Resolve test user
+// Guard: never mutate a real account via CLI typo
+if (readEmailArg && readEmailArg !== PERF_TEST_EMAIL) {
+  console.warn(`⚠  --email ${readEmailArg} is a non-perf email.`)
+  console.warn(`   Read-only benchmarks will use that user's data for realistic sizing.`)
+  console.warn(`   Mutating benchmarks (import RPC) will STILL use ${PERF_TEST_EMAIL}.`)
+  console.warn()
+}
+
+// ── User resolution ───────────────────────────────────────────────────────────
 const { data: { users }, error: listErr } = await supabase.auth.admin.listUsers({ perPage: 1000 })
 if (listErr) { console.error('Failed to list users:', listErr.message); process.exit(1) }
-const testUser = users?.find(u => u.email === emailArg)
-if (!testUser) {
-  console.error(`User ${emailArg} not found. Available emails: ${users?.map(u => u.email).join(', ')}`)
-  process.exit(1)
-}
-const userId = testUser.id
-console.log(`Testing with user: ${emailArg} (${userId})`)
-console.log(`Runs per query: ${N}\n`)
 
+function findUser(email) {
+  const u = users?.find(u => u.email === email)
+  if (!u) {
+    console.error(`User not found: ${email}`)
+    console.error('Available:', users?.map(u => u.email).join(', '))
+    process.exit(1)
+  }
+  return u
+}
+
+// Read user: --email arg or perf-test
+const readEmail = readEmailArg || PERF_TEST_EMAIL
+const readUser = findUser(readEmail)
+const readUserId = readUser.id
+
+// Write user: always perf-test, no exceptions
+const perfUser = findUser(PERF_TEST_EMAIL)
+const perfUserId = perfUser.id
+
+console.log(`Read benchmarks:  ${readEmail} (${readUserId})`)
+console.log(`Write benchmarks: ${PERF_TEST_EMAIL} (${perfUserId}) — always`)
+console.log(`Iterations per query: ${N}\n`)
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
 function percentile(sorted, p) {
   const idx = Math.min(Math.floor(sorted.length * p), sorted.length - 1)
   return sorted[idx]
@@ -69,7 +109,6 @@ async function measure(label, fn, budget = 500) {
     const t0 = performance.now()
     const result = await fn()
     const elapsed = performance.now() - t0
-    // Surface any Supabase errors on first run
     if (i === 0 && result?.error) {
       console.warn(`  [warn] ${label}: ${result.error.message}`)
     }
@@ -86,11 +125,12 @@ async function measure(label, fn, budget = 500) {
 
 const results = []
 
+// ── READ-ONLY benchmarks (use readUserId — safe for any account) ──────────────
 results.push(await measure('GET /library page 1 (all cards)', () =>
   supabase
     .from('library_cards')
     .select('*, card_index!inner(*)', { count: 'exact' })
-    .eq('user_id', userId)
+    .eq('user_id', readUserId)
     .order('date_added', { ascending: false })
     .range(0, 47)
 ))
@@ -99,7 +139,7 @@ results.push(await measure('GET /binders (with card counts)', () =>
   supabase
     .from('binders')
     .select('id, name, is_default, created_at, library_cards(count)')
-    .eq('user_id', userId)
+    .eq('user_id', readUserId)
     .order('created_at')
 ))
 
@@ -107,7 +147,7 @@ results.push(await measure('Advanced search (rarity=rare/mythic, type=Instant)',
   supabase
     .from('library_cards')
     .select('*, card_index!inner(*)', { count: 'exact' })
-    .eq('user_id', userId)
+    .eq('user_id', readUserId)
     .in('card_index.rarity', ['rare', 'mythic'])
     .ilike('card_index.type_line', '%Instant%')
     .order('date_added', { ascending: false })
@@ -118,34 +158,33 @@ results.push(await measure('GET /api/profile/value (all cards scryfall_id+foil)'
   supabase
     .from('library_cards')
     .select('scryfall_id, foil, quantity')
-    .eq('user_id', userId)
+    .eq('user_id', readUserId)
 ))
 
-// Get first binder for binder-scoped query
-const { data: bindersCheck } = await supabase
+// Binder-scoped query — uses first binder of the read user
+const { data: readBinders } = await supabase
   .from('binders')
   .select('id')
-  .eq('user_id', userId)
+  .eq('user_id', readUserId)
+  .order('created_at')
   .limit(1)
 
-if (bindersCheck?.[0]) {
-  const binderId = bindersCheck[0].id
+if (readBinders?.[0]) {
+  const binderId = readBinders[0].id
   results.push(await measure(`GET /library page 1 (binder=${binderId.slice(0, 8)}…)`, () =>
     supabase
       .from('library_cards')
       .select('*, card_index!inner(*)', { count: 'exact' })
-      .eq('user_id', userId)
+      .eq('user_id', readUserId)
       .eq('binder_id', binderId)
       .order('date_added', { ascending: false })
       .range(0, 47)
   ))
 }
 
-// ── Phase 13 additions ────────────────────────────────────────────────────────
-
+// ── Phase 13 additions (read-only) ───────────────────────────────────────────
 console.log('\n--- Phase 13: catalog search, cart, bazaar, import ---\n')
 
-// Catalog search — budget is 300ms per Phase 13 spec (tighter than library)
 results.push(await measure('GET /api/catalog/search (name ILIKE "Lightning")', () =>
   supabase
     .from('card_index')
@@ -167,7 +206,7 @@ results.push(await measure('GET /api/catalog/search (name ILIKE + rarity filter)
   300
 ))
 
-// Cart query — full join (same 500ms budget as other list endpoints)
+// Cart query using readUserId (read-only)
 results.push(await measure('GET /api/cart (full join, all items)', () =>
   supabase
     .from('cart_items')
@@ -181,11 +220,11 @@ results.push(await measure('GET /api/cart (full join, all items)', () =>
         )
       )
     `)
-    .eq('user_id', userId)
+    .eq('user_id', readUserId)
     .order('created_at', { ascending: true })
 ))
 
-// Bazaar listings query — page 1, newest sort
+// Bazaar listings (global — not user-specific)
 results.push(await measure('GET /api/listings (bazaar active, page 1, newest)', () =>
   supabase
     .from('listings')
@@ -203,7 +242,6 @@ results.push(await measure('GET /api/listings (bazaar active, page 1, newest)', 
     .range(0, 23)
 ))
 
-// Bazaar name-search (tests ILIKE on joined table through PostgREST)
 results.push(await measure('GET /api/listings (bazaar, search="Lightning")', () =>
   supabase
     .from('listings')
@@ -222,7 +260,7 @@ results.push(await measure('GET /api/listings (bazaar, search="Lightning")', () 
     .range(0, 23)
 ))
 
-// Import: card_index batch-check (simulates the "which IDs already exist?" step)
+// card_index batch-check (read-only)
 const { data: sampleCards } = await supabase
   .from('card_index')
   .select('scryfall_id')
@@ -239,43 +277,47 @@ if (sampleIds.length >= 100) {
   ))
 }
 
-// Import: RPC import_library_cards (10 rows all-merge — idempotent, won't change data)
-const { data: libSample } = await supabase
+// ── MUTATING benchmarks — PERF-TEST USER ONLY ────────────────────────────────
+//
+// These benchmarks call import_library_cards which inserts/updates rows.
+// They MUST run against perf-test@dbb-internal.test with a temporary binder
+// that is created and destroyed within this run. Zero net rows are allowed to
+// remain after completion (asserted below).
+//
+// ⚠  DO NOT change perfUserId to readUserId or any other account.
+
+console.log('\n--- Phase 17: mutating benchmarks (perf-test only) ---\n')
+
+// Fetch sample cards from the perf-test user's permanent library for benchmark payloads
+const { data: perfLibSample } = await supabase
   .from('library_cards')
-  .select('scryfall_id, foil, condition, language, quantity, purchase_price, purchase_currency, date_added, binder_id')
-  .eq('user_id', userId)
-  .limit(10)
+  .select('scryfall_id, foil, condition, language, quantity, purchase_price, purchase_currency, date_added')
+  .eq('user_id', perfUserId)
+  .limit(100)
 
-if (libSample?.[0] && bindersCheck?.[0]) {
-  const rpcBatch = libSample.map(c => ({
-    scryfall_id: c.scryfall_id,
-    quantity: c.quantity,
-    foil: c.foil,
-    condition: c.condition,
-    language: c.language || 'en',
-    purchase_price: c.purchase_price,
-    purchase_currency: c.purchase_currency,
-    date_added: c.date_added,
-  }))
-  results.push(await measure('Import: RPC import_library_cards (10 rows, merge path)', () =>
-    supabase.rpc('import_library_cards', {
-      p_user_id: userId,
-      p_binder_id: bindersCheck[0].id,
-      p_rows: rpcBatch,
-    })
-  ))
-}
-
-// Import: larger RPC chunk (100 rows) to gauge throughput
-if (libSample && libSample.length >= 10) {
-  const { data: libLarge } = await supabase
+if (perfLibSample?.length >= 10) {
+  // Record perf-user total row count before mutating benchmarks
+  const { count: rowsBefore } = await supabase
     .from('library_cards')
-    .select('scryfall_id, foil, condition, language, quantity, purchase_price, purchase_currency, date_added')
-    .eq('user_id', userId)
-    .limit(100)
+    .select('*', { count: 'exact', head: true })
+    .eq('user_id', perfUserId)
 
-  if (libLarge?.length >= 20 && bindersCheck?.[0]) {
-    const largeBatch = libLarge.map(c => ({
+  // Create a fresh temporary binder for this run only
+  const tempBinderName = `perf-run-${Date.now()}`
+  const { data: tempBinder, error: tempErr } = await supabase
+    .from('binders')
+    .insert({ user_id: perfUserId, name: tempBinderName })
+    .select('id')
+    .single()
+
+  if (tempErr) {
+    console.error('Could not create temp binder:', tempErr.message)
+  } else {
+    const tempBinderId = tempBinder.id
+    console.log(`Temp binder: ${tempBinderName} (${tempBinderId})`)
+
+    // 10-row batch
+    const batch10 = perfLibSample.slice(0, 10).map(c => ({
       scryfall_id: c.scryfall_id,
       quantity: c.quantity,
       foil: c.foil,
@@ -285,16 +327,59 @@ if (libSample && libSample.length >= 10) {
       purchase_currency: c.purchase_currency,
       date_added: c.date_added,
     }))
-    results.push(await measure('Import: RPC import_library_cards (100 rows, merge path)', () =>
+    results.push(await measure('Import: RPC import_library_cards (10 rows, perf-test temp binder)', () =>
       supabase.rpc('import_library_cards', {
-        p_user_id: userId,
-        p_binder_id: bindersCheck[0].id,
-        p_rows: largeBatch,
+        p_user_id: perfUserId,
+        p_binder_id: tempBinderId,
+        p_rows: batch10,
       })
     ))
+
+    // 100-row batch (if available)
+    if (perfLibSample.length >= 20) {
+      const batch100 = perfLibSample.map(c => ({
+        scryfall_id: c.scryfall_id,
+        quantity: c.quantity,
+        foil: c.foil,
+        condition: c.condition,
+        language: c.language || 'en',
+        purchase_price: c.purchase_price,
+        purchase_currency: c.purchase_currency,
+        date_added: c.date_added,
+      }))
+      results.push(await measure('Import: RPC import_library_cards (100 rows, perf-test temp binder)', () =>
+        supabase.rpc('import_library_cards', {
+          p_user_id: perfUserId,
+          p_binder_id: tempBinderId,
+          p_rows: batch100,
+        })
+      ))
+    }
+
+    // ── Teardown & isolation assertion ──────────────────────────────────────────
+    console.log('\nTearing down temp binder...')
+    await supabase.from('library_cards').delete().eq('user_id', perfUserId).eq('binder_id', tempBinderId)
+    await supabase.from('binders').delete().eq('id', tempBinderId).eq('user_id', perfUserId)
+
+    const { count: rowsAfter } = await supabase
+      .from('library_cards')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', perfUserId)
+
+    if (rowsAfter === rowsBefore) {
+      console.log(`✓ Isolation check: perf-test row count unchanged (${rowsBefore} before, ${rowsAfter} after)`)
+    } else {
+      console.error(`✗ ISOLATION FAILURE: perf-test row count changed! before=${rowsBefore} after=${rowsAfter}`)
+      console.error('  Manual cleanup required — inspect library_cards for user_id=' + perfUserId)
+      process.exit(1)
+    }
   }
+} else {
+  console.log(`Skipping import benchmarks: perf-test library has ${perfLibSample?.length ?? 0} rows (need ≥10).`)
+  console.log('To seed: run scripts/seed-perf-user.mjs')
 }
 
+// ── Summary ───────────────────────────────────────────────────────────────────
 console.log('\n=== Summary ===')
 const passed = results.filter(r => r.ok).length
 const failed = results.filter(r => !r.ok).length
