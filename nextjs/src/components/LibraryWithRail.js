@@ -1,31 +1,28 @@
 'use client'
 
-import { useState, useCallback, useRef } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useState, useCallback } from 'react'
+import { useSearchParams } from 'next/navigation'
 import BinderRail from './BinderRail'
 import LibraryView from './LibraryView'
 
 export default function LibraryWithRail({ userId, initialData, initialBinders = [], initialBinderId }) {
-  const router = useRouter()
   const searchParams = useSearchParams()
   const [selectedBinderId, setSelectedBinderId] = useState(initialBinderId || null)
   const [binders, setBinders] = useState(initialBinders)
-  const switchCount = useRef(0)
 
   const handleSelectBinder = useCallback((id) => {
-    switchCount.current++
     setSelectedBinderId(id)
+    // Update URL without triggering a server re-render (no router.replace).
+    // This prevents the double-fetch pattern where both server prefetch AND
+    // client reload fire for the same binder switch.
     const params = new URLSearchParams(searchParams.toString())
     if (id) params.set('binder', id)
     else params.delete('binder')
-    // Strip per-view state that doesn't carry across binder context changes
     params.delete('q')
-    router.replace(`/library?${params}`, { scroll: false })
-  }, [router, searchParams])
-
-  // Only use the server-prefetched initialData on the very first render with the right binder
-  const isFirstLoad = switchCount.current === 0
-  const libraryInitialData = (isFirstLoad && selectedBinderId === initialBinderId) ? initialData : null
+    params.delete('sort')
+    const newUrl = `${window.location.pathname}?${params}`
+    window.history.replaceState(null, '', newUrl)
+  }, [searchParams])
 
   return (
     <div className="flex flex-col md:flex-row gap-4">
@@ -44,12 +41,12 @@ export default function LibraryWithRail({ userId, initialData, initialBinders = 
         </div>
       </div>
 
-      {/* Library content */}
+      {/* Library content — key forces remount when binder changes */}
       <div className="flex-1 min-w-0">
         <LibraryView
           key={selectedBinderId || '__all__'}
           userId={userId}
-          initialData={libraryInitialData}
+          initialData={selectedBinderId === initialBinderId ? initialData : null}
           binders={binders}
           binderId={selectedBinderId}
         />

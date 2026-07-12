@@ -31,28 +31,36 @@ export async function GET(request) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const t0 = Date.now()
-
-  // Single query: binders + exact card count via PostgREST resource embedding
-  const { data: binders, error } = await supabase
+  // Fetch binders list first, then get exact card counts in parallel.
+  // We use individual COUNT(*) queries per binder rather than embedded
+  // resource aggregates, which can be unreliable with large row sets.
+  const { data: binderRows, error: bindersError } = await supabase
     .from('binders')
-    .select('id, name, is_default, created_at, library_cards(count)')
+    .select('id, name, is_default, created_at')
     .eq('user_id', user.id)
     .order('created_at')
 
-  const elapsed = Date.now() - t0
-  console.log(`GET /api/binders db query: ${elapsed}ms`)
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+  if (bindersError) {
+    return NextResponse.json({ error: bindersError.message }, { status: 500 })
   }
 
-  const bindersWithCounts = (binders || []).map(b => ({
+  // Exact count per binder — parallel HEAD queries (one per binder, fast)
+  const countResults = await Promise.all(
+    (binderRows || []).map(b =>
+      supabase
+        .from('library_cards')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .eq('binder_id', b.id)
+    )
+  )
+
+  const bindersWithCounts = (binderRows || []).map((b, i) => ({
     id: b.id,
     name: b.name,
     is_default: b.is_default,
     created_at: b.created_at,
-    card_count: b.library_cards?.[0]?.count ?? 0,
+    card_count: countResults[i]?.count ?? 0,
   }))
 
   return NextResponse.json({ binders: bindersWithCounts })

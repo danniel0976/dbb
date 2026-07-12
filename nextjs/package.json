@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "perf": "node scripts/perf-baseline.mjs",
     "import-collection": "node scripts/import-collection.js"
   },
   "dependencies": {

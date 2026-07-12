@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { User, Mail, Calendar, BookOpen, Layers, Star, DollarSign, Pencil, Check, X, Loader2, AlertTriangle } from 'lucide-react'
+import { User, Mail, Calendar, BookOpen, Layers, Star, Pencil, Check, X, Loader2, AlertTriangle } from 'lucide-react'
 import DBBNav from '@/components/DBBNav'
 
 export default function ProfilePage() {
@@ -20,11 +20,6 @@ export default function ProfilePage() {
 
   // Password change state
   const [changingPassword, setChangingPassword] = useState(false)
-
-  // Collection value state
-  const [value, setValue] = useState(null)
-  const [valueLoading, setValueLoading] = useState(false)
-  const [valueFetched, setValueFetched] = useState(false)
 
   // Deactivate state
   const [showDeactivate, setShowDeactivate] = useState(false)
@@ -44,27 +39,6 @@ export default function ProfilePage() {
       .catch(e => setError(e.message))
       .finally(() => setLoading(false))
   }, [])
-
-  const fetchValue = async () => {
-    if (valueFetched || valueLoading) return
-    setValueLoading(true)
-    try {
-      const res = await fetch('/api/profile/value')
-      if (!res.ok) throw new Error('Failed')
-      const data = await res.json()
-      setValue(data)
-      setValueFetched(true)
-    } catch {
-      setValue(null)
-    } finally {
-      setValueLoading(false)
-    }
-  }
-
-  // Lazy-load value once profile is loaded
-  useEffect(() => {
-    if (profile) fetchValue()
-  }, [profile]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const saveName = async () => {
     setSavingName(true)
@@ -217,7 +191,7 @@ export default function ProfilePage() {
         {/* Collection stats */}
         <div className="bg-dbb-secondary border border-gray-700 rounded-xl p-6 mb-6">
           <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4">Collection</h3>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <div className="grid grid-cols-3 gap-4">
             <StatTile
               icon={<Layers className="w-5 h-5 text-dbb-accent" />}
               label="Total cards"
@@ -233,30 +207,7 @@ export default function ProfilePage() {
               label="Binders"
               value={(stats?.binder_count || 0).toLocaleString()}
             />
-            <StatTile
-              icon={<DollarSign className="w-5 h-5 text-dbb-accent" />}
-              label="Est. value"
-              value={
-                valueLoading
-                  ? <span className="inline-flex items-center gap-1 text-gray-400"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading…</span>
-                  : value != null
-                    ? (
-                      <span>
-                        <span className="text-white">${value.total_usd.toFixed(2)}</span>
-                        <span className="block text-sm text-gray-400 font-normal mt-0.5">
-                          RM {(value.total_myr ?? value.total_usd * 3).toFixed(2)} <span className="text-gray-600 text-xs">@3.0</span>
-                        </span>
-                      </span>
-                    )
-                    : '—'
-              }
-            />
           </div>
-          {value && (
-            <p className="text-xs text-gray-600 mt-3">
-              Based on CardKingdom prices for {value.priced_count.toLocaleString()} of {value.total_count.toLocaleString()} unique card rows.
-            </p>
-          )}
         </div>
 
         {/* Security */}

@@ -115,6 +115,7 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
   const currentQ = useRef(q)
   const currentFilters = useRef(advFilters)
   const resetPending = useRef(false)
+  const abortControllerRef = useRef(null)
 
   const buildApiParams = useCallback((p = 1, overrides = {}) => {
     const f = overrides.filters ?? currentFilters.current
@@ -154,19 +155,31 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
   }, [router, searchParams])
 
   const reload = useCallback(async (overrides = {}) => {
+    // Cancel any in-flight request before starting a new one
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+    }
+    const controller = new AbortController()
+    abortControllerRef.current = controller
+
     resetPending.current = true
     setSelectedIds(new Set())
     try {
       const params = buildApiParams(1, overrides)
-      const res = await fetch(`/api/library?${params}`)
-      if (!res.ok) return
+      const res = await fetch(`/api/library?${params}`, { signal: controller.signal })
+      if (!res.ok) {
+        toast('Failed to load library', 'error')
+        return
+      }
       const data = await res.json()
       setCards(data.cards || [])
       setTotal(data.total || 0)
       setHasMore(data.hasMore || false)
       setPage(1)
-    } catch {
-      toast('Failed to load library', 'error')
+    } catch (err) {
+      if (err.name !== 'AbortError') {
+        toast('Failed to load library', 'error')
+      }
     } finally {
       resetPending.current = false
     }
@@ -196,7 +209,7 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
     clearTimeout(searchTimeout.current)
     searchTimeout.current = setTimeout(() => {
       reload({ filters: newFilters })
-    }, 300)
+    }, 200)
   }, [pushUrl, reload])
 
   const handleRemoveChip = useCallback((key) => {

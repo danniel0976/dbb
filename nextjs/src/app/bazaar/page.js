@@ -2,7 +2,6 @@ import { createClient as createAuthClient } from '@/lib/supabaseServer'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import DBBNav from '@/components/DBBNav'
 import BazaarView from '@/components/BazaarView'
-import CollectionValue from '@/components/CollectionValue'
 
 export const metadata = { title: 'Bazaar — DBB' }
 
@@ -77,10 +76,7 @@ export default async function BazaarPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-dbb-primary to-dbb-secondary">
-      <DBBNav
-        userEmail={user?.email}
-        extra={user ? <CollectionValue /> : null}
-      />
+      <DBBNav userEmail={user?.email} />
       <BazaarView initialData={initialData} filterOptions={filterOptions} userId={user?.id || null} />
     </div>
   )

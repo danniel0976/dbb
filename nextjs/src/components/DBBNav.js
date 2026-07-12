@@ -11,14 +11,33 @@ const NAV_LINKS = [
   { href: '/profile', label: 'Profile' },
 ]
 
+// Module-level cache so CartBadge fetches once per session even if DBBNav
+// remounts across page navigations (since DBBNav lives in per-page components).
+const cartCache = { count: null, fetchedAt: 0, pending: null }
+const CART_TTL = 60_000 // revalidate after 1 minute
+
 function CartBadge() {
-  const [count, setCount] = useState(null)
+  const [count, setCount] = useState(cartCache.count)
 
   useEffect(() => {
-    fetch('/api/cart/count')
-      .then(r => r.ok ? r.json() : null)
-      .then(data => { if (data?.count > 0) setCount(data.count) })
-      .catch(() => {})
+    const now = Date.now()
+    if (cartCache.count !== null && now - cartCache.fetchedAt < CART_TTL) {
+      setCount(cartCache.count)
+      return
+    }
+    // Deduplicate concurrent fetches (multiple CartBadge instances mounting simultaneously)
+    if (!cartCache.pending) {
+      cartCache.pending = fetch('/api/cart/count')
+        .then(r => r.ok ? r.json() : null)
+        .then(data => {
+          cartCache.count = data?.count ?? 0
+          cartCache.fetchedAt = Date.now()
+          cartCache.pending = null
+          return cartCache.count
+        })
+        .catch(() => { cartCache.pending = null; return 0 })
+    }
+    cartCache.pending.then(c => setCount(c))
   }, [])
 
   if (!count) return null
