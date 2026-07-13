@@ -9,16 +9,29 @@ const JPEG_QUALITY = 0.85
 // MTG card ratio: 63mm × 88mm → width/height = 0.716
 const MTG_CARD_RATIO = 0.716
 
-// Resize video frame to max 1280px on the longest side and return a JPEG blob
+// Capture the same portrait crop shown by the object-cover viewfinder. Camera
+// sensors may still report landscape dimensions while a phone is held upright;
+// getUserMedia constraints are preferences, not an orientation guarantee.
 function captureFrame(video) {
   const { videoWidth: vw, videoHeight: vh } = video
-  const scale = Math.min(1, MAX_PX / Math.max(vw, vh))
-  const w = Math.round(vw * scale)
-  const h = Math.round(vh * scale)
+  let sx = 0
+  let sy = 0
+  let sw = vw
+  let sh = vh
+  if (vw / vh > MTG_CARD_RATIO) {
+    sw = Math.round(vh * MTG_CARD_RATIO)
+    sx = Math.round((vw - sw) / 2)
+  } else {
+    sh = Math.round(vw / MTG_CARD_RATIO)
+    sy = Math.round((vh - sh) / 2)
+  }
+  const scale = Math.min(1, MAX_PX / Math.max(sw, sh))
+  const w = Math.round(sw * scale)
+  const h = Math.round(sh * scale)
   const canvas = document.createElement('canvas')
   canvas.width = w
   canvas.height = h
-  canvas.getContext('2d').drawImage(video, 0, 0, w, h)
+  canvas.getContext('2d').drawImage(video, sx, sy, sw, sh, 0, 0, w, h)
   return new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', JPEG_QUALITY))
 }
 
@@ -227,7 +240,11 @@ export default function CameraCapture({ libraryCardId, onUploaded, onCancel, car
       {/* Live viewfinder — vertical/portrait orientation with MTG card framing guide */}
       {(status === 'init' || status === 'live') && (
         <div className="space-y-2">
-          <div className="relative bg-black rounded-lg overflow-hidden mx-auto" style={{ maxWidth: '360px', aspectRatio: `${MTG_CARD_RATIO}` }}>
+          <div
+            data-testid="portrait-camera-viewport"
+            className="relative w-full bg-black rounded-lg overflow-hidden mx-auto"
+            style={{ maxWidth: '420px', aspectRatio: '63 / 88' }}
+          >
             {status === 'init' && (
               <div className="absolute inset-0 flex items-center justify-center z-20">
                 <Loader2 className="w-6 h-6 text-gray-400 dark:text-gray-600 animate-spin" />
@@ -244,47 +261,26 @@ export default function CameraCapture({ libraryCardId, onUploaded, onCancel, car
             {/* MTG card framing guide overlay */}
             {status === 'live' && (
               <div className="absolute inset-0 pointer-events-none z-10">
-                {/* Semi-transparent dark overlay with cutout for card area */}
-                <div className="absolute inset-0 bg-black/30" />
-
-                {/* Card-shaped cutout using box-shadow trick (creates the see-through area) */}
-                {/* The guide rectangle is centered, with ~8% margin from each edge */}
+                {/* A single shadowed rectangle creates a genuinely clear center.
+                    There must not be a second full-screen tint behind it. */}
                 <div
-                  className="absolute"
+                  data-testid="mtg-framing-guide"
+                  className="absolute left-1/2 top-1/2"
                   style={{
-                    top: '8%',
-                    bottom: '8%',
-                    left: '12%',
-                    right: '12%',
-                    // MTG card rounded corners: ~6mm on 63mm width ≈ 9.5% → ~12px at this scale
+                    width: '78%',
+                    aspectRatio: '63 / 88',
+                    transform: 'translate(-50%, -50%)',
                     borderRadius: '16px',
-                    // Cutout effect: spread a large box-shadow that covers the overlay
-                    boxShadow: '0 0 0 9999px rgba(0, 0, 0, 0.3)',
-                    // Subtle dashed border to guide centering
-                    border: '2px dashed rgba(255, 255, 255, 0.6)',
-                    // Background is transparent so the camera shows through
+                    boxShadow: '0 0 0 9999px rgba(0, 0, 0, 0.48), 0 0 22px 3px rgba(219, 38, 38, 0.28)',
+                    border: '3px dashed rgba(255, 255, 255, 0.9)',
                     background: 'transparent',
-                  }}
-                />
-
-                {/* Soft glow accent at corners for visual polish */}
-                <div
-                  className="absolute"
-                  style={{
-                    top: '8%',
-                    bottom: '8%',
-                    left: '12%',
-                    right: '12%',
-                    borderRadius: '16px',
-                    boxShadow: '0 0 20px 2px rgba(219, 38, 38, 0.15)',
-                    border: '1px solid rgba(255, 255, 255, 0.15)',
                   }}
                 />
 
                 {/* "Center your card here" hint at top of guide */}
                 <div
                   className="absolute left-1/2 -translate-x-1/2 text-white/70 text-[10px] font-medium tracking-wide"
-                  style={{ top: '2%' }}
+                  style={{ top: '3%' }}
                 >
                   Center your card in the frame
                 </div>
@@ -313,12 +309,11 @@ export default function CameraCapture({ libraryCardId, onUploaded, onCancel, car
       {/* Captured preview */}
       {(status === 'captured' || status === 'uploading') && previewUrl && (
         <div className="space-y-2">
-          <div className="mx-auto" style={{ maxWidth: '360px' }}>
+          <div className="mx-auto w-full" style={{ maxWidth: '420px', aspectRatio: '63 / 88' }}>
             <img
               src={previewUrl}
               alt="Card photo preview"
-              className="w-full rounded-lg border border-gray-200 dark:border-gray-700 object-cover"
-              style={{ maxHeight: '400px', objectFit: 'cover' }}
+              className="w-full h-full rounded-lg border border-gray-200 dark:border-gray-700 object-cover"
             />
           </div>
           {errorMsg && (
