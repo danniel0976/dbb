@@ -36,41 +36,35 @@ export default async function ClaimSalesPage() {
       .range(0, 19)
 
     if (!error && data) {
+      const claimSaleIds = data.map(cs => cs.id)
       const userIds = [...new Set(data.map(cs => cs.user_id))]
       let sellerMap = {}
-      if (userIds.length > 0) {
-        const { data: profiles } = await sc
-          .from('profiles')
-          .select('id, display_name')
-          .in('id', userIds)
-        for (const p of profiles || []) sellerMap[p.id] = p.display_name
-      }
-
-      // Get card counts
-      const claimSaleIds = data.map(cs => cs.id)
       let cardCountMap = {}
       let followerCountMap = {}
-      if (claimSaleIds.length > 0) {
-        try {
-          const { data: listingCounts } = await sc
+      const [profilesResult, listingsResult, followsResult] = await Promise.all([
+        userIds.length > 0
+          ? sc.from('profiles').select('id, display_name').in('id', userIds)
+          : Promise.resolve({ data: [] }),
+        claimSaleIds.length > 0
+          ? sc
             .from('listings')
             .select('claim_sale_id')
             .in('claim_sale_id', claimSaleIds)
             .eq('status', 'active')
-          for (const row of listingCounts || []) {
-            cardCountMap[row.claim_sale_id] = (cardCountMap[row.claim_sale_id] || 0) + 1
-          }
-        } catch {}
-
-        try {
-          const { data: followCounts } = await sc
+          : Promise.resolve({ data: [] }),
+        claimSaleIds.length > 0
+          ? sc
             .from('follows')
             .select('claim_sale_id')
             .in('claim_sale_id', claimSaleIds)
-          for (const row of followCounts || []) {
-            followerCountMap[row.claim_sale_id] = (followerCountMap[row.claim_sale_id] || 0) + 1
-          }
-        } catch {}
+          : Promise.resolve({ data: [] }),
+      ])
+      for (const p of profilesResult.data || []) sellerMap[p.id] = p.display_name
+      for (const row of listingsResult.data || []) {
+        cardCountMap[row.claim_sale_id] = (cardCountMap[row.claim_sale_id] || 0) + 1
+      }
+      for (const row of followsResult.data || []) {
+        followerCountMap[row.claim_sale_id] = (followerCountMap[row.claim_sale_id] || 0) + 1
       }
 
       claimSales = data.map(cs => ({

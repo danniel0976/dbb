@@ -32,10 +32,36 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
   const [filters, setFilters] = useState(INITIAL_FILTERS)
   const [filterOptions] = useState(initialFilterOptions || { sets: [], rarities: [], cardTypes: [] })
   const [selectedListing, setSelectedListing] = useState(null)
+  const [prices, setPrices] = useState({})
   const { toast } = useToast()
 
   const PAGE_SIZE = 24
   const searchTimeout = useRef(null)
+
+  // One price request per result set/page, instead of one request per tile.
+  useEffect(() => {
+    const items = [...new Map(listings
+      .filter(l => l.library_cards?.scryfall_id)
+      .map(l => {
+        const foil = l.library_cards.foil || 'normal'
+        return [`${l.library_cards.scryfall_id}:${foil}`, { scryfall_id: l.library_cards.scryfall_id, foil }]
+      })).values()]
+    if (!items.length) {
+      setPrices({})
+      return
+    }
+    const controller = new AbortController()
+    fetch('/api/pricing/batch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items }),
+      signal: controller.signal,
+    })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data?.prices) setPrices(data.prices) })
+      .catch(err => { if (err?.name !== 'AbortError') setPrices({}) })
+    return () => controller.abort()
+  }, [listings])
 
   const buildParams = useCallback((f = filters, p = 1) => {
     const params = new URLSearchParams({ page: String(p), sort: f.sortBy })
@@ -296,6 +322,7 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
                   <BazaarCard
                     key={listing.id}
                     listing={listing}
+                    priceData={prices[`${listing.library_cards?.scryfall_id}:${listing.library_cards?.foil || 'normal'}`]}
                     onClick={() => setSelectedListing(listing)}
                   />
                 ))}

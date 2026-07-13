@@ -29,7 +29,7 @@ export default async function BazaarPage() {
         library_cards!inner(
           id, scryfall_id, foil, condition, quantity,
           card_index!inner(
-            name, set_code, set_name, collector_number, rarity, type_line, colors, cmc
+            name, set_code, set_name, collector_number, rarity, type_line, colors, cmc, image_uris
           )
         )
       `, { count: 'exact' })
@@ -38,17 +38,25 @@ export default async function BazaarPage() {
       .range(0, 23)
 
     if (!error && listings) {
-      const userIds = [...new Set(listings.map(l => l.user_id))]
-      let sellerMap = {}
-      if (userIds.length > 0) {
-        const { data: profiles } = await sc
-          .from('profiles')
-          .select('id, display_name')
-          .in('id', userIds)
-        for (const p of profiles || []) sellerMap[p.id] = p.display_name
+      const scryfallIds = [...new Set(listings.map(l => l.library_cards?.scryfall_id).filter(Boolean))]
+      const sellersByCard = new Map()
+      if (scryfallIds.length > 0) {
+        const { data: sellerRows } = await sc
+          .from('listings')
+          .select('user_id, library_cards!inner(scryfall_id)')
+          .eq('status', 'active')
+          .in('library_cards.scryfall_id', scryfallIds)
+        for (const row of sellerRows || []) {
+          const id = row.library_cards?.scryfall_id
+          if (!id) continue
+          if (!sellersByCard.has(id)) sellersByCard.set(id, new Set())
+          sellersByCard.get(id).add(row.user_id)
+        }
       }
-
-      const enriched = listings.map(l => ({ ...l, seller_name: sellerMap[l.user_id] || null }))
+      const enriched = listings.map(l => ({
+        ...l,
+        seller_count: sellersByCard.get(l.library_cards?.scryfall_id)?.size || 1,
+      }))
       const total = count || 0
       initialData = { listings: enriched, total, hasMore: 24 < total, page: 1 }
 

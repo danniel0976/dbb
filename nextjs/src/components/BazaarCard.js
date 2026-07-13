@@ -15,16 +15,20 @@ const RARITY_COLORS = {
   common: 'text-gray-500 dark:text-gray-400',
 }
 
-export default function BazaarCard({ listing, onClick }) {
+export default function BazaarCard({ listing, onClick, priceData }) {
   const lc = listing.library_cards
   const ci = lc?.card_index
-  const [imageUrl, setImageUrl] = useState(null)
+  const storedImage = ci?.image_uris?.normal || ci?.image_uris?.small || null
+  const [imageUrl, setImageUrl] = useState(storedImage)
   const [imgLoaded, setImgLoaded] = useState(false)
-  const [myrPrice, setMyrPrice] = useState(null)
-  const [priceLoading, setPriceLoading] = useState(true)
 
-  // Fetch card image
+  // Catalog images avoid one external Scryfall request per tile. Retain the
+  // fallback for old catalog rows that predate stored image URIs.
   useEffect(() => {
+    if (storedImage) {
+      setImageUrl(storedImage)
+      return
+    }
     if (!lc?.scryfall_id) return
     const cacheKey = `sf_img_${lc.scryfall_id}`
     const cached = sessionStorage.getItem(cacheKey)
@@ -41,32 +45,13 @@ export default function BazaarCard({ listing, onClick }) {
         }
       })
       .catch(() => {})
-  }, [lc?.scryfall_id])
+  }, [lc?.scryfall_id, storedImage])
 
-  // Fetch CKD price to compute MYR listing price
-  useEffect(() => {
-    if (!lc?.scryfall_id) { setPriceLoading(false); return }
-
-    const foilType = lc.foil || 'normal'
-    fetch('/api/pricing/batch', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ items: [{ scryfall_id: lc.scryfall_id, foil: foilType }] }),
-    })
-      .then(r => r.ok ? r.json() : null)
-      .then(data => {
-        const key = `${lc.scryfall_id}:${foilType}`
-        const entry = data?.prices?.[key]
-        const multiplier = Number(listing.multiplier)
-        let myr = null
-        if (entry?.ckd_usd != null) {
-          myr = Math.round(entry.ckd_usd * multiplier * 2) / 2
-        }
-        setMyrPrice(myr)
-      })
-      .catch(() => {})
-      .finally(() => setPriceLoading(false))
-  }, [lc?.scryfall_id, lc?.foil, listing.multiplier])
+  const multiplier = Number(listing.multiplier)
+  const myrPrice = priceData?.ckd_usd != null
+    ? Math.round(priceData.ckd_usd * multiplier * 2) / 2
+    : null
+  const priceLoading = priceData === undefined
 
   const foilBadge = lc?.foil && FOIL_BADGE[lc.foil]
   const rarityColor = RARITY_COLORS[ci?.rarity] || 'text-gray-500 dark:text-gray-400'

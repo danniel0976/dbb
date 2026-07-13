@@ -80,14 +80,14 @@ export async function GET(request) {
         library_cards!inner(
           id, scryfall_id, foil, condition, quantity,
           card_index!inner(
-            name, set_code, set_name, collector_number, rarity, type_line, colors, cmc
+            name, set_code, set_name, collector_number, rarity, type_line, colors, cmc, image_uris
           )
         )`
       : `id, user_id, multiplier, status, created_at,
         library_cards!inner(
           id, scryfall_id, foil, condition, quantity,
           card_index!inner(
-            name, set_code, set_name, collector_number, rarity, type_line, colors, cmc
+            name, set_code, set_name, collector_number, rarity, type_line, colors, cmc, image_uris
           )
         )`
     let q = sc
