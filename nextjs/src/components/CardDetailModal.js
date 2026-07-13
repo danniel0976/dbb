@@ -32,7 +32,7 @@ function relativeTime(isoString, future = false) {
 
 // PhotoSection — shows current card photo + camera capture for owner.
 // Uses small variant (640px) for inline display; full-size available via lightbox.
-function PhotoSection({ libraryRow, listing, onPhotoChange }) {
+function PhotoSection({ libraryRow, listing, onPhotoChange, forceCamera, onCameraOpened }) {
   const { toast } = useToast()
   const [photoUrl, setPhotoUrl] = useState(undefined) // undefined=loading, null=none, string=url
   const [showCamera, setShowCamera] = useState(false)
@@ -56,6 +56,13 @@ function PhotoSection({ libraryRow, listing, onPhotoChange }) {
     toast('Photo saved', 'success')
     onPhotoChange?.(true)
   }
+
+  useEffect(() => {
+    if (forceCamera && photoUrl !== undefined && !photoUrl) {
+      setShowCamera(true)
+      onCameraOpened?.()
+    }
+  }, [forceCamera, photoUrl, onCameraOpened])
 
   const handleOpenLightbox = () => {
     setShowLightbox(true)
@@ -290,7 +297,7 @@ function ClaimSaleForm({ libraryRow, onCancel }) {
   )
 }
 
-function ListingSection({ libraryRow, hasPhoto }) {
+function ListingSection({ libraryRow, hasPhoto, onRequirePhoto }) {
   const { toast } = useToast()
   const [listing, setListing] = useState(undefined) // undefined = loading, null = not listed
   const [showPicker, setShowPicker] = useState(false)
@@ -414,7 +421,10 @@ function ListingSection({ libraryRow, hasPhoto }) {
       <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
         <button
           onClick={() => {
-            if (!hasPhoto) { setPhotoRequired(true) } else { setShowListPrompt(true) }
+            if (!hasPhoto) {
+              setPhotoRequired(true)
+              onRequirePhoto?.()
+            } else { setShowListPrompt(true) }
           }}
           className="flex items-center justify-center gap-2 w-full py-1.5 border border-gray-200 dark:border-gray-700 hover:border-dbb-accent text-gray-500 dark:text-gray-400 hover:text-dbb-accent rounded-lg text-xs font-medium transition-colors"
         >
@@ -423,7 +433,7 @@ function ListingSection({ libraryRow, hasPhoto }) {
         </button>
         {photoRequired && !hasPhoto && (
           <p className="text-xs text-amber-400 mt-1.5">
-            A card photo is required before listing. Take a photo above first.
+            Opening the assisted camera so you can add the required condition photo.
           </p>
         )}
       </div>
@@ -630,6 +640,7 @@ export default function CardDetailModal({ libraryRow, onClose, onSave, onDelete 
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [hasPhoto, setHasPhoto] = useState(false)
   const [currentListing, setCurrentListing] = useState(undefined)
+  const [forcePhotoCamera, setForcePhotoCamera] = useState(false)
 
   const [quantity, setQuantity] = useState(libraryRow.quantity)
   const [condition, setCondition] = useState(libraryRow.condition)
@@ -834,10 +845,16 @@ export default function CardDetailModal({ libraryRow, onClose, onSave, onDelete 
               libraryRow={libraryRow}
               listing={currentListing}
               onPhotoChange={setHasPhoto}
+              forceCamera={forcePhotoCamera}
+              onCameraOpened={() => setForcePhotoCamera(false)}
             />
 
             {/* Bazaar listing */}
-            <ListingSection libraryRow={libraryRow} hasPhoto={hasPhoto} />
+            <ListingSection
+              libraryRow={libraryRow}
+              hasPhoto={hasPhoto}
+              onRequirePhoto={() => setForcePhotoCamera(true)}
+            />
 
             {/* Actions */}
             <div className="flex items-center justify-between pt-2 border-t border-gray-200 dark:border-gray-700">

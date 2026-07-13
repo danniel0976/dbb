@@ -7,6 +7,7 @@ import CardDetailModal from '@/components/CardDetailModal'
 import BinderPicker from '@/components/BinderPicker'
 import AdvancedSearchPanel, { buildFilterChips } from '@/components/AdvancedSearchPanel'
 import AddCardModal from '@/components/AddCardModal'
+import CameraCapture from '@/components/CameraCapture'
 import { useToast } from '@/components/Toast'
 import { Search, SortAsc, CheckSquare, X, Star, StarOff, Trash2, FolderOpen, Filter, Tag, PlusCircle, Package } from 'lucide-react'
 import Link from 'next/link'
@@ -119,6 +120,8 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
   const [csSetCode, setCsSetCode] = useState('')
   const [csDelivery, setCsDelivery] = useState('both')
   const [showAddCard, setShowAddCard] = useState(false)
+  const [missingPhotoIds, setMissingPhotoIds] = useState([])
+  const [photoCaptureIndex, setPhotoCaptureIndex] = useState(0)
 
   const sentinelRef = useRef(null)
   const searchTimeout = useRef(null)
@@ -453,6 +456,11 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
         })
         if (!res.ok) {
           const err = await res.json().catch(() => ({}))
+          if (res.status === 422 && err.missing_photos?.length) {
+            setMissingPhotoIds([...new Set(err.missing_photos)])
+            setPhotoCaptureIndex(0)
+            return
+          }
           throw new Error(err.error || 'Failed')
         }
         toast(`Claim sale created with ${ids.length} card${ids.length !== 1 ? 's' : ''}`, 'success')
@@ -468,7 +476,15 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ items }),
         })
-        if (!res.ok) throw new Error('Failed')
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}))
+          if (res.status === 422 && err.missing_photos?.length) {
+            setMissingPhotoIds([...new Set(err.missing_photos)])
+            setPhotoCaptureIndex(0)
+            return
+          }
+          throw new Error(err.error || 'Failed')
+        }
         toast(`${ids.length} card${ids.length !== 1 ? 's' : ''} listed on Bazaar`, 'success')
       }
       clearSelection()
@@ -994,6 +1010,53 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
           </div>
         </div>
       )}
+
+      {/* Guided missing-photo capture. One photo per library-card row covers
+          every owned/listed copy; quantity never creates duplicate steps. */}
+      {missingPhotoIds.length > 0 && (() => {
+        const cardId = missingPhotoIds[photoCaptureIndex]
+        const card = cards.find(c => c.id === cardId)
+        const cardName = card?.card_index?.name || 'Selected card'
+        return (
+          <div className="fixed inset-0 z-[70] bg-black/80 flex items-center justify-center p-4">
+            <div className="bg-white dark:bg-dbb-primary border border-dbb-accent/30 rounded-dbb max-w-md w-full p-5 shadow-2xl max-h-[95vh] overflow-y-auto">
+              <div className="flex items-start justify-between gap-3 mb-3">
+                <div>
+                  <h3 className="font-bold text-gray-900 dark:text-white">Add condition photos</h3>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    Card {photoCaptureIndex + 1} of {missingPhotoIds.length}: {cardName}
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    One photo covers all copies of this card in your listing.
+                  </p>
+                </div>
+                <button
+                  onClick={() => { setMissingPhotoIds([]); setPhotoCaptureIndex(0); setShowListPicker(true) }}
+                  className="p-1 text-gray-500 hover:text-gray-900 dark:hover:text-white"
+                  aria-label="Close photo capture"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <CameraCapture
+                libraryCardId={cardId}
+                cardName={cardName}
+                onCancel={() => { setMissingPhotoIds([]); setPhotoCaptureIndex(0); setShowListPicker(true) }}
+                onUploaded={() => {
+                  if (photoCaptureIndex + 1 < missingPhotoIds.length) {
+                    setPhotoCaptureIndex(i => i + 1)
+                  } else {
+                    setMissingPhotoIds([])
+                    setPhotoCaptureIndex(0)
+                    setShowListPicker(true)
+                    toast('All required photos added. Review and confirm your listing.', 'success')
+                  }
+                }}
+              />
+            </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }

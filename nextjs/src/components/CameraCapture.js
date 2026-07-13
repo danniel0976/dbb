@@ -6,6 +6,9 @@ import { Camera, X, RefreshCw, Loader2 } from 'lucide-react'
 const MAX_PX = 1280
 const JPEG_QUALITY = 0.85
 
+// MTG card ratio: 63mm × 88mm → width/height = 0.716
+const MTG_CARD_RATIO = 0.716
+
 // Resize video frame to max 1280px on the longest side and return a JPEG blob
 function captureFrame(video) {
   const { videoWidth: vw, videoHeight: vh } = video
@@ -20,12 +23,20 @@ function captureFrame(video) {
 }
 
 /**
- * CameraCapture — camera-only photo capture component.
+ * CameraCapture — camera-only photo capture component (vertical/portrait orientation).
+ *
+ * Features:
+ *   - Vertical camera orientation (portrait mode) with MTG card ratio framing guide
+ *   - Rounded-edge rectangle overlay matching MTG card proportions (63×88mm ≈ 0.716)
+ *   - Semi-transparent overlay with cutout for the card area
+ *   - Dashed border guide that's visually subtle (encourages centering without blocking view)
+ *   - Captures the full frame (condition assessment needs surrounding context)
  *
  * Props:
  *   libraryCardId  string    — the library_card to attach the photo to
  *   onUploaded     fn(url)   — called with the new signed URL after successful upload
  *   onCancel       fn()      — called when user dismisses without capturing
+ *   cardName       string    — optional: card name to display during batch capture
  *
  * Desktop note: `facingMode: environment` is requested (ideal) so a rear camera
  * is preferred when available; on desktops with a single webcam it falls back to
@@ -33,7 +44,7 @@ function captureFrame(video) {
  *
  * If no camera is available at all, a "camera required" message is shown.
  */
-export default function CameraCapture({ libraryCardId, onUploaded, onCancel }) {
+export default function CameraCapture({ libraryCardId, onUploaded, onCancel, cardName }) {
   const videoRef = useRef(null)
   const streamRef = useRef(null)
 
@@ -60,8 +71,15 @@ export default function CameraCapture({ libraryCardId, onUploaded, onCancel }) {
     }
 
     try {
+      // Request vertical (portrait) orientation with MTG card aspect ratio
+      // aspectRatio ideal 0.716 → portrait orientation matching MTG card proportions
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+        video: {
+          facingMode: { ideal: 'environment' },
+          aspectRatio: { ideal: MTG_CARD_RATIO },
+          width: { ideal: 720 },
+          height: { ideal: 1008 },  // 720 / 0.716 ≈ 1006, round to clean number
+        },
         audio: false,
       })
       streamRef.current = stream
@@ -70,18 +88,44 @@ export default function CameraCapture({ libraryCardId, onUploaded, onCancel }) {
       }
       setStatus('live')
     } catch (err) {
-      if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
-        setStatus('error')
-        setErrorMsg('A camera is required to photograph your card.')
-      } else if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-        setStatus('error')
-        setErrorMsg('Camera permission was denied. Please allow camera access and try again.')
-      } else {
-        setStatus('error')
-        setErrorMsg('Could not start the camera. A camera is required to photograph your card.')
+      // Fallback: try without aspectRatio constraint (some browsers/cameras don't support it)
+      if (err.name === 'OverconstrainedError' || err.name === 'ConstraintNotSatisfiedError') {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: {
+              facingMode: { ideal: 'environment' },
+              width: { ideal: 720 },
+              height: { ideal: 1280 },
+            },
+            audio: false,
+          })
+          streamRef.current = stream
+          if (videoRef.current) {
+            videoRef.current.srcObject = stream
+          }
+          setStatus('live')
+          return
+        } catch (fallbackErr) {
+          handleCameraError(fallbackErr)
+          return
+        }
       }
+      handleCameraError(err)
     }
   }, [stopStream])
+
+  function handleCameraError(err) {
+    if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+      setStatus('error')
+      setErrorMsg('A camera is required to photograph your card.')
+    } else if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+      setStatus('error')
+      setErrorMsg('Camera permission was denied. Please allow camera access and try again.')
+    } else {
+      setStatus('error')
+      setErrorMsg('Could not start the camera. A camera is required to photograph your card.')
+    }
+  }
 
   useEffect(() => {
     startCamera()
@@ -159,6 +203,13 @@ export default function CameraCapture({ libraryCardId, onUploaded, onCancel }) {
 
   return (
     <div className="space-y-3">
+      {/* Card name label (for batch capture context) */}
+      {cardName && (
+        <div className="text-center">
+          <p className="text-sm font-medium text-gray-700 dark:text-gray-300">{cardName}</p>
+        </div>
+      )}
+
       {/* Error state */}
       {status === 'error' && (
         <div className="rounded-lg bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-4 text-center">
@@ -173,12 +224,12 @@ export default function CameraCapture({ libraryCardId, onUploaded, onCancel }) {
         </div>
       )}
 
-      {/* Live viewfinder */}
+      {/* Live viewfinder — vertical/portrait orientation with MTG card framing guide */}
       {(status === 'init' || status === 'live') && (
         <div className="space-y-2">
-          <div className="relative bg-black rounded-lg overflow-hidden aspect-video">
+          <div className="relative bg-black rounded-lg overflow-hidden mx-auto" style={{ maxWidth: '360px', aspectRatio: `${MTG_CARD_RATIO}` }}>
             {status === 'init' && (
-              <div className="absolute inset-0 flex items-center justify-center">
+              <div className="absolute inset-0 flex items-center justify-center z-20">
                 <Loader2 className="w-6 h-6 text-gray-400 dark:text-gray-600 animate-spin" />
               </div>
             )}
@@ -189,6 +240,56 @@ export default function CameraCapture({ libraryCardId, onUploaded, onCancel }) {
               muted
               className="w-full h-full object-cover"
             />
+
+            {/* MTG card framing guide overlay */}
+            {status === 'live' && (
+              <div className="absolute inset-0 pointer-events-none z-10">
+                {/* Semi-transparent dark overlay with cutout for card area */}
+                <div className="absolute inset-0 bg-black/30" />
+
+                {/* Card-shaped cutout using box-shadow trick (creates the see-through area) */}
+                {/* The guide rectangle is centered, with ~8% margin from each edge */}
+                <div
+                  className="absolute"
+                  style={{
+                    top: '8%',
+                    bottom: '8%',
+                    left: '12%',
+                    right: '12%',
+                    // MTG card rounded corners: ~6mm on 63mm width ≈ 9.5% → ~12px at this scale
+                    borderRadius: '16px',
+                    // Cutout effect: spread a large box-shadow that covers the overlay
+                    boxShadow: '0 0 0 9999px rgba(0, 0, 0, 0.3)',
+                    // Subtle dashed border to guide centering
+                    border: '2px dashed rgba(255, 255, 255, 0.6)',
+                    // Background is transparent so the camera shows through
+                    background: 'transparent',
+                  }}
+                />
+
+                {/* Soft glow accent at corners for visual polish */}
+                <div
+                  className="absolute"
+                  style={{
+                    top: '8%',
+                    bottom: '8%',
+                    left: '12%',
+                    right: '12%',
+                    borderRadius: '16px',
+                    boxShadow: '0 0 20px 2px rgba(219, 38, 38, 0.15)',
+                    border: '1px solid rgba(255, 255, 255, 0.15)',
+                  }}
+                />
+
+                {/* "Center your card here" hint at top of guide */}
+                <div
+                  className="absolute left-1/2 -translate-x-1/2 text-white/70 text-[10px] font-medium tracking-wide"
+                  style={{ top: '2%' }}
+                >
+                  Center your card in the frame
+                </div>
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -212,14 +313,16 @@ export default function CameraCapture({ libraryCardId, onUploaded, onCancel }) {
       {/* Captured preview */}
       {(status === 'captured' || status === 'uploading') && previewUrl && (
         <div className="space-y-2">
-          <img
-            src={previewUrl}
-            alt="Card photo preview"
-            className="w-full rounded-lg border border-gray-200 dark:border-gray-700 object-cover"
-            style={{ maxHeight: '200px', objectFit: 'cover' }}
-          />
+          <div className="mx-auto" style={{ maxWidth: '360px' }}>
+            <img
+              src={previewUrl}
+              alt="Card photo preview"
+              className="w-full rounded-lg border border-gray-200 dark:border-gray-700 object-cover"
+              style={{ maxHeight: '400px', objectFit: 'cover' }}
+            />
+          </div>
           {errorMsg && (
-            <p className="text-xs text-red-400">{errorMsg}</p>
+            <p className="text-xs text-red-400 text-center">{errorMsg}</p>
           )}
           <div className="flex items-center gap-2">
             <button
