@@ -14,8 +14,8 @@ export default async function LibraryPage({ searchParams }) {
   const selectedBinderId = searchParams?.binder || null
 
   // Fetch binders and prefetch the first library page in parallel.
-  // Binder counts use parallel HEAD queries for exact per-binder totals
-  // (embedded library_cards(count) aggregate is unreliable on large sets).
+  // Binder counts are deferred to client-side (BinderRail fetches /api/binders
+  // after mount) so the server doesn't block HTML delivery on N count queries.
   const [libraryResult, { data: binderRows }] = await Promise.all([
     getLibrary(user.id, selectedBinderId ? { binder_id: selectedBinderId } : {}, 1, 48)
       .catch(() => ({ cards: [], total: 0, hasMore: false })),
@@ -25,23 +25,12 @@ export default async function LibraryPage({ searchParams }) {
       .order('created_at'),
   ])
 
-  // Exact count per binder — parallel HEAD queries
-  const countResults = await Promise.all(
-    (binderRows || []).map(b =>
-      supabase
-        .from('library_cards')
-        .select('id', { count: 'exact', head: true })
-        .eq('user_id', user.id)
-        .eq('binder_id', b.id)
-    )
-  )
-
-  const binders = (binderRows || []).map((b, i) => ({
+  const binders = (binderRows || []).map(b => ({
     id: b.id,
     name: b.name,
     is_default: b.is_default,
     created_at: b.created_at,
-    card_count: countResults[i]?.count ?? 0,
+    card_count: null, // loaded client-side by BinderRail
   }))
 
   // Validate the binder param belongs to this user

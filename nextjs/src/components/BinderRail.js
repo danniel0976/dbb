@@ -42,7 +42,7 @@ function MergeModal({ source, binders, onConfirm, onClose }) {
                   className="w-full appearance-none bg-dbb-primary border border-gray-600 focus:border-dbb-accent rounded-lg px-3 py-2 text-white text-sm outline-none pr-8"
                 >
                   {targets.map(b => (
-                    <option key={b.id} value={b.id}>{b.name} ({b.card_count} cards)</option>
+                    <option key={b.id} value={b.id}>{b.name} ({b.card_count ?? '?'} cards)</option>
                   ))}
                 </select>
                 <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
@@ -51,7 +51,7 @@ function MergeModal({ source, binders, onConfirm, onClose }) {
           </div>
           {target && (
             <div className="p-3 bg-yellow-900/20 border border-yellow-700/40 rounded-lg text-sm text-yellow-200">
-              Merge <span className="font-semibold">"{source.name}"</span> ({source.card_count} cards) into <span className="font-semibold">"{target.name}"</span>? "{source.name}" will be deleted after merging.
+              Merge <span className="font-semibold">"{source.name}"</span> ({source.card_count ?? '?'} cards) into <span className="font-semibold">"{target.name}"</span>? "{source.name}" will be deleted after merging.
             </div>
           )}
         </div>
@@ -127,7 +127,7 @@ function BinderItem({ binder, isSelected, onSelect, onRename, onDelete, onMerge 
       >
         <span className="block text-sm truncate">{binder.name}</span>
         <span className="text-xs text-gray-500">
-          {binder.card_count || 0} card{binder.card_count !== 1 ? 's' : ''}
+          {binder.card_count === null ? '…' : `${binder.card_count} card${binder.card_count !== 1 ? 's' : ''}`}
         </span>
       </button>
 
@@ -180,6 +180,15 @@ export default function BinderRail({ initialBinders = [], selectedId, onSelect, 
   useEffect(() => {
     onBindersChange?.(binders)
   }, [binders]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Load binder counts after mount if the server passed null counts (deferred for faster HTML delivery)
+  useEffect(() => {
+    if (!initialBinders.some(b => b.card_count === null)) return
+    fetch('/api/binders')
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data?.binders) setBinders(data.binders) })
+      .catch(() => {})
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleCreate = async (e) => {
     e.preventDefault()
