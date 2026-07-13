@@ -32,7 +32,7 @@ function relativeTime(isoString, future = false) {
 
 // PhotoSection — shows current card photo + camera capture for owner.
 // Uses small variant (640px) for inline display; full-size available via lightbox.
-function PhotoSection({ libraryRow, listing, onPhotoChange, forceCamera, onCameraOpened, onCaptureComplete }) {
+function PhotoSection({ libraryRow, listing, onPhotoChange, forceCamera, onCameraOpened, onCaptureComplete, onCaptureCancel }) {
   const { toast } = useToast()
   const [photoUrl, setPhotoUrl] = useState(undefined) // undefined=loading, null=none, string=url
   const [showCamera, setShowCamera] = useState(false)
@@ -103,7 +103,10 @@ function PhotoSection({ libraryRow, listing, onPhotoChange, forceCamera, onCamer
         <CameraCapture
           libraryCardId={libraryRow.id}
           onUploaded={handleUploaded}
-          onCancel={() => setShowCamera(false)}
+          onCancel={() => {
+            setShowCamera(false)
+            onCaptureCancel?.()
+          }}
         />
       ) : photoUrl ? (
         <div className="relative">
@@ -865,6 +868,7 @@ export default function CardDetailModal({ libraryRow, onClose, onSave, onDelete 
                   retry()
                 }
               }}
+              onCaptureCancel={() => setPendingPhotoAction(null)}
             />
 
             {/* Bazaar listing */}
