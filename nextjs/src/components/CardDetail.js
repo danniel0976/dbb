@@ -73,11 +73,11 @@ export default function CardDetail({ card, onClose, onCopyCaption }) {
       />
 
       {/* Modal */}
-      <div className="relative bg-dbb-secondary rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="relative bg-white dark:bg-dbb-secondary rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
         {/* Close Button */}
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 p-2 hover:bg-dbb-primary rounded-lg transition-colors z-10"
+          className="absolute top-4 right-4 p-2 hover:bg-gray-100 dark:hover:bg-dbb-primary rounded-lg transition-colors z-10"
         >
           <X className="w-6 h-6" />
         </button>
@@ -85,7 +85,7 @@ export default function CardDetail({ card, onClose, onCopyCaption }) {
         <div className="grid md:grid-cols-2 gap-6 p-6">
           {/* Left: Card Image */}
           <div className="space-y-4">
-            <div className="relative aspect-[2/3] rounded-lg overflow-hidden border-2 border-dbb-accent/30 bg-dbb-primary">
+            <div className="relative aspect-[2/3] rounded-lg overflow-hidden border-2 border-dbb-accent/30 bg-gray-100 dark:bg-dbb-primary">
               {card.image_png_url ? (
                 <Image
                   src={card.image_png_url}
@@ -96,8 +96,8 @@ export default function CardDetail({ card, onClose, onCopyCaption }) {
                   priority
                 />
               ) : (
-                <div className="w-full h-full bg-dbb-primary flex items-center justify-center">
-                  <span className="text-gray-600">No Image Available</span>
+                <div className="w-full h-full bg-gray-100 dark:bg-dbb-primary flex items-center justify-center">
+                  <span className="text-gray-400 dark:text-gray-600">No Image Available</span>
                 </div>
               )}
               
@@ -114,7 +114,7 @@ export default function CardDetail({ card, onClose, onCopyCaption }) {
           <div className="space-y-6">
             {/* Header */}
             <div>
-              <h2 className="text-2xl font-bold mb-2">{card.card_name}</h2>
+              <h2 className="text-2xl font-bold mb-2 text-gray-900 dark:text-white">{card.card_name}</h2>
               
               <div className="flex items-center gap-3 flex-wrap">
                 {/* Rarity Badge */}
@@ -123,12 +123,12 @@ export default function CardDetail({ card, onClose, onCopyCaption }) {
                 </span>
                 
                 {/* Collector Number */}
-                <span className="text-sm text-gray-400">
+                <span className="text-sm text-gray-500 dark:text-gray-400">
                   #{card.collector_number?.padStart(4, '0') ?? '????'}
                 </span>
                 
                 {/* Set Code */}
-                <span className="text-sm text-gray-400 bg-dbb-primary px-2 py-1 rounded">
+                <span className="text-sm text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-dbb-primary px-2 py-1 rounded">
                   {card.set_code}
                 </span>
               </div>
@@ -136,7 +136,7 @@ export default function CardDetail({ card, onClose, onCopyCaption }) {
               {/* Colors */}
               {card.colors && card.colors.length > 0 && (
                 <div className="flex items-center gap-2 mt-3">
-                  <span className="text-xs text-gray-400">Colors:</span>
+                  <span className="text-xs text-gray-600 dark:text-gray-400">Colors:</span>
                   <div className="flex gap-1">
                     {card.colors.map((color) => (
                       <span
@@ -156,13 +156,13 @@ export default function CardDetail({ card, onClose, onCopyCaption }) {
             {/* Card Type */}
             {card.card_type && (
               <div>
-                <h3 className="text-sm font-semibold text-gray-400 mb-1">Type</h3>
-                <p className="text-sm">{card.card_type}</p>
+                <h3 className="text-sm font-semibold text-gray-600 dark:text-gray-400 mb-1">Type</h3>
+                <p className="text-sm text-gray-700 dark:text-gray-300">{card.card_type</p>
               </div>
             )}
 
             {/* Pricing */}
-            <div className="bg-dbb-primary rounded-lg p-4 space-y-4">
+            <div className="bg-gray-50 dark:bg-dbb-primary rounded-lg p-4 space-y-4">
               {hasCKPrice ? (
                 <>
                   {/* Hero Price */}
@@ -185,7 +185,7 @@ export default function CardDetail({ card, onClose, onCopyCaption }) {
                           p-2 rounded-lg text-center transition-all
                           ${multiplier === mult 
                             ? 'bg-dbb-accent text-white' 
-                            : 'bg-dbb-secondary hover:bg-dbb-primary border border-gray-700'}
+                            : 'bg-gray-100 dark:bg-dbb-secondary hover:bg-gray-200 dark:hover:bg-dbb-primary border border-gray-200 dark:border-gray-700'}
                         `}
                       >
                         <div className="text-xs opacity-75">{mult}×</div>
@@ -229,27 +229,27 @@ export default function CardDetail({ card, onClose, onCopyCaption }) {
                   )}
 
                   {/* Price Info */}
-                  <div className="pt-3 border-t border-gray-700 space-y-1.5">
+                  <div className="pt-3 border-t border-gray-200 dark:border-gray-700 space-y-1.5">
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-400">
+                      <span className="text-sm text-gray-500 dark:text-gray-400">
                         CKD USD {isEtched ? '(Etched)' : card.is_foil && foilType !== 'nonfoil' ? '(Foil)' : ''}
                       </span>
                       <span className="font-semibold">{priceUtils.formatUSD(card.ckd_usd_price)}</span>
                     </div>
                     {!card.is_foil && hasCKFoilPrice && (
                       <div className="flex items-center justify-between">
-                        <span className="text-sm text-gray-400">CKD USD (Foil)</span>
+                        <span className="text-sm text-gray-500 dark:text-gray-400">CKD USD (Foil)</span>
                         <span className="font-semibold text-yellow-400">{priceUtils.formatUSD(card.ckd_foil_price)}</span>
                       </div>
                     )}
                     {!card.is_foil && hasCKEtchedPrice && (
                       <div className="flex items-center justify-between">
-                        <span className="text-sm text-gray-400">CKD USD (Etched)</span>
+                        <span className="text-sm text-gray-500 dark:text-gray-400">CKD USD (Etched)</span>
                         <span className="font-semibold text-purple-400">{priceUtils.formatUSD(card.ckd_etched_price)}</span>
                       </div>
                     )}
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-400">Source</span>
+                      <span className="text-sm text-gray-500 dark:text-gray-400">Source</span>
                       <span className="text-sm">CardKingdom</span>
                     </div>
                   </div>
@@ -257,8 +257,8 @@ export default function CardDetail({ card, onClose, onCopyCaption }) {
                 </>
               ) : (
                 <div className="text-center py-4">
-                  <p className="text-gray-400 text-lg font-semibold">N/A</p>
-                  <p className="text-xs text-gray-500 mt-1">No CardKingdom price available</p>
+                  <p className="text-gray-500 dark:text-gray-400 text-lg font-semibold">N/A</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">No CardKingdom price available</p>
                 </div>
               )}
             </div>
@@ -309,7 +309,7 @@ export default function CardDetail({ card, onClose, onCopyCaption }) {
             })()}
 
             {/* Additional Info */}
-            <div className="text-xs text-gray-500 space-y-1 pt-4 border-t border-gray-700">
+            <div className="text-xs text-gray-500 dark:text-gray-500 space-y-1 pt-4 border-t border-gray-200 dark:border-gray-700">
               <div>Condition: {card.condition || 'NM'}</div>
               {hasCKPrice && card.pricing_source && (
                 <>

@@ -28,8 +28,8 @@ export default function LibraryWithRail({ userId, initialData, initialBinders = 
     <div className="flex flex-col md:flex-row gap-4">
       {/* Binder rail — horizontal scroll on mobile, vertical sidebar on desktop */}
       <div className="md:w-52 md:flex-shrink-0">
-        <div className="overflow-x-auto md:overflow-x-visible md:bg-dbb-secondary/50 md:border md:border-gray-800 md:rounded-xl md:p-2">
-          <p className="hidden md:block text-xs font-medium text-gray-500 uppercase tracking-wider px-2 py-1.5 mb-1">Binders</p>
+        <div className="overflow-x-auto md:overflow-x-visible md:bg-gray-50 dark:bg-dbb-secondary/50 md:border md:border-gray-200 dark:border-gray-800 md:rounded-xl md:p-2">
+          <p className="hidden md:block text-xs font-medium text-gray-600 dark:text-gray-500 uppercase tracking-wider px-2 py-1.5 mb-1">Binders</p>
           <div className="flex flex-row md:flex-col gap-2 md:gap-0.5 min-w-max md:min-w-0">
             <BinderRail
               initialBinders={binders}
