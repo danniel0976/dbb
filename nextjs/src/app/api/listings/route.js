@@ -33,7 +33,7 @@ export async function GET(request) {
     try {
       const { data, error } = await authClient
         .from('listings')
-        .select('id, multiplier, status, created_at, expires_at')
+        .select('id, multiplier, status, created_at, expires_at, quantity')
         .eq('library_card_id', library_card_id)
         .eq('user_id', user.id)
         .maybeSingle()
@@ -46,7 +46,7 @@ export async function GET(request) {
         const authClient2 = await createAuthClient()
         const { data } = await authClient2
           .from('listings')
-          .select('id, multiplier, status, created_at')
+          .select('id, multiplier, status, created_at, quantity')
           .eq('library_card_id', library_card_id)
           .eq('user_id', user.id)
           .maybeSingle()
@@ -74,7 +74,7 @@ export async function GET(request) {
     let q = sc
       .from('listings')
       .select(`
-        id, user_id, multiplier, status, created_at, expires_at,
+        id, user_id, multiplier, status, created_at, expires_at, quantity,
         library_cards!inner(
           id, scryfall_id, foil, condition, quantity,
           card_index!inner(
@@ -123,7 +123,7 @@ export async function GET(request) {
     if (scryfallIds.length > 0) {
       const { data: sellerRows } = await sc
         .from('listings')
-        .select('user_id, library_cards!inner(scryfall_id)')
+        .select('user_id, quantity, library_cards!inner(scryfall_id)')
         .eq('status', 'active')
         .gt('expires_at', new Date().toISOString())
         .in('library_cards.scryfall_id', scryfallIds)
@@ -172,7 +172,7 @@ export async function POST(request) {
   const topDuration = body.duration_hours
   const items = body.items
     ? body.items.map(i => ({ ...i, duration_hours: i.duration_hours ?? topDuration }))
-    : [{ library_card_id: body.library_card_id, multiplier: body.multiplier, duration_hours: topDuration }]
+    : [{ library_card_id: body.library_card_id, multiplier: body.multiplier, duration_hours: topDuration, quantity: body.quantity }]
 
   for (const item of items) {
     if (!item.library_card_id) {
@@ -191,13 +191,22 @@ export async function POST(request) {
     if (dur > MAX_DURATION_HOURS) {
       return NextResponse.json({ error: 'Maximum listing duration is 24 hours' }, { status: 400 })
     }
+    // Validate quantity: integer ≥ 1 (default 1)
+    const qty = item.quantity !== undefined ? Number(item.quantity) : 1
+    if (!Number.isInteger(qty) || qty < 1) {
+      return NextResponse.json(
+        { error: 'quantity must be a positive integer' },
+        { status: 400 }
+      )
+    }
+    item._quantity = qty
   }
 
-  // Verify all library cards belong to this user
+  // Verify all library cards belong to this user AND fetch owned quantities
   const libraryCardIds = items.map(i => i.library_card_id)
   const { data: ownedCards, error: ownErr } = await authClient
     .from('library_cards')
-    .select('id')
+    .select('id, quantity')
     .in('id', libraryCardIds)
     .eq('user_id', user.id)
 
@@ -205,10 +214,21 @@ export async function POST(request) {
     return NextResponse.json({ error: 'Failed to verify ownership' }, { status: 500 })
   }
 
-  const ownedIds = new Set((ownedCards || []).map(c => c.id))
-  const unowned = libraryCardIds.filter(id => !ownedIds.has(id))
+  const ownedMap = new Map((ownedCards || []).map(c => [c.id, c.quantity]))
+  const unowned = libraryCardIds.filter(id => !ownedMap.has(id))
   if (unowned.length > 0) {
     return NextResponse.json({ error: 'One or more cards not found in your library' }, { status: 403 })
+  }
+
+  // Validate each item's quantity against owned quantity
+  for (const item of items) {
+    const ownedQty = ownedMap.get(item.library_card_id)
+    if (item._quantity > ownedQty) {
+      return NextResponse.json(
+        { error: `Cannot list ${item._quantity} copies; you only own ${ownedQty} of this card`, library_card_id: item.library_card_id },
+        { status: 400 }
+      )
+    }
   }
 
   // Photo gate — every card being listed must have a photo
@@ -232,6 +252,7 @@ export async function POST(request) {
     user_id: user.id,
     library_card_id: item.library_card_id,
     multiplier: Number(item.multiplier),
+    quantity: item._quantity,
     status: 'active',
     expires_at: new Date(now + Number(item.duration_hours) * 3600 * 1000).toISOString(),
   }))

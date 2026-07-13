@@ -55,7 +55,7 @@ export async function GET(request, { params }) {
       const { data: listingData, error: listErr } = await sc
         .from('listings')
         .select(`
-          id, multiplier, status, created_at, expires_at,
+          id, multiplier, status, created_at, expires_at, quantity,
           library_cards!inner(
             id, scryfall_id, foil, condition, quantity,
             card_index!inner(

@@ -391,6 +391,11 @@ export default function BazaarDetailModal({ listing, onClose, onSelectListing })
                               {foilBadge.label}
                             </span>
                           )}
+                          {s.quantity > 1 && (
+                            <span className="text-[10px] text-gray-500 dark:text-gray-400 flex-shrink-0">
+                              {s.quantity}×
+                            </span>
+                          )}
                         </div>
                         <div className="flex items-center gap-2 flex-shrink-0">
                           <div className="text-right">

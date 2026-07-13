@@ -114,6 +114,8 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
   const [listMultiplier, setListMultiplier] = useState(2.5)
   const [listDuration, setListDuration] = useState(24)
   const [listing, setListing] = useState(false)
+  // Per-card quantities for bulk listing: { [library_card_id]: qty }
+  const [listQuantities, setListQuantities] = useState({})
   // Claim sale fields
   const [csTitle, setCsTitle] = useState('')
   const [csDescription, setCsDescription] = useState('')
@@ -442,6 +444,8 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
           setShowListPicker(true)
           return
         }
+        const quantities = {}
+        ids.forEach(id => { quantities[id] = listQuantities[id] || 1 })
         const res = await fetch('/api/claim-sales', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -452,6 +456,7 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
             duration_hours: listDuration,
             delivery_option: csDelivery,
             card_ids: ids,
+            quantities,
           }),
         })
         if (!res.ok) {
@@ -470,6 +475,7 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
           library_card_id: id,
           multiplier: listMultiplier,
           duration_hours: listDuration,
+          quantity: listQuantities[id] || 1,
         }))
         const res = await fetch('/api/listings', {
           method: 'POST',
@@ -489,6 +495,7 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
       }
       clearSelection()
       setListMode(null)
+      setListQuantities({})
       setCsTitle('')
       setCsDescription('')
       setCsSetCode('')
@@ -501,6 +508,7 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
   }
 
   const selectedCount = selectedIds.size
+  const selectedCards = cards.filter(c => selectedIds.has(c.id))
   const activeChips = buildFilterChips(advFilters, binders, [])
   const filterActive = hasActiveFilters(advFilters)
   const activeFilterCount = activeChips.length
@@ -883,7 +891,7 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
                 </div>
 
                 <p className="text-xs text-gray-600 dark:text-gray-500 mb-1.5 font-medium">Duration (max 24h)</p>
-                <div className="flex gap-2 mb-6">
+                <div className="flex gap-2 mb-4">
                   {[1, 3, 6, 12, 24].map(h => (
                     <button
                       key={h}
@@ -896,6 +904,30 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
                     >
                       {h}h
                     </button>
+                  ))}
+                </div>
+
+                {/* Per-card quantities */}
+                <div className="mb-4 max-h-40 overflow-y-auto">
+                  <p className="text-xs text-gray-600 dark:text-gray-500 mb-1.5 font-medium">Quantities</p>
+                  {selectedCards.map(c => (
+                    <div key={c.id} className="flex items-center gap-2 py-1">
+                      <span className="text-xs text-gray-600 dark:text-gray-400 flex-1 truncate">
+                        {c.card_index?.name || 'Card'}{(c.foil && c.foil !== 'normal') ? ` (${c.foil})` : ''}
+                      </span>
+                      <input
+                        type="number"
+                        min="1"
+                        max={c.quantity || 1}
+                        defaultValue="1"
+                        onChange={(e) => {
+                          const v = Math.max(1, Math.min(c.quantity || 1, parseInt(e.target.value) || 1))
+                          setListQuantities(prev => ({ ...prev, [c.id]: v }))
+                        }}
+                        className="w-14 text-center bg-white dark:bg-dbb-secondary border border-gray-200 dark:border-dbb-tertiary/50 rounded px-1 py-0.5 text-xs focus:border-dbb-accent focus:outline-none"
+                      />
+                      <span className="text-[10px] text-gray-500">of {c.quantity || 1}</span>
+                    </div>
                   ))}
                 </div>
 

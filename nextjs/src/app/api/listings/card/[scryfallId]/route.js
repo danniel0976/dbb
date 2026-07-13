@@ -27,7 +27,7 @@ export async function GET(request, { params }) {
     let q = sc
       .from('listings')
       .select(`
-        id, user_id, multiplier, status, created_at, expires_at,
+        id, user_id, multiplier, status, created_at, expires_at, quantity,
         library_cards!inner(
           id, scryfall_id, foil, condition, quantity,
           card_index!inner(

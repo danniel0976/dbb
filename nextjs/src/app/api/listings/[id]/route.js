@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
+import { createClient as createServiceClient } from '@supabase/supabase-js'
 
 export const runtime = 'nodejs'
 
@@ -67,6 +68,43 @@ export async function PATCH(request, { params }) {
       return NextResponse.json({ error: 'multiplier must be 2.5, 2.8 or 3.0' }, { status: 400 })
     }
     updates.multiplier = Number(body.multiplier)
+  }
+
+  if (body.quantity !== undefined) {
+    const qty = Number(body.quantity)
+    if (!Number.isInteger(qty) || qty < 1) {
+      return NextResponse.json(
+        { error: 'quantity must be a positive integer' },
+        { status: 400 }
+      )
+    }
+    // Validate against owned library_cards.quantity
+    const { data: listing } = await authClient
+      .from('listings')
+      .select('library_card_id')
+      .eq('id', id)
+      .eq('user_id', user.id)
+      .maybeSingle()
+    if (!listing) {
+      return NextResponse.json({ error: 'Listing not found' }, { status: 404 })
+    }
+    const sc = createServiceClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+    )
+    const { data: card } = await sc
+      .from('library_cards')
+      .select('quantity')
+      .eq('id', listing.library_card_id)
+      .maybeSingle()
+    const ownedQty = card?.quantity ?? 0
+    if (qty > ownedQty) {
+      return NextResponse.json(
+        { error: `Cannot list ${qty} copies; you only own ${ownedQty} of this card` },
+        { status: 400 }
+      )
+    }
+    updates.quantity = qty
   }
 
   if (body.duration_hours !== undefined) {

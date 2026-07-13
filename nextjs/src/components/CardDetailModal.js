@@ -170,7 +170,10 @@ function ClaimSaleForm({ libraryRow, onCancel, onRequirePhoto }) {
   const [setCode, setSetCode] = useState(libraryRow?.card_index?.set_code || '')
   const [durationHours, setDurationHours] = useState(24)
   const [deliveryOption, setDeliveryOption] = useState('both')
+  const [csQuantity, setCsQuantity] = useState(1)
   const [submitting, setSubmitting] = useState(false)
+
+  const ownedQty = libraryRow?.quantity || 1
 
   const handleCreate = async () => {
     if (!title.trim()) {
@@ -189,6 +192,7 @@ function ClaimSaleForm({ libraryRow, onCancel, onRequirePhoto }) {
           duration_hours: durationHours,
           delivery_option: deliveryOption,
           card_ids: [libraryRow.id],
+          quantities: { [libraryRow.id]: csQuantity },
         }),
       })
       if (!res.ok) {
@@ -286,6 +290,39 @@ function ClaimSaleForm({ libraryRow, onCancel, onRequirePhoto }) {
         </div>
       </div>
 
+      {/* Quantity picker for claim sale */}
+      {ownedQty > 1 && (
+        <div>
+          <p className="text-xs text-gray-600 mb-1.5">Quantity (max {ownedQty})</p>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setCsQuantity(q => Math.max(1, q - 1))}
+              className="p-1 rounded bg-gray-100 dark:bg-dbb-secondary hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+            >
+              <Minus className="w-4 h-4" />
+            </button>
+            <input
+              type="number"
+              min="1"
+              max={ownedQty}
+              value={csQuantity}
+              onChange={(e) => {
+                const v = parseInt(e.target.value) || 1
+                setCsQuantity(Math.max(1, Math.min(ownedQty, v)))
+              }}
+              className="w-16 text-center bg-white dark:bg-dbb-secondary border border-gray-200 dark:border-gray-700 rounded px-2 py-1 text-sm focus:border-dbb-accent focus:outline-none"
+            />
+            <button
+              onClick={() => setCsQuantity(q => Math.min(ownedQty, q + 1))}
+              className="p-1 rounded bg-gray-100 dark:bg-dbb-secondary hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+            </button>
+            <span className="text-xs text-gray-500 ml-1">of {ownedQty} owned</span>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center gap-2">
         <button
           onClick={handleCreate}
@@ -314,9 +351,12 @@ function ListingSection({ libraryRow, hasPhoto, onRequirePhoto }) {
   const [isRelist, setIsRelist] = useState(false)
   const [multiplier, setMultiplier] = useState(2.5)
   const [durationHours, setDurationHours] = useState(24)
+  const [listQuantity, setListQuantity] = useState(1) // listing quantity (1..owned)
   const [pricePreview, setPricePreview] = useState(null)
   const [submitting, setSubmitting] = useState(false)
   const [photoRequired, setPhotoRequired] = useState(false)
+
+  const ownedQty = libraryRow.quantity || 1
 
   // Load listing status (including expired ones owned by this user)
   useEffect(() => {
@@ -325,6 +365,11 @@ function ListingSection({ libraryRow, hasPhoto, onRequirePhoto }) {
       .then(data => setListing(data.listing || null))
       .catch(() => setListing(null))
   }, [libraryRow.id])
+
+  // Reset listing quantity to 1 when opening a new listing picker
+  useEffect(() => {
+    if (showPicker) setListQuantity(1)
+  }, [showPicker])
 
   // Fetch price preview when either the new-listing or relist picker is open.
   // Relisting uses isRelist without setting showPicker, so checking only
@@ -356,7 +401,7 @@ function ListingSection({ libraryRow, hasPhoto, onRequirePhoto }) {
       const res = await fetch('/api/listings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ library_card_id: libraryRow.id, multiplier, duration_hours: durationHours }),
+        body: JSON.stringify({ library_card_id: libraryRow.id, multiplier, duration_hours: durationHours, quantity: listQuantity }),
       })
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
@@ -548,6 +593,39 @@ function ListingSection({ libraryRow, hasPhoto, onRequirePhoto }) {
             </div>
           </div>
 
+          {/* Quantity picker (1..owned) */}
+          {ownedQty > 1 && (
+            <div>
+              <p className="text-xs text-gray-600 mb-1.5">Quantity (max {ownedQty})</p>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setListQuantity(q => Math.max(1, q - 1))}
+                  className="p-1 rounded bg-gray-100 dark:bg-dbb-secondary hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                >
+                  <Minus className="w-4 h-4" />
+                </button>
+                <input
+                  type="number"
+                  min="1"
+                  max={ownedQty}
+                  value={listQuantity}
+                  onChange={(e) => {
+                    const v = parseInt(e.target.value) || 1
+                    setListQuantity(Math.max(1, Math.min(ownedQty, v)))
+                  }}
+                  className="w-16 text-center bg-white dark:bg-dbb-secondary border border-gray-200 dark:border-gray-700 rounded px-2 py-1 text-sm focus:border-dbb-accent focus:outline-none"
+                />
+                <button
+                  onClick={() => setListQuantity(q => Math.min(ownedQty, q + 1))}
+                  className="p-1 rounded bg-gray-100 dark:bg-dbb-secondary hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
+                <span className="text-xs text-gray-500 ml-1">of {ownedQty} owned</span>
+              </div>
+            </div>
+          )}
+
           {/* Duration picker */}
           <div>
             <p className="text-xs text-gray-600 mb-1.5">Duration (max 24h)</p>
@@ -589,6 +667,7 @@ function ListingSection({ libraryRow, hasPhoto, onRequirePhoto }) {
   }
 
   // Expired listing state
+  const expiredQty = listing.quantity || 1
   if (isExpired) {
     return (
       <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
@@ -597,12 +676,15 @@ function ListingSection({ libraryRow, hasPhoto, onRequirePhoto }) {
             <Tag className="w-3 h-3" /> Listing Expired
           </span>
           <button
-            onClick={() => { setIsRelist(true); setMultiplier(Number(listing.multiplier) || 2.5) }}
+            onClick={() => { setIsRelist(true); setMultiplier(Number(listing.multiplier) || 2.5); setListQuantity(expiredQty) }}
             className="btn btn-outline btn-sm"
           >
             Relist
           </button>
         </div>
+        {expiredQty > 1 && (
+          <p className="text-xs text-gray-500 mt-1">{expiredQty} copies</p>
+        )}
       </div>
     )
   }
@@ -610,6 +692,7 @@ function ListingSection({ libraryRow, hasPhoto, onRequirePhoto }) {
   // Active listing state
   const listedAgo = listing.created_at ? relativeTime(listing.created_at, false) : null
   const expiresIn = listing.expires_at ? relativeTime(listing.expires_at, true) : null
+  const listedQty = listing.quantity || 1
 
   return (
     <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
@@ -618,7 +701,7 @@ function ListingSection({ libraryRow, hasPhoto, onRequirePhoto }) {
           <span className="flex items-center gap-1 text-xs font-medium text-green-400 bg-green-500/10 border border-green-500/30 rounded px-2 py-0.5">
             <Tag className="w-3 h-3" /> Listed on Bazaar
           </span>
-          <span className="text-xs text-gray-500">×{listing.multiplier}</span>
+          <span className="text-xs text-gray-500">×{listing.multiplier}{listedQty > 1 ? ` · ${listedQty} copies` : ''}</span>
         </div>
         <button
           onClick={handleUnlist}

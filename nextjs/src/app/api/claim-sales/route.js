@@ -166,10 +166,30 @@ export async function POST(request) {
 
   const cardIds = body.card_ids
 
-  // Verify all cards belong to this user
+  // Optional per-card quantities: { card_id: qty } map or array aligned with card_ids
+  let quantityMap = {}
+  if (body.quantities && typeof body.quantities === 'object' && !Array.isArray(body.quantities)) {
+    quantityMap = body.quantities
+  } else if (Array.isArray(body.quantities)) {
+    cardIds.forEach((id, i) => { quantityMap[id] = body.quantities[i] ?? 1 })
+  }
+
+  // Validate all quantities are positive integers
+  for (const id of cardIds) {
+    const qty = quantityMap[id] !== undefined ? Number(quantityMap[id]) : 1
+    if (!Number.isInteger(qty) || qty < 1) {
+      return NextResponse.json(
+        { error: 'quantities must be positive integers', library_card_id: id },
+        { status: 400 }
+      )
+    }
+    quantityMap[id] = qty
+  }
+
+  // Verify all cards belong to this user AND get owned quantities
   const { data: ownedCards, error: ownErr } = await authClient
     .from('library_cards')
-    .select('id')
+    .select('id, quantity')
     .in('id', cardIds)
     .eq('user_id', user.id)
 
@@ -177,10 +197,21 @@ export async function POST(request) {
     return NextResponse.json({ error: 'Failed to verify card ownership' }, { status: 500 })
   }
 
-  const ownedIds = new Set((ownedCards || []).map(c => c.id))
-  const unowned = cardIds.filter(id => !ownedIds.has(id))
+  const ownedMap = new Map((ownedCards || []).map(c => [c.id, c.quantity]))
+  const unowned = cardIds.filter(id => !ownedMap.has(id))
   if (unowned.length > 0) {
     return NextResponse.json({ error: 'One or more cards not found in your library' }, { status: 403 })
+  }
+
+  // Validate each card's requested quantity against owned quantity
+  for (const id of cardIds) {
+    const ownedQty = ownedMap.get(id)
+    if (quantityMap[id] > ownedQty) {
+      return NextResponse.json(
+        { error: `Cannot list ${quantityMap[id]} copies; you only own ${ownedQty} of this card`, library_card_id: id },
+        { status: 400 }
+      )
+    }
   }
 
   // Photo gate — every card must have a card_photos row
@@ -237,6 +268,7 @@ export async function POST(request) {
     user_id: user.id,
     library_card_id: cardId,
     multiplier: DEFAULT_MULTIPLIER,
+    quantity: quantityMap[cardId] || 1,
     status: 'active',
     expires_at: expiresAt,
     claim_sale_id: claimSale.id,
