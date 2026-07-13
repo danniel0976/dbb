@@ -24,17 +24,24 @@ export async function GET(request, { params }) {
   const sc = makeServiceClient()
 
   const runQuery = async (withExpiry) => {
-    let q = sc
-      .from('listings')
-      .select(`
-        id, user_id, multiplier, status, created_at, expires_at, quantity,
+    const selectCols = withExpiry
+      ? `id, user_id, multiplier, status, created_at, expires_at, quantity,
         library_cards!inner(
           id, scryfall_id, foil, condition, quantity,
           card_index!inner(
             name, set_code, set_name, collector_number, rarity, type_line, colors, cmc, mana_cost
           )
-        )
-      `)
+        )`
+      : `id, user_id, multiplier, status, created_at,
+        library_cards!inner(
+          id, scryfall_id, foil, condition, quantity,
+          card_index!inner(
+            name, set_code, set_name, collector_number, rarity, type_line, colors, cmc, mana_cost
+          )
+        )`
+    let q = sc
+      .from('listings')
+      .select(selectCols)
       .eq('status', 'active')
       .eq('library_cards.scryfall_id', scryfallId)
       .order('created_at', { ascending: true })

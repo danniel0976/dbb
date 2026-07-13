@@ -40,16 +40,20 @@ export async function GET(request) {
 
       if (error) throw error
       return NextResponse.json({ listing: data || null })
-    } catch {
-      // Fallback without expires_at if column doesn't exist yet
+    } catch (err) {
+      // Fallback without expires_at AND quantity if either column doesn't exist yet
+      if (err?.code !== UNDEF_COLUMN) {
+        return NextResponse.json({ listing: null })
+      }
       try {
         const authClient2 = await createAuthClient()
-        const { data } = await authClient2
+        const { data, error: err2 } = await authClient2
           .from('listings')
-          .select('id, multiplier, status, created_at, quantity')
+          .select('id, multiplier, status, created_at')
           .eq('library_card_id', library_card_id)
           .eq('user_id', user.id)
           .maybeSingle()
+        if (err2) throw err2
         return NextResponse.json({ listing: data || null })
       } catch {
         return NextResponse.json({ listing: null })
@@ -71,17 +75,24 @@ export async function GET(request) {
   const sc = makeServiceClient()
 
   const buildQuery = (withExpiry) => {
-    let q = sc
-      .from('listings')
-      .select(`
-        id, user_id, multiplier, status, created_at, expires_at, quantity,
+    const selectCols = withExpiry
+      ? `id, user_id, multiplier, status, created_at, expires_at, quantity,
         library_cards!inner(
           id, scryfall_id, foil, condition, quantity,
           card_index!inner(
             name, set_code, set_name, collector_number, rarity, type_line, colors, cmc
           )
-        )
-      `, { count: 'exact' })
+        )`
+      : `id, user_id, multiplier, status, created_at,
+        library_cards!inner(
+          id, scryfall_id, foil, condition, quantity,
+          card_index!inner(
+            name, set_code, set_name, collector_number, rarity, type_line, colors, cmc
+          )
+        )`
+    let q = sc
+      .from('listings')
+      .select(selectCols, { count: 'exact' })
       .eq('status', 'active')
 
     if (withExpiry) q = q.gt('expires_at', new Date().toISOString())
@@ -123,7 +134,7 @@ export async function GET(request) {
     if (scryfallIds.length > 0) {
       const { data: sellerRows } = await sc
         .from('listings')
-        .select('user_id, quantity, library_cards!inner(scryfall_id)')
+        .select('user_id, library_cards!inner(scryfall_id)')
         .eq('status', 'active')
         .gt('expires_at', new Date().toISOString())
         .in('library_cards.scryfall_id', scryfallIds)
@@ -257,17 +268,19 @@ export async function POST(request) {
     expires_at: new Date(now + Number(item.duration_hours) * 3600 * 1000).toISOString(),
   }))
 
-  // Try with expires_at; fall back if column not yet migrated
+  // Try with expires_at + quantity; fall back if columns not yet migrated
   let result = await authClient
     .from('listings')
     .upsert(rows, { onConflict: 'library_card_id' })
     .select()
 
   if (result.error?.code === UNDEF_COLUMN) {
-    const rowsNoExpiry = rows.map(({ expires_at: _, ...r }) => r)
+    // Strip columns that may not exist yet (expires_at from migration-009,
+    // quantity from migration-014)
+    const rowsFallback = rows.map(({ expires_at: _e, quantity: _q, ...r }) => r)
     result = await authClient
       .from('listings')
-      .upsert(rowsNoExpiry, { onConflict: 'library_card_id' })
+      .upsert(rowsFallback, { onConflict: 'library_card_id' })
       .select()
   }
 

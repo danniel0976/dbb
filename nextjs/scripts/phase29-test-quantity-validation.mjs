@@ -44,16 +44,16 @@ test('POST /api/listings source validates quantity as positive integer', () => {
   assert(src.includes('item._quantity > ownedQty'), 'Must reject oversell against owned quantity')
 })
 
-// Test 3: GET /api/listings includes quantity in select
-test('GET /api/listings includes quantity in bazaar browse select', () => {
+// Test 3: GET /api/listings includes quantity in primary select (withExpiry=true)
+test('GET /api/listings includes quantity in primary bazaar browse select', () => {
   const src = readSrc('nextjs/src/app/api/listings/route.js')
-  assert(src.includes('expires_at, quantity,'), 'Bazaar browse must select quantity')
+  assert(src.includes('expires_at, quantity,'), 'Bazaar browse primary select must include quantity')
 })
 
-// Test 4: GET /api/listings/card/[scryfallId] includes quantity
-test('GET /api/listings/card/[scryfallId] includes quantity', () => {
+// Test 4: GET /api/listings/card/[scryfallId] includes quantity in primary select
+test('GET /api/listings/card/[scryfallId] includes quantity in primary select', () => {
   const src = readSrc('nextjs/src/app/api/listings/card/[scryfallId]/route.js')
-  assert(src.includes('expires_at, quantity,'), 'Card listings must select quantity')
+  assert(src.includes('expires_at, quantity,'), 'Card listings primary select must include quantity')
 })
 
 // Test 5: PATCH /api/listings/[id] supports quantity with validation
@@ -118,6 +118,109 @@ test('BazaarCard tile shows seller_count and no seller display name', () => {
   const src = readSrc('nextjs/src/components/BazaarCard.js')
   assert(src.includes('seller_count'), 'Must show seller_count')
   assert(!src.includes('seller_name'), 'Must NOT show seller_name on tile')
+})
+
+// === Regression tests for verifier-found defects ===
+
+// Defect 1: checkOversell must fail CLOSED, not open
+
+test('REG-1a: checkOversell does NOT return ok:true on query error', () => {
+  const src = readSrc('nextjs/src/app/api/library/[id]/route.js')
+  assert(!src.includes('if (error) return { ok: true }'),
+    'Must NOT return ok:true on query error (fail-open bug)')
+  assert(!/catch\s*\{\s*return\s*\{\s*ok:\s*true\s*\}/.test(src),
+    'Must NOT return ok:true in catch block (fail-open bug)')
+})
+
+test('REG-1b: checkOversell returns 503 on database/network errors', () => {
+  const src = readSrc('nextjs/src/app/api/library/[id]/route.js')
+  assert(src.includes('status: 503'), 'Must return 503 on DB errors')
+  assert(src.includes('Oversell check failed'), 'Must have descriptive error message')
+})
+
+test('REG-1c: checkOversell handles UNDEF_COLUMN for pre-migration compatibility', () => {
+  const src = readSrc('nextjs/src/app/api/library/[id]/route.js')
+  assert(src.includes('error.code === UNDEF_COLUMN'), 'Must check for UNDEF_COLUMN error code')
+  assert(src.includes("select('id, status, expires_at')"),
+    'Must have fallback select without quantity column')
+})
+
+test('REG-1d: checkOversell uses guard.status in PATCH response', () => {
+  const src = readSrc('nextjs/src/app/api/library/[id]/route.js')
+  assert(src.includes('guard.status || 409'),
+    'PATCH must use guard.status (503 or 409) from checkOversell')
+})
+
+// Defect 2: UNDEF_COLUMN fallback selects must NOT include quantity
+
+test('REG-2a: GET /api/listings single-card fallback strips quantity from select', () => {
+  const src = readSrc('nextjs/src/app/api/listings/route.js')
+  const fallbackMatch = src.match(/Fallback without[\s\S]*?maybeSingle/)
+  assert(fallbackMatch, 'Must have fallback select block')
+  assert(fallbackMatch[0].includes("'id, multiplier, status, created_at'"),
+    'Fallback select must NOT include quantity (only id, multiplier, status, created_at)')
+})
+
+test('REG-2b: GET /api/listings bazaar browse fallback strips listings.quantity from select', () => {
+  const src = readSrc('nextjs/src/app/api/listings/route.js')
+  const falseBranchMatch = src.match(/withExpiry\s*\?\s*[\s\S]*?:\s*`([^`]+)`/)
+  assert(falseBranchMatch, 'buildQuery must have ternary select for withExpiry true/false')
+  // The false branch must NOT have listings-level 'expires_at, quantity,' but SHOULD
+  // still have library_cards.quantity (which is from the original schema, not migration-014)
+  assert(!falseBranchMatch[1].includes('expires_at, quantity,'),
+    'buildQuery(false) select must NOT include listings.quantity (expires_at, quantity,)')
+  assert(falseBranchMatch[1].includes('foil, condition, quantity'),
+    'buildQuery(false) select must still include library_cards.quantity (original schema)')
+})
+
+test('REG-2c: GET /api/listings seller-count sub-query does NOT select quantity', () => {
+  const src = readSrc('nextjs/src/app/api/listings/route.js')
+  const sellerQMatch = src.match(/sellerRows[\s\S]*?\.select\('([^']+)'\)/)
+  assert(sellerQMatch, 'Must find seller-count sub-query select')
+  assert(!sellerQMatch[1].includes('quantity'),
+    'Seller-count sub-query must NOT select quantity (not needed, avoids UNDEF_COLUMN)')
+})
+
+test('REG-2d: POST /api/listings upsert fallback strips both expires_at AND quantity', () => {
+  const src = readSrc('nextjs/src/app/api/listings/route.js')
+  assert(src.includes('expires_at: _e, quantity: _q'),
+    'Upsert fallback must strip both expires_at AND quantity from rows')
+})
+
+test('REG-2e: GET /api/listings/card/[scryfallId] fallback strips listings.quantity from select', () => {
+  const src = readSrc('nextjs/src/app/api/listings/card/[scryfallId]/route.js')
+  const falseBranchMatch = src.match(/withExpiry\s*\?\s*[\s\S]*?:\s*`([^`]+)`/)
+  assert(falseBranchMatch, 'runQuery must have ternary select for withExpiry true/false')
+  assert(!falseBranchMatch[1].includes('expires_at, quantity,'),
+    'runQuery(false) select must NOT include listings.quantity (expires_at, quantity,)')
+  assert(falseBranchMatch[1].includes('foil, condition, quantity'),
+    'runQuery(false) select must still include library_cards.quantity (original schema)')
+})
+
+test('REG-2f: PATCH /api/listings/[id] fallback strips both expires_at AND quantity', () => {
+  const src = readSrc('nextjs/src/app/api/listings/[id]/route.js')
+  assert(src.includes('expires_at: _exp, quantity: _qty'),
+    'PATCH fallback must strip both expires_at AND quantity from updates')
+})
+
+test('REG-2g: POST /api/claim-sales listing insert fallback strips quantity', () => {
+  const src = readSrc('nextjs/src/app/api/claim-sales/route.js')
+  assert(src.includes('claim_sale_id: _cs, quantity: _q'),
+    'Claim sale listing insert fallback must strip both claim_sale_id AND quantity')
+})
+
+test('REG-2h: GET /api/claim-sales/[id] has UNDEF_COLUMN fallback for listing select', () => {
+  const src = readSrc('nextjs/src/app/api/claim-sales/[id]/route.js')
+  assert(src.includes('listErr?.code === UNDEF_COLUMN'),
+    'Must check for UNDEF_COLUMN on listing select error')
+  // The fallback select must not include listings-level quantity
+  const fbMatch = src.match(/fbData[\s\S]*?\.select\(`([^`]+)`\)/)
+  if (fbMatch) {
+    assert(!fbMatch[1].includes('expires_at, quantity,'),
+      'Fallback listing select must NOT include listings.quantity (expires_at, quantity,)')
+    assert(fbMatch[1].includes('foil, condition, quantity'),
+      'Fallback listing select must still include library_cards.quantity (original schema)')
+  }
 })
 
 // Run all tests

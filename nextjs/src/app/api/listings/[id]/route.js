@@ -134,12 +134,12 @@ export async function PATCH(request, { params }) {
     .select()
     .maybeSingle()
 
-  // Defensive: if expires_at column not yet migrated, retry without it
+  // Defensive: if expires_at or quantity column not yet migrated, retry without them
   if (result.error?.code === UNDEF_COLUMN) {
-    const { expires_at: _exp, ...updatesNoExpiry } = updates
+    const { expires_at: _exp, quantity: _qty, ...updatesNoMigration } = updates
     result = await authClient
       .from('listings')
-      .update(updatesNoExpiry)
+      .update(updatesNoMigration)
       .eq('id', id)
       .eq('user_id', user.id)
       .select()

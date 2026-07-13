@@ -282,8 +282,8 @@ export async function POST(request) {
       .select()
 
     if (result.error?.code === UNDEF_COLUMN) {
-      // claim_sale_id column doesn't exist — insert without it
-      const rowsNoClaim = listingRows.map(({ claim_sale_id: _, ...r }) => r)
+      // claim_sale_id and/or quantity columns don't exist — insert without them
+      const rowsNoClaim = listingRows.map(({ claim_sale_id: _cs, quantity: _q, ...r }) => r)
       result = await sc
         .from('listings')
         .upsert(rowsNoClaim, { onConflict: 'library_card_id' })

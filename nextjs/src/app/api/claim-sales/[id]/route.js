@@ -65,7 +65,22 @@ export async function GET(request, { params }) {
         `)
         .eq('claim_sale_id', id)
 
-      if (!listErr && listingData) {
+      if (listErr?.code === UNDEF_COLUMN) {
+        // Pre-migration fallback: strip expires_at + quantity from listings select
+        const { data: fbData, error: fbErr } = await sc
+          .from('listings')
+        .select(`
+          id, multiplier, status, created_at,
+          library_cards!inner(
+            id, scryfall_id, foil, condition, quantity,
+            card_index!inner(
+              name, set_code, set_name, collector_number, rarity, type_line, colors, cmc
+            )
+          )
+        `)
+        .eq('claim_sale_id', id)
+        if (!fbErr && fbData) listings = fbData
+      } else if (!listErr && listingData) {
         listings = listingData
       }
     } catch {
