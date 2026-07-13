@@ -134,16 +134,28 @@ export async function PATCH(request, { params }) {
     .select()
     .maybeSingle()
 
-  // Defensive: if expires_at or quantity column not yet migrated, retry without them
+  // Defensive: migration-014 may be pending while expires_at already exists.
   if (result.error?.code === UNDEF_COLUMN) {
-    const { expires_at: _exp, quantity: _qty, ...updatesNoMigration } = updates
+    const { quantity: _qty, ...updatesNoQuantity } = updates
     result = await authClient
       .from('listings')
-      .update(updatesNoMigration)
+      .update(updatesNoQuantity)
       .eq('id', id)
       .eq('user_id', user.id)
       .select()
       .maybeSingle()
+
+    if (result.error?.code === UNDEF_COLUMN) {
+      // Pre-migration-009 fallback: expires_at is also unavailable.
+      const { expires_at: _exp, ...updatesLegacy } = updatesNoQuantity
+      result = await authClient
+        .from('listings')
+        .update(updatesLegacy)
+        .eq('id', id)
+        .eq('user_id', user.id)
+        .select()
+        .maybeSingle()
+    }
   }
 
   if (result.error) return NextResponse.json({ error: result.error.message }, { status: 500 })

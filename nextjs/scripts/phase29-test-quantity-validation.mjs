@@ -181,10 +181,17 @@ test('REG-2c: GET /api/listings seller-count sub-query does NOT select quantity'
     'Seller-count sub-query must NOT select quantity (not needed, avoids UNDEF_COLUMN)')
 })
 
-test('REG-2d: POST /api/listings upsert fallback strips both expires_at AND quantity', () => {
+test('REG-2d: POST /api/listings upsert fallback is staged: strips quantity first, expires_at only on second 42703', () => {
   const src = readSrc('nextjs/src/app/api/listings/route.js')
-  assert(src.includes('expires_at: _e, quantity: _q'),
-    'Upsert fallback must strip both expires_at AND quantity from rows')
+  // First fallback strips quantity only (preserves expires_at)
+  assert(src.includes('quantity: _q, ...r'),
+    'First upsert fallback must strip quantity only (not expires_at)')
+  // Second fallback strips expires_at from the already-quantity-stripped rows
+  assert(src.includes('expires_at: _e, ...r'),
+    'Second upsert fallback must strip expires_at (pre-migration-009 path)')
+  // Regression guard: must NOT strip both in a single destructure
+  assert(!src.includes('expires_at: _e, quantity: _q'),
+    'Must NOT strip both expires_at AND quantity in a single fallback (regression guard)')
 })
 
 test('REG-2e: GET /api/listings/card/[scryfallId] fallback strips listings.quantity from select', () => {
@@ -197,16 +204,30 @@ test('REG-2e: GET /api/listings/card/[scryfallId] fallback strips listings.quant
     'runQuery(false) select must still include library_cards.quantity (original schema)')
 })
 
-test('REG-2f: PATCH /api/listings/[id] fallback strips both expires_at AND quantity', () => {
+test('REG-2f: PATCH /api/listings/[id] fallback is staged: strips quantity first, expires_at only on second 42703', () => {
   const src = readSrc('nextjs/src/app/api/listings/[id]/route.js')
-  assert(src.includes('expires_at: _exp, quantity: _qty'),
-    'PATCH fallback must strip both expires_at AND quantity from updates')
+  // First fallback strips quantity only (preserves expires_at)
+  assert(src.includes('quantity: _qty'),
+    'First PATCH fallback must strip quantity only (not expires_at)')
+  // Second fallback strips expires_at from the already-quantity-stripped object
+  assert(src.includes('expires_at: _exp'),
+    'Second PATCH fallback must strip expires_at (pre-migration-009 path)')
+  // Regression guard: must NOT strip both in a single destructure
+  assert(!src.includes('expires_at: _exp, quantity: _qty'),
+    'Must NOT strip both expires_at AND quantity in a single fallback (regression guard)')
 })
 
-test('REG-2g: POST /api/claim-sales listing insert fallback strips quantity', () => {
+test('REG-2g: POST /api/claim-sales listing insert fallback is staged: strips quantity first, claim_sale_id only on second 42703', () => {
   const src = readSrc('nextjs/src/app/api/claim-sales/route.js')
-  assert(src.includes('claim_sale_id: _cs, quantity: _q'),
-    'Claim sale listing insert fallback must strip both claim_sale_id AND quantity')
+  // First fallback strips quantity only (preserves claim_sale_id)
+  assert(src.includes('quantity: _q, ...r'),
+    'First claim-sale fallback must strip quantity only (not claim_sale_id)')
+  // Second fallback strips claim_sale_id from the already-quantity-stripped rows
+  assert(src.includes('claim_sale_id: _cs, ...r'),
+    'Second claim-sale fallback must strip claim_sale_id (pre-migration-013 path)')
+  // Regression guard: must NOT strip both in a single destructure
+  assert(!src.includes('claim_sale_id: _cs, quantity: _q'),
+    'Must NOT strip both claim_sale_id AND quantity in a single fallback (regression guard)')
 })
 
 test('REG-2h: GET /api/claim-sales/[id] has UNDEF_COLUMN fallback for listing select', () => {

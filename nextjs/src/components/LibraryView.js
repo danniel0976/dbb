@@ -919,7 +919,7 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
                         type="number"
                         min="1"
                         max={c.quantity || 1}
-                        defaultValue="1"
+                        value={listQuantities[c.id] ?? 1}
                         onChange={(e) => {
                           const v = Math.max(1, Math.min(c.quantity || 1, parseInt(e.target.value) || 1))
                           setListQuantities(prev => ({ ...prev, [c.id]: v }))

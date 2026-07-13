@@ -282,12 +282,22 @@ export async function POST(request) {
       .select()
 
     if (result.error?.code === UNDEF_COLUMN) {
-      // claim_sale_id and/or quantity columns don't exist — insert without them
-      const rowsNoClaim = listingRows.map(({ claim_sale_id: _cs, quantity: _q, ...r }) => r)
+      // migration-014 may be pending while claim_sale_id already exists.
+      // Preserve claim-sale linkage and retry without quantity first.
+      const rowsNoQuantity = listingRows.map(({ quantity: _q, ...r }) => r)
       result = await sc
         .from('listings')
-        .upsert(rowsNoClaim, { onConflict: 'library_card_id' })
+        .upsert(rowsNoQuantity, { onConflict: 'library_card_id' })
         .select()
+
+      if (result.error?.code === UNDEF_COLUMN) {
+        // Pre-migration-013 fallback: claim_sale_id is also unavailable.
+        const rowsLegacy = rowsNoQuantity.map(({ claim_sale_id: _cs, ...r }) => r)
+        result = await sc
+          .from('listings')
+          .upsert(rowsLegacy, { onConflict: 'library_card_id' })
+          .select()
+      }
     }
 
     if (result.error) throw result.error

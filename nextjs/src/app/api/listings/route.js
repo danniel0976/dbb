@@ -275,13 +275,22 @@ export async function POST(request) {
     .select()
 
   if (result.error?.code === UNDEF_COLUMN) {
-    // Strip columns that may not exist yet (expires_at from migration-009,
-    // quantity from migration-014)
-    const rowsFallback = rows.map(({ expires_at: _e, quantity: _q, ...r }) => r)
+    // migration-014 may be pending while expires_at already exists.
+    // Preserve expiry and retry without quantity first.
+    const rowsFallback = rows.map(({ quantity: _q, ...r }) => r)
     result = await authClient
       .from('listings')
       .upsert(rowsFallback, { onConflict: 'library_card_id' })
       .select()
+
+    if (result.error?.code === UNDEF_COLUMN) {
+      // Pre-migration-009 fallback: expires_at is also unavailable.
+      const rowsLegacy = rowsFallback.map(({ expires_at: _e, ...r }) => r)
+      result = await authClient
+        .from('listings')
+        .upsert(rowsLegacy, { onConflict: 'library_card_id' })
+        .select()
+    }
   }
 
   if (result.error) {

@@ -99,8 +99,16 @@ export async function PATCH(request, { params }) {
     return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 })
   }
 
-  // Oversell protection: if quantity is being reduced, check active listings
+  // Verify ownership before any service-role operations to prevent UUID info leak
   if (updates.quantity !== undefined) {
+    const { data: owned } = await supabase
+      .from('library_cards')
+      .select('id')
+      .eq('id', params.id)
+      .eq('user_id', user.id)
+      .maybeSingle()
+    if (!owned) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
     const sc = makeServiceClient()
     const guard = await checkOversell(sc, params.id, updates.quantity)
     if (!guard.ok) {
@@ -133,8 +141,31 @@ export async function DELETE(request, { params }) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  // Clean up card photo before deleting the card (storage object must be removed manually)
+  // Verify ownership before any service-role operations
+  const { data: owned } = await supabase
+    .from('library_cards')
+    .select('id')
+    .eq('id', params.id)
+    .eq('user_id', user.id)
+    .maybeSingle()
+  if (!owned) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+  // Block deletion when active listings exist
   const sc = makeServiceClient()
+  const { data: activeListings } = await sc
+    .from('listings')
+    .select('id')
+    .eq('library_card_id', params.id)
+    .eq('status', 'active')
+    .limit(1)
+  if (activeListings?.length > 0) {
+    return NextResponse.json(
+      { error: 'Cannot delete card with active listings. Remove the listing first.' },
+      { status: 409 }
+    )
+  }
+
+  // Clean up card photo before deleting the card (storage object must be removed manually)
   const { data: photo } = await sc
     .from('card_photos')
     .select('storage_path')

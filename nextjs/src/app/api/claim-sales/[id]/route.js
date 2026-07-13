@@ -5,6 +5,7 @@ import { createClient as createServiceClient } from '@supabase/supabase-js'
 export const runtime = 'nodejs'
 
 const UNDEF_TABLE = '42P01'
+const UNDEF_COLUMN = '42703'
 
 function makeServiceClient() {
   return createServiceClient(

@@ -510,7 +510,21 @@ export default function AddCardModal({ binders = [], onClose, onAdded }) {
 
       const newGroups = data.groups || []
       if (append) {
-        setGroups(prev => [...prev, ...newGroups])
+        setGroups(prev => {
+          const map = new Map(prev.map(g => [g.name, { ...g, editions: [...g.editions] }]))
+          for (const g of newGroups) {
+            if (map.has(g.name)) {
+              const existing = map.get(g.name)
+              const seenIds = new Set(existing.editions.map(e => e.scryfall_id))
+              for (const ed of g.editions) {
+                if (!seenIds.has(ed.scryfall_id)) existing.editions.push(ed)
+              }
+            } else {
+              map.set(g.name, { ...g, editions: [...g.editions] })
+            }
+          }
+          return [...map.values()]
+        })
       } else {
         setGroups(newGroups)
       }
