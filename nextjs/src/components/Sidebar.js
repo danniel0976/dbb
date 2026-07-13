@@ -29,11 +29,11 @@ export default function Sidebar({ filters, updateFilter, clearFilters, filterOpt
     <div className="p-4 space-y-6">
       {/* Set Filter */}
       <div>
-        <h3 className="text-sm font-semibold mb-2 text-gray-300">Set</h3>
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">Set</h3>
         <select
           value={filters.setCode || ''}
           onChange={(e) => updateFilter('setCode', e.target.value || null)}
-          className="w-full bg-dbb-secondary border border-gray-700 rounded-lg px-3 py-2 text-sm focus:border-dbb-accent focus:outline-none"
+          className="w-full bg-dbb-secondary border border-dbb-tertiary/50 rounded-dbb px-3 py-2 text-sm focus:border-dbb-accent focus:outline-none"
         >
           <option value="">All Sets</option>
           {filterOptions.sets.map((set) => (
@@ -44,14 +44,14 @@ export default function Sidebar({ filters, updateFilter, clearFilters, filterOpt
         </select>
       </div>
 
-      {/* Rarity Filter - checkboxes for multi-select */}
+      {/* Rarity Filter */}
       <div>
-        <h3 className="text-sm font-semibold mb-2 text-gray-300">Rarity</h3>
-        <div className="space-y-1">
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">Rarity</h3>
+        <div className="space-y-0.5">
           {rarityOrder.map((rarity) => (
             <label
               key={rarity}
-              className="flex items-center gap-2 cursor-pointer hover:bg-dbb-secondary p-1.5 rounded-lg transition-colors"
+              className="flex items-center gap-2 cursor-pointer hover:bg-dbb-secondary p-1.5 rounded-dbb transition-colors"
             >
               <input
                 type="checkbox"
@@ -73,9 +73,9 @@ export default function Sidebar({ filters, updateFilter, clearFilters, filterOpt
         </div>
       </div>
 
-      {/* Color Filter - toggle buttons, OR matching */}
+      {/* Color Filter */}
       <div>
-        <h3 className="text-sm font-semibold mb-2 text-gray-300">Colors</h3>
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">Colors</h3>
         <div className="flex flex-wrap gap-2">
           {colorOptions.map((color) => (
             <button
@@ -104,11 +104,11 @@ export default function Sidebar({ filters, updateFilter, clearFilters, filterOpt
 
       {/* Card Type Filter */}
       <div>
-        <h3 className="text-sm font-semibold mb-2 text-gray-300">Card Type</h3>
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">Card Type</h3>
         <select
           value={filters.cardType || ''}
           onChange={(e) => updateFilter('cardType', e.target.value || null)}
-          className="w-full bg-dbb-secondary border border-gray-700 rounded-lg px-3 py-2 text-sm focus:border-dbb-accent focus:outline-none"
+          className="w-full bg-dbb-secondary border border-dbb-tertiary/50 rounded-dbb px-3 py-2 text-sm focus:border-dbb-accent focus:outline-none"
         >
           <option value="">All Types</option>
           {filterOptions.cardTypes.map((type) => (
@@ -119,14 +119,14 @@ export default function Sidebar({ filters, updateFilter, clearFilters, filterOpt
         </select>
       </div>
 
-      {/* Foil Filter - three options: All, Foil Only, Non-Foil Only */}
+      {/* Foil Filter */}
       <div>
-        <h3 className="text-sm font-semibold mb-2 text-gray-300 flex items-center gap-2">
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2 flex items-center gap-2">
           <Sparkles className="w-4 h-4" />
           Foil
         </h3>
-        <div className="space-y-1">
-          <label className="flex items-center gap-2 cursor-pointer hover:bg-dbb-secondary p-1.5 rounded-lg transition-colors">
+        <div className="space-y-0.5">
+          <label className="flex items-center gap-2 cursor-pointer hover:bg-dbb-secondary p-1.5 rounded-dbb transition-colors">
             <input
               type="radio"
               name="foil"
@@ -136,7 +136,7 @@ export default function Sidebar({ filters, updateFilter, clearFilters, filterOpt
             />
             <span className="text-sm">All</span>
           </label>
-          <label className="flex items-center gap-2 cursor-pointer hover:bg-dbb-secondary p-1.5 rounded-lg transition-colors">
+          <label className="flex items-center gap-2 cursor-pointer hover:bg-dbb-secondary p-1.5 rounded-dbb transition-colors">
             <input
               type="radio"
               name="foil"
@@ -146,7 +146,7 @@ export default function Sidebar({ filters, updateFilter, clearFilters, filterOpt
             />
             <span className="text-sm">Foil Only</span>
           </label>
-          <label className="flex items-center gap-2 cursor-pointer hover:bg-dbb-secondary p-1.5 rounded-lg transition-colors">
+          <label className="flex items-center gap-2 cursor-pointer hover:bg-dbb-secondary p-1.5 rounded-dbb transition-colors">
             <input
               type="radio"
               name="foil"
@@ -161,21 +161,21 @@ export default function Sidebar({ filters, updateFilter, clearFilters, filterOpt
 
       {/* Price Range Filter */}
       <div>
-        <h3 className="text-sm font-semibold mb-2 text-gray-300">Price Range (MYR)</h3>
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">Price Range (MYR)</h3>
         <div className="space-y-2">
           <input
             type="number"
             placeholder="Min"
             value={filters.minPrice || ''}
             onChange={(e) => updateFilter('minPrice', e.target.value ? parseFloat(e.target.value) : null)}
-            className="w-full bg-dbb-secondary border border-gray-700 rounded-lg px-3 py-2 text-sm focus:border-dbb-accent focus:outline-none"
+            className="w-full bg-dbb-secondary border border-dbb-tertiary/50 rounded-dbb px-3 py-2 text-sm focus:border-dbb-accent focus:outline-none"
           />
           <input
             type="number"
             placeholder="Max"
             value={filters.maxPrice || ''}
             onChange={(e) => updateFilter('maxPrice', e.target.value ? parseFloat(e.target.value) : null)}
-            className="w-full bg-dbb-secondary border border-gray-700 rounded-lg px-3 py-2 text-sm focus:border-dbb-accent focus:outline-none"
+            className="w-full bg-dbb-secondary border border-dbb-tertiary/50 rounded-dbb px-3 py-2 text-sm focus:border-dbb-accent focus:outline-none"
           />
         </div>
       </div>
@@ -183,7 +183,7 @@ export default function Sidebar({ filters, updateFilter, clearFilters, filterOpt
       {/* Clear Filters Button */}
       <button
         onClick={clearFilters}
-        className="w-full btn-outline text-sm py-2"
+        className="w-full btn btn-outline btn-sm"
       >
         Clear All Filters
       </button>

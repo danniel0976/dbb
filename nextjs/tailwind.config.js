@@ -8,10 +8,16 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        // MTG-inspired color palette
-        'dbb-primary': '#1a1a2e',
-        'dbb-secondary': '#16213e',
-        'dbb-accent': '#e94560',
+        // DBB design system (TCGPlayer-inspired, dark theme)
+        'dbb-primary': '#0f172a',      // slate-900 — page background
+        'dbb-secondary': '#1e293b',     // slate-800 — cards/surfaces
+        'dbb-tertiary': '#334155',      // slate-700 — borders/hover
+        'dbb-accent': '#0835DB',        // brand blue — CTAs, links, active
+        'dbb-accent-hov': '#1944E8',    // brand blue hover
+        'dbb-mint': '#3AC692',          // mint green — positive accents
+        'dbb-mint-hov': '#2DA27C',      // mint green hover
+        'dbb-price': '#05772D',         // price green
+        'dbb-pink': '#E02179',          // NEW tag pink
         'dbb-gold': '#f4d03f',
         'dbb-silver': '#bdc3c7',
         'dbb-bronze': '#cd7f32',
@@ -31,7 +37,17 @@ module.exports = {
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', 'sans-serif'],
-        display: ['Playfair Display', 'serif'],
+        display: ['Barlow Condensed', 'Inter', 'sans-serif'],
+      },
+      borderRadius: {
+        'dbb': '8px',
+      },
+      boxShadow: {
+        'card': '0 1px 2px rgba(0,0,0,0.3)',
+        'card-hover': '0 12px 32px 2px rgba(0,0,0,0.12), 0 4px 8px rgba(0,0,0,0.08)',
+      },
+      transitionProperty: {
+        'card': 'box-shadow',
       },
     },
   },

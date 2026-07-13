@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Grid, Filter, X, Search, Loader2, ShoppingCart } from 'lucide-react'
+import { Grid, Filter, X, Search, Loader2 } from 'lucide-react'
 import Sidebar from '@/components/Sidebar'
 import BazaarCard from '@/components/BazaarCard'
 import BazaarDetailModal from '@/components/BazaarDetailModal'
@@ -153,18 +153,18 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-dbb-primary to-dbb-secondary">
+    <div className="min-h-screen">
       {/* Sub-header */}
-      <div className="sticky top-[73px] z-30 bg-dbb-primary/95 backdrop-blur border-b border-dbb-accent/10">
+      <div className="sticky top-[57px] z-30 bg-dbb-primary/95 backdrop-blur border-b border-dbb-tertiary/30">
         <div className="container mx-auto px-4 py-3 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="lg:hidden p-2 hover:bg-dbb-secondary rounded-lg transition-colors"
+              className="lg:hidden p-2 hover:bg-dbb-secondary rounded-dbb transition-colors"
             >
               <Filter className="w-5 h-5" />
             </button>
-            <h2 className="text-lg font-semibold text-white">Bazaar</h2>
+            <h1 className="text-lg font-semibold text-white">Bazaar</h1>
             {!loading && (
               <span className="text-sm text-gray-500">
                 {total} listing{total !== 1 ? 's' : ''}
@@ -179,7 +179,7 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
                 placeholder="Search cards..."
                 value={filters.search}
                 onChange={(e) => updateFilter('search', e.target.value)}
-                className="w-40 sm:w-64 bg-dbb-secondary border border-gray-700 rounded-lg pl-9 pr-8 py-2 text-sm focus:border-dbb-accent focus:outline-none placeholder-gray-500"
+                className="w-40 sm:w-64 bg-dbb-secondary border border-dbb-tertiary/50 rounded-dbb pl-9 pr-8 py-2 text-sm focus:border-dbb-accent focus:outline-none placeholder-gray-500"
               />
               {filters.search && (
                 <button
@@ -193,7 +193,7 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
             {hasActiveFilters && (
               <button
                 onClick={clearFilters}
-                className="flex items-center gap-1 text-sm text-dbb-accent hover:text-red-400 transition-colors"
+                className="flex items-center gap-1 text-sm text-dbb-accent hover:text-dbb-accent-hov transition-colors"
               >
                 <X className="w-4 h-4" /> Clear
               </button>
@@ -204,7 +204,7 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
 
       <div className="flex">
         {/* Sidebar — Desktop */}
-        <aside className="hidden lg:block w-72 fixed left-0 top-[121px] bottom-0 overflow-y-auto border-r border-dbb-accent/10 bg-dbb-primary/50">
+        <aside className="hidden lg:block w-72 fixed left-0 top-[105px] bottom-0 overflow-y-auto border-r border-dbb-tertiary/30 bg-dbb-primary/50">
           <Sidebar
             filters={filters}
             updateFilter={updateFilter}
@@ -222,9 +222,9 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
             />
             <aside className="fixed left-0 top-0 bottom-0 w-80 z-50 lg:hidden">
               <div className="h-full bg-dbb-primary overflow-y-auto">
-                <div className="p-4 border-b border-dbb-accent/10 flex items-center justify-between">
+                <div className="p-4 border-b border-dbb-tertiary/30 flex items-center justify-between">
                   <h2 className="text-lg font-semibold">Filters</h2>
-                  <button onClick={() => setSidebarOpen(false)} className="p-2 hover:bg-dbb-secondary rounded-lg">
+                  <button onClick={() => setSidebarOpen(false)} className="p-2 hover:bg-dbb-secondary rounded-dbb">
                     <X className="w-5 h-5" />
                   </button>
                 </div>
@@ -246,7 +246,7 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
             <select
               value={filters.sortBy}
               onChange={(e) => updateFilter('sortBy', e.target.value)}
-              className="bg-dbb-secondary border border-gray-700 rounded-lg px-3 py-1.5 text-sm focus:border-dbb-accent focus:outline-none"
+              className="bg-dbb-secondary border border-dbb-tertiary/50 rounded-dbb px-3 py-1.5 text-sm focus:border-dbb-accent focus:outline-none"
             >
               <option value="newest">Newest</option>
               <option value="price_high">Price: High → Low</option>
@@ -264,7 +264,7 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
           ) : error ? (
             <div className="text-center py-12">
               <p className="text-red-400 mb-4">{error}</p>
-              <button onClick={() => loadListings()} className="btn-primary">
+              <button onClick={() => loadListings()} className="btn btn-primary btn-md">
                 Try Again
               </button>
             </div>
@@ -280,11 +280,11 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
                   : 'List yours from your library to get started.'}
               </p>
               {hasActiveFilters ? (
-                <button onClick={clearFilters} className="btn-primary">
+                <button onClick={clearFilters} className="btn btn-primary btn-md">
                   Clear All Filters
                 </button>
               ) : (
-                <a href="/library" className="btn-primary inline-block">
+                <a href="/library" className="btn btn-primary btn-md inline-block">
                   Go to your library →
                 </a>
               )}

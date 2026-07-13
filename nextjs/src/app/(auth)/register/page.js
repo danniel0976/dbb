@@ -67,7 +67,7 @@ export default function RegisterPage() {
           We sent a confirmation link to <span className="text-white">{email}</span>.
           Click it to activate your account.
         </p>
-        <Link href="/login" className="mt-6 inline-block text-dbb-accent hover:text-dbb-accent/80 text-sm transition-colors">
+        <Link href="/login" className="mt-6 inline-block text-dbb-accent hover:text-dbb-accent-hov text-sm transition-colors">
           Back to sign in
         </Link>
       </div>
@@ -157,7 +157,7 @@ export default function RegisterPage() {
         <button
           type="submit"
           disabled={loading}
-          className="w-full bg-dbb-accent hover:bg-dbb-accent/90 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-2.5 rounded-lg transition-colors mt-2"
+          className="w-full btn btn-primary btn-lg disabled:cursor-not-allowed mt-2"
         >
           {loading ? 'Creating account…' : 'Create account'}
         </button>
@@ -165,7 +165,7 @@ export default function RegisterPage() {
 
       <p className="mt-6 text-center text-sm text-gray-400">
         Already have an account?{' '}
-        <Link href="/login" className="text-dbb-accent hover:text-dbb-accent/80 transition-colors font-medium">
+        <Link href="/login" className="text-dbb-accent hover:text-dbb-accent-hov transition-colors font-medium">
           Sign in
         </Link>
       </p>

@@ -13,12 +13,9 @@ function makeServiceClient() {
 }
 
 export default async function BazaarPage() {
-  // Auth (optional — bazaar is public but shows more when logged in)
   const authClient = await createAuthClient()
   const { data: { user } } = await authClient.auth.getUser().catch(() => ({ data: { user: null } }))
 
-  // Fetch initial listings using service role so the JOIN works server-side
-  // regardless of whether the viewer is authenticated.
   let initialData = null
   let filterOptions = { sets: [], rarities: [], cardTypes: [] }
 
@@ -41,7 +38,6 @@ export default async function BazaarPage() {
       .range(0, 23)
 
     if (!error && listings) {
-      // Fetch seller display names
       const userIds = [...new Set(listings.map(l => l.user_id))]
       let sellerMap = {}
       if (userIds.length > 0) {
@@ -56,7 +52,6 @@ export default async function BazaarPage() {
       const total = count || 0
       initialData = { listings: enriched, total, hasMore: 24 < total, page: 1 }
 
-      // Build filter options from active listings
       const setMap = {}
       const raritySet = new Set()
       for (const l of listings) {
@@ -75,7 +70,7 @@ export default async function BazaarPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-dbb-primary to-dbb-secondary">
+    <div className="min-h-screen">
       <DBBNav userEmail={user?.email} />
       <BazaarView initialData={initialData} filterOptions={filterOptions} userId={user?.id || null} />
     </div>

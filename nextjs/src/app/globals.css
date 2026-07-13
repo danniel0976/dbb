@@ -4,26 +4,17 @@
 
 :root {
   --foreground-rgb: 255, 255, 255;
-  --background-start-rgb: 26, 26, 46;
-  --background-end-rgb: 22, 33, 62;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --foreground-rgb: 255, 255, 255;
-    --background-start-rgb: 26, 26, 46;
-    --background-end-rgb: 22, 33, 62;
-  }
+  --background-start-rgb: 15, 23, 42;    /* slate-900 */
+  --background-end-rgb: 10, 15, 30;       /* darker slate */
 }
 
 body {
   color: rgb(var(--foreground-rgb));
   background: linear-gradient(
       to bottom,
-      transparent,
+      rgb(var(--background-start-rgb)),
       rgb(var(--background-end-rgb))
-    )
-    rgb(var(--background-start-rgb));
+    );
   min-height: 100vh;
 }
 
@@ -34,33 +25,33 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: #1a1a2e;
+  background: #0f172a;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #e94560;
+  background: #0835DB;
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #ff6b6b;
+  background: #1944E8;
 }
 
-/* Card hover effects */
+/* Card hover effects — TCGPlayer-style elevation */
 .card-hover {
-  transition: all 0.3s ease;
+  transition: box-shadow 0.18s ease-out, transform 0.18s ease-out;
 }
 
 .card-hover:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 12px 24px rgba(233, 69, 96, 0.3);
+  transform: translateY(-3px);
+  box-shadow: 0 12px 32px 2px rgba(0,0,0,0.12), 0 4px 8px rgba(0,0,0,0.08);
 }
 
 /* Rarity glow effects */
 .rarity-common { border-color: #8c8c8c; }
 .rarity-uncommon { border-color: #c0c0c0; }
-.rarity-rare { border-color: #f4d03f; box-shadow: 0 0 10px rgba(244, 208, 63, 0.3); }
-.rarity-mythic { border-color: #e94560; box-shadow: 0 0 15px rgba(233, 69, 96, 0.4); }
+.rarity-rare { border-color: #f4d03f; box-shadow: 0 0 10px rgba(244, 208, 63, 0.2); }
+.rarity-mythic { border-color: #e94560; box-shadow: 0 0 12px rgba(233, 69, 96, 0.3); }
 
 /* Mana symbols */
 .mana-symbol {
@@ -86,21 +77,33 @@ body {
   transition: transform 0.3s ease-in-out;
 }
 
-/* Loading skeleton */
+/* Skeleton/shimmer loading */
 .skeleton {
   background: linear-gradient(
     90deg,
-    #1a1a2e 0%,
-    #2a2a3e 50%,
-    #1a1a2e 100%
+    #1e293b 0%,
+    #334155 50%,
+    #1e293b 100%
   );
   background-size: 200% 100%;
-  animation: skeleton-loading 1.5s infinite;
+  animation: shimmer 1.5s infinite;
 }
 
-@keyframes skeleton-loading {
+@keyframes shimmer {
   0% { background-position: 200% 0; }
   100% { background-position: -200% 0; }
+}
+
+/* Card image skeleton — TCG card silhouette */
+.card-skeleton {
+  background: linear-gradient(
+    135deg,
+    #1e293b 0%,
+    #283548 40%,
+    #1e293b 80%
+  );
+  background-size: 200% 200%;
+  animation: shimmer 1.5s infinite;
 }
 
 /* Toast notifications */
@@ -130,8 +133,8 @@ body {
   background: linear-gradient(
     135deg,
     transparent 30%,
-    rgba(180, 120, 255, 0.12) 45%,
-    rgba(100, 200, 255, 0.12) 55%,
+    rgba(180, 120, 255, 0.10) 45%,
+    rgba(100, 200, 255, 0.10) 55%,
     transparent 70%
   );
   background-size: 200% 200%;
@@ -144,43 +147,77 @@ body {
   100% { background-position: -200% -200%; }
 }
 
-/* Button styles */
-.btn-primary {
-  background-color: #e94560;
-  color: white;
+/* ── Button system (TCGPlayer-inspired) ── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 8px;
   font-weight: 600;
-  padding: 0.5rem 1rem;
-  border-radius: 0.5rem;
-  transition: background-color 0.2s;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  border: none;
 }
 
+.btn-lg { padding: 0.75rem 1rem; }
+.btn-md { padding: 0.5rem 1rem; }
+.btn-sm { padding: 0.5rem 0.75rem; }
+
+.btn-primary {
+  background-color: #0835DB;
+  color: white;
+}
 .btn-primary:hover {
-  background-color: #dc2626;
+  background-color: #1944E8;
+}
+
+.btn-mint {
+  background-color: #3AC692;
+  color: white;
+}
+.btn-mint:hover {
+  background-color: #2DA27C;
 }
 
 .btn-secondary {
-  background-color: #16213e;
-  color: white;
-  font-weight: 600;
-  padding: 0.5rem 1rem;
-  border-radius: 0.5rem;
-  transition: background-color 0.2s;
+  background-color: #1e293b;
+  color: #e2e8f0;
+  border: 1px solid #334155;
 }
-
 .btn-secondary:hover {
-  background-color: #1e3a8a;
+  background-color: #334155;
 }
 
 .btn-outline {
-  border: 2px solid #e94560;
-  color: #e94560;
-  font-weight: 600;
-  padding: 0.5rem 1rem;
-  border-radius: 0.5rem;
-  transition: all 0.2s;
+  background-color: transparent;
+  color: #0835DB;
+  border: 1.5px solid #0835DB;
+}
+.btn-outline:hover {
+  background-color: #0835DB;
+  color: white;
 }
 
-.btn-outline:hover {
-  background-color: #e94560;
+.btn-danger {
+  background-color: transparent;
+  color: #ef4444;
+  border: 1px solid #ef4444;
+}
+.btn-danger:hover {
+  background-color: #ef4444;
   color: white;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Price display — green per TCGPlayer convention */
+.price-green {
+  color: #05772D;
+  font-weight: 600;
 }

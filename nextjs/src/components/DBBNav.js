@@ -26,7 +26,6 @@ function CartBadge() {
       setCount(cartCache.count)
       return
     }
-    // Deduplicate concurrent fetches (multiple CartBadge instances mounting simultaneously)
     if (!cartCache.pending) {
       cartCache.pending = fetch('/api/cart/count')
         .then(r => r.ok ? r.json() : null)
@@ -53,12 +52,10 @@ export default function DBBNav({ userEmail, extra }) {
   const pathname = usePathname()
   const [drawerOpen, setDrawerOpen] = useState(false)
 
-  // Close drawer on route change
   useEffect(() => {
     setDrawerOpen(false)
   }, [pathname])
 
-  // Lock body scroll when drawer is open
   useEffect(() => {
     if (drawerOpen) {
       document.body.style.overflow = 'hidden'
@@ -70,20 +67,23 @@ export default function DBBNav({ userEmail, extra }) {
 
   return (
     <>
-      <header className="sticky top-0 z-40 bg-dbb-primary/95 backdrop-blur border-b border-dbb-accent/20">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
+      <header className="sticky top-0 z-40 bg-dbb-primary/95 backdrop-blur border-b border-dbb-tertiary/50">
+        <div className="container mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <span className="text-xl font-bold text-dbb-accent">Dan's Bizarre Bazaar</span>
-            <nav className="hidden sm:flex items-center gap-3 text-sm text-gray-400">
+            <Link href="/library" className="text-lg font-bold text-white hover:text-dbb-accent transition-colors tracking-tight">
+              <span className="font-display text-xl">DBB</span>
+              <span className="ml-1.5 text-sm font-medium text-gray-400 hidden sm:inline">Dan's Bizarre Bazaar</span>
+            </Link>
+            <nav className="hidden sm:flex items-center gap-1 text-sm">
               {NAV_LINKS.map(({ href, label }) => (
                 <Link
                   key={href}
                   href={href}
-                  className={
+                  className={`px-3 py-1.5 rounded-lg transition-colors ${
                     isActive(href)
-                      ? 'text-white font-medium'
-                      : 'hover:text-white transition-colors'
-                  }
+                      ? 'text-white bg-dbb-accent/15 font-medium'
+                      : 'text-gray-400 hover:text-white hover:bg-white/5'
+                  }`}
                 >
                   {label}
                 </Link>
@@ -91,10 +91,10 @@ export default function DBBNav({ userEmail, extra }) {
               {userEmail && (
                 <Link
                   href="/cart"
-                  className={`flex items-center ${
+                  className={`flex items-center px-3 py-1.5 rounded-lg transition-colors ${
                     isActive('/cart')
-                      ? 'text-white font-medium'
-                      : 'hover:text-white transition-colors'
+                      ? 'text-white bg-dbb-accent/15 font-medium'
+                      : 'text-gray-400 hover:text-white hover:bg-white/5'
                   }`}
                 >
                   Cart
@@ -106,26 +106,22 @@ export default function DBBNav({ userEmail, extra }) {
           <div className="flex items-center gap-3">
             {extra}
             {userEmail ? (
-            <>
-              <span className="text-xs text-gray-500 hidden sm:inline">{userEmail}</span>
-              <form action="/api/auth/signout" method="POST">
-                <button
-                  type="submit"
-                  className="text-sm text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 rounded-lg px-3 py-1.5 transition-colors"
-                >
-                  Sign out
-                </button>
-              </form>
-            </>
+              <>
+                <span className="text-xs text-gray-500 hidden sm:inline">{userEmail}</span>
+                <form action="/api/auth/signout" method="POST">
+                  <button
+                    type="submit"
+                    className="btn btn-secondary btn-sm"
+                  >
+                    Sign out
+                  </button>
+                </form>
+              </>
             ) : (
-              <Link
-                href="/login"
-                className="text-sm text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 rounded-lg px-3 py-1.5 transition-colors"
-              >
+              <Link href="/login" className="btn btn-outline btn-sm">
                 Sign in
               </Link>
             )}
-            {/* Hamburger button — visible only below sm breakpoint */}
             <button
               type="button"
               onClick={() => setDrawerOpen(true)}
@@ -142,14 +138,12 @@ export default function DBBNav({ userEmail, extra }) {
       {/* Mobile slide-in drawer */}
       {drawerOpen && (
         <div className="sm:hidden fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label="Navigation menu">
-          {/* Backdrop */}
           <div
             className="absolute inset-0 bg-black/60"
             onClick={() => setDrawerOpen(false)}
           />
-          {/* Drawer panel */}
-          <div className="absolute right-0 top-0 h-full w-72 max-w-[80vw] bg-dbb-primary border-l border-dbb-accent/20 shadow-2xl flex flex-col">
-            <div className="flex items-center justify-between px-4 py-4 border-b border-dbb-accent/20">
+          <div className="absolute right-0 top-0 h-full w-72 max-w-[80vw] bg-dbb-primary border-l border-dbb-tertiary/50 shadow-2xl flex flex-col">
+            <div className="flex items-center justify-between px-4 py-4 border-b border-dbb-tertiary/50">
               <span className="text-lg font-bold text-dbb-accent">Menu</span>
               <button
                 type="button"
@@ -188,14 +182,13 @@ export default function DBBNav({ userEmail, extra }) {
                 </Link>
               )}
             </nav>
-            {/* Footer area: email + sign out */}
             {userEmail && (
-              <div className="border-t border-dbb-accent/20 px-4 py-4 space-y-3">
+              <div className="border-t border-dbb-tertiary/50 px-4 py-4 space-y-3">
                 <span className="block text-xs text-gray-500 truncate">{userEmail}</span>
                 <form action="/api/auth/signout" method="POST">
                   <button
                     type="submit"
-                    className="w-full text-sm text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 rounded-lg px-3 py-2.5 min-h-[44px] transition-colors"
+                    className="w-full btn btn-secondary btn-sm min-h-[44px]"
                   >
                     Sign out
                   </button>

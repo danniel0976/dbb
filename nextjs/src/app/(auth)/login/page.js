@@ -77,7 +77,7 @@ export default function LoginPage() {
         </div>
 
         <div className="flex justify-end">
-          <Link href="/reset-password" className="text-xs text-dbb-accent hover:text-dbb-accent/80 transition-colors">
+          <Link href="/reset-password" className="text-xs text-dbb-accent hover:text-dbb-accent-hov transition-colors">
             Forgot password?
           </Link>
         </div>
@@ -85,7 +85,7 @@ export default function LoginPage() {
         <button
           type="submit"
           disabled={loading}
-          className="w-full bg-dbb-accent hover:bg-dbb-accent/90 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-2.5 rounded-lg transition-colors"
+          className="w-full btn btn-primary btn-lg disabled:cursor-not-allowed"
         >
           {loading ? 'Signing in…' : 'Sign in'}
         </button>

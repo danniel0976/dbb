@@ -378,7 +378,7 @@ export default function BazaarDetailModal({ listing, onClose, onSelectListing })
                           <User className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
                           <button
                             onClick={() => setSellerPopupId(s.id)}
-                            className="text-sm text-gray-300 hover:text-dbb-accent transition-colors truncate max-w-[120px] text-left underline-offset-2 hover:underline"
+                            className="text-sm text-gray-300 hover:text-dbb-accent transition-colors truncate max-w-[120px] text-left"
                             title="View seller profile"
                           >
                             {s.seller_name || 'Seller'}
@@ -405,10 +405,10 @@ export default function BazaarDetailModal({ listing, onClose, onSelectListing })
                               setSelectedListingId(s.id)
                               onSelectListing(s)
                             }}
-                            className={`px-3 py-1.5 text-xs font-medium rounded transition-colors flex-shrink-0 ${
+                            className={`btn btn-sm flex-shrink-0 ${
                               isSelected
-                                ? 'bg-dbb-accent text-white'
-                                : 'bg-gray-700 hover:bg-dbb-accent text-gray-300 hover:text-white'
+                                ? 'btn-primary'
+                                : 'btn-secondary hover:bg-dbb-accent hover:text-white'
                             }`}
                           >
                             {isSelected ? 'Selected' : 'Select'}
@@ -426,9 +426,9 @@ export default function BazaarDetailModal({ listing, onClose, onSelectListing })
                         {/* View card condition (lazy fetch — no auto-load) */}
                         <button
                           onClick={() => setProofListingId(s.id)}
-                          className="text-[10px] text-gray-500 hover:text-dbb-accent transition-colors flex items-center gap-1 pl-0.5"
+                          className="btn btn-outline btn-sm mt-1"
                         >
-                          <Camera className="w-3 h-3" /> View card condition
+                          <Camera className="w-3.5 h-3.5" /> View card condition
                         </button>
                       </div>
                     )

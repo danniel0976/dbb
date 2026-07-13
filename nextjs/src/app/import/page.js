@@ -11,12 +11,12 @@ export default async function ImportPage() {
   if (!user) redirect('/login')
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-dbb-primary to-dbb-secondary">
+    <div className="min-h-screen">
       <DBBNav userEmail={user.email} />
 
       <main className="container mx-auto px-4 py-10">
         <div className="mb-8">
-          <h2 className="text-2xl font-bold text-white">Import Collection</h2>
+          <h1 className="text-2xl font-bold text-white">Import Collection</h1>
           <p className="text-gray-400 text-sm mt-1">Import your ManaBox collection export into your DBB library.</p>
         </div>
         <ImportWizard />

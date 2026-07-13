@@ -50,12 +50,12 @@ export default async function LibraryPage({ searchParams }) {
     : null
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-dbb-primary to-dbb-secondary">
+    <div className="min-h-screen">
       <DBBNav userEmail={user.email} />
 
       <main className="container mx-auto px-4 py-6">
         <div className="mb-4">
-          <h2 className="text-2xl font-bold text-white">Your Library</h2>
+          <h1 className="text-2xl font-bold text-white">Your Library</h1>
         </div>
 
         <LibraryWithRail

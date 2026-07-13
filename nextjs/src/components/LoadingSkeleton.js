@@ -6,29 +6,28 @@ export default function LoadingSkeleton({ count = 12 }) {
       {Array.from({ length: count }).map((_, i) => (
         <div
           key={i}
-          className="bg-dbb-secondary rounded-lg overflow-hidden border-2 border-gray-700"
+          className="bg-dbb-secondary rounded-dbb overflow-hidden border border-dbb-tertiary/30"
         >
-          {/* Image Placeholder */}
-          <div className="aspect-[2/3] skeleton" />
+          {/* Card image placeholder — TCG card silhouette */}
+          <div className="aspect-[2/3] card-skeleton" />
           
-          {/* Content Placeholder */}
-          <div className="p-3 space-y-2">
+          {/* Content placeholder */}
+          <div className="p-2.5 space-y-1.5">
             {/* Name */}
             <div className="h-4 skeleton rounded w-3/4" />
             
-            {/* Set and Number */}
+            {/* Set and rarity */}
             <div className="flex justify-between">
+              <div className="h-3 skeleton rounded w-8" />
               <div className="h-3 skeleton rounded w-12" />
-              <div className="h-3 skeleton rounded w-16" />
             </div>
             
+            {/* Condition + seller */}
+            <div className="h-3 skeleton rounded w-2/3" />
+            
             {/* Price */}
-            <div className="pt-2 border-t border-gray-700 space-y-2">
-              <div className="flex justify-between">
-                <div className="h-3 skeleton rounded w-8" />
-                <div className="h-3 skeleton rounded w-12" />
-              </div>
-              <div className="h-5 skeleton rounded w-full" />
+            <div className="pt-2 border-t border-dbb-tertiary/30">
+              <div className="h-4 skeleton rounded w-16" />
             </div>
           </div>
         </div>

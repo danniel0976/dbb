@@ -101,6 +101,15 @@ export async function getLibrary(userId, filters = {}, page = 1, pageSize = DEFA
     case 'rarity':
       query = query.order('rarity', { referencedTable: 'card_index', ascending: true })
       break
+    case 'price_high':
+      // Sort by purchase_price descending (server-side, no client reordering)
+      // NULLs are pushed to the end so cards without purchase price don't disappear
+      query = query.order('purchase_price', { ascending: false, nullsFirst: false })
+      break
+    case 'price_low':
+      // Sort by purchase_price ascending — cards without price shown last
+      query = query.order('purchase_price', { ascending: true, nullsFirst: false })
+      break
     default:
       query = query.order('date_added', { ascending: false })
   }

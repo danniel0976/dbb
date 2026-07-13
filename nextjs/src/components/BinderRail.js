@@ -18,7 +18,7 @@ function MergeModal({ source, binders, onConfirm, onClose }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-dbb-secondary border border-gray-700 rounded-2xl w-full max-w-md p-6 shadow-xl">
+      <div className="bg-dbb-secondary border border-dbb-tertiary/50 rounded-dbb w-full max-w-md p-6 shadow-xl">
         <div className="flex items-center justify-between mb-5">
           <h3 className="text-lg font-bold text-white">Merge binder</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-white"><X className="w-5 h-5" /></button>
@@ -56,11 +56,11 @@ function MergeModal({ source, binders, onConfirm, onClose }) {
           )}
         </div>
         <div className="flex gap-3 mt-6">
-          <button onClick={onClose} className="flex-1 py-2.5 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-xl text-sm font-medium transition-colors">Cancel</button>
+          <button onClick={onClose} className="flex-1 py-2.5 btn btn-secondary btn-md rounded-dbb">Cancel</button>
           <button
             disabled={merging || !targetId || targets.length === 0}
             onClick={handleConfirm}
-            className="flex-[2] py-2.5 bg-dbb-accent hover:bg-dbb-accent/80 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-xl text-sm font-medium transition-colors flex items-center justify-center gap-2"
+            className="flex-[2] py-2.5 btn btn-primary btn-md rounded-dbb disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
             {merging ? <Loader2 className="w-4 h-4 animate-spin" /> : <GitMerge className="w-4 h-4" />}
             {merging ? 'Merging…' : 'Merge & delete source'}

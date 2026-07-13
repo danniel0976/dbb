@@ -82,7 +82,7 @@ export default function CartView() {
         <ShoppingCart className="w-16 h-16 mx-auto mb-4 text-gray-600" />
         <h2 className="text-xl font-semibold mb-2">Your cart is empty</h2>
         <p className="text-gray-400 mb-6">Browse the Bazaar to find cards you'd like to buy.</p>
-        <Link href="/bazaar" className="btn-primary inline-block">
+        <Link href="/bazaar" className="btn btn-primary btn-md inline-block">
           Browse the Bazaar →
         </Link>
       </div>
@@ -203,7 +203,7 @@ export default function CartView() {
       </div>
 
       <div className="flex items-center justify-between text-sm">
-        <Link href="/bazaar" className="text-dbb-accent hover:underline flex items-center gap-1">
+        <Link href="/bazaar" className="btn btn-outline btn-sm inline-flex items-center gap-1">
           <ExternalLink className="w-3.5 h-3.5" /> Continue shopping
         </Link>
         <p className="text-gray-500 text-xs">Checkout coming soon</p>

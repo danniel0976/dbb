@@ -394,7 +394,7 @@ function ListingSection({ libraryRow, hasPhoto }) {
           </span>
           <button
             onClick={() => { setIsRelist(true); setMultiplier(Number(listing.multiplier) || 2.5) }}
-            className="text-xs text-dbb-accent hover:text-red-400 transition-colors"
+            className="btn btn-outline btn-sm"
           >
             Relist
           </button>

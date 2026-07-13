@@ -20,7 +20,7 @@ const RARITY_BORDER = {
   mythic: 'border-rarity-mythic',
 }
 
-export default function LibraryCard({ libraryRow, onStar, onDelete, onOpen }) {
+export default function LibraryCard({ libraryRow, onStar, onDelete, onOpen, dimmed, priceData }) {
   const [imageUrl, setImageUrl] = useState(null)
   const [imgLoaded, setImgLoaded] = useState(false)
   const [imgError, setImgError] = useState(false)
@@ -41,14 +41,11 @@ export default function LibraryCard({ libraryRow, onStar, onDelete, onOpen }) {
     return () => { cancelled = true }
   }, [libraryRow.scryfall_id])
 
+  const myrPrice = priceData?.myr_3_0 ?? null
+
   return (
     <div
-      className={`
-        group relative bg-dbb-secondary rounded-lg overflow-hidden
-        border-2 ${RARITY_BORDER[rarity] || 'border-gray-700'}
-        card-hover cursor-pointer flex flex-col
-        ${isFoil ? 'foil-card' : ''}
-      `}
+      className={`group relative bg-dbb-secondary rounded-dbb overflow-hidden border border-dbb-tertiary/40 card-hover cursor-pointer flex flex-col ${isFoil ? 'foil-card' : ''} ${dimmed ? 'opacity-50' : ''}`}
     >
       {/* Image area */}
       <div
@@ -56,7 +53,7 @@ export default function LibraryCard({ libraryRow, onStar, onDelete, onOpen }) {
         onClick={() => onOpen(libraryRow)}
       >
         {!imgLoaded && !imgError && (
-          <div className="absolute inset-0 skeleton rounded-t-lg" />
+          <div className="absolute inset-0 card-skeleton" />
         )}
         {imageUrl && !imgError && (
           <img
@@ -65,6 +62,7 @@ export default function LibraryCard({ libraryRow, onStar, onDelete, onOpen }) {
             className={`w-full h-full object-cover transition-opacity duration-300 ${imgLoaded ? 'opacity-100' : 'opacity-0'}`}
             onLoad={() => setImgLoaded(true)}
             onError={() => setImgError(true)}
+            loading="lazy"
           />
         )}
         {imgError && (
@@ -96,7 +94,7 @@ export default function LibraryCard({ libraryRow, onStar, onDelete, onOpen }) {
       {/* Card info */}
       <div className="p-2 flex flex-col gap-1">
         <div className="flex items-start justify-between gap-1">
-          <h3 className="text-xs font-semibold truncate flex-1 leading-tight" title={ci?.name}>
+          <h3 className="text-xs font-semibold truncate flex-1 leading-tight text-gray-200" title={ci?.name}>
             {ci?.name || '—'}
           </h3>
           <button
@@ -118,6 +116,15 @@ export default function LibraryCard({ libraryRow, onStar, onDelete, onOpen }) {
             {libraryRow.condition}
           </span>
         </div>
+
+        {/* Price display in thumbnail (MYR @ ×3.0) */}
+        {myrPrice != null && (
+          <div className="pt-0.5 border-t border-dbb-tertiary/30">
+            <span className="text-xs font-semibold price-green">
+              RM {myrPrice.toFixed(2)}
+            </span>
+          </div>
+        )}
       </div>
     </div>
   )

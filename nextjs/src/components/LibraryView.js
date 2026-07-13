@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import LibraryCard from '@/components/LibraryCard'
 import CardDetailModal from '@/components/CardDetailModal'
@@ -17,6 +17,8 @@ const SORTS = [
   { value: 'set', label: 'Set / Number' },
   { value: 'cmc', label: 'Mana value' },
   { value: 'rarity', label: 'Rarity' },
+  { value: 'price_high', label: 'Price: High → Low' },
+  { value: 'price_low', label: 'Price: Low → High' },
 ]
 
 function parseInitialFilters(searchParams) {
@@ -94,11 +96,13 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
   const [hasMore, setHasMore] = useState(initialData?.hasMore || false)
   const [page, setPage] = useState(1)
   const [loadingMore, setLoadingMore] = useState(false)
+  const [initialLoading, setInitialLoading] = useState(!initialData?.cards?.length)
   const [sort, setSort] = useState('newest')
   const [q, setQ] = useState('')
   const [selectedCard, setSelectedCard] = useState(null)
   const [advFilters, setAdvFilters] = useState(() => parseInitialFilters(searchParams))
   const [showPanel, setShowPanel] = useState(false)
+  const [priceMap, setPriceMap] = useState({})
 
   // Multi-select state
   const [multiSelect, setMultiSelect] = useState(false)
@@ -149,14 +153,30 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
       overrides.q ?? currentQ.current,
       overrides.sort ?? currentSort.current
     )
-    // Preserve the ?binder= param managed by BinderRail
     const binderParam = searchParams.get('binder')
     if (binderParam) urlParams.set('binder', binderParam)
     router.push(`?${urlParams}`, { scroll: false })
   }, [router, searchParams])
 
+  const fetchPrices = useCallback(async (cardsToPrice) => {
+    if (!cardsToPrice?.length) return
+    const items = cardsToPrice.map(c => ({
+      scryfall_id: c.scryfall_id,
+      foil: c.foil || 'normal',
+    }))
+    try {
+      const res = await fetch('/api/pricing/batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items }),
+      })
+      if (!res.ok) return
+      const data = await res.json()
+      setPriceMap(prev => ({ ...prev, ...data.prices }))
+    } catch {}
+  }, [])
+
   const reload = useCallback(async (overrides = {}) => {
-    // Cancel any in-flight request before starting a new one
     if (abortControllerRef.current) {
       abortControllerRef.current.abort()
     }
@@ -165,6 +185,7 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
 
     resetPending.current = true
     setSelectedIds(new Set())
+    setInitialLoading(true)
     try {
       const params = buildApiParams(1, overrides)
       const res = await fetch(`/api/library?${params}`, { signal: controller.signal })
@@ -177,14 +198,17 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
       setTotal(data.total || 0)
       setHasMore(data.hasMore || false)
       setPage(1)
+      // Fetch prices for the first page of cards
+      fetchPrices(data.cards)
     } catch (err) {
       if (err.name !== 'AbortError') {
         toast('Failed to load library', 'error')
       }
     } finally {
       resetPending.current = false
+      setInitialLoading(false)
     }
-  }, [toast, buildApiParams])
+  }, [toast, buildApiParams, fetchPrices])
 
   const handleSortChange = (newSort) => {
     setSort(newSort)
@@ -246,22 +270,27 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
       setCards(prev => [...prev, ...(data.cards || [])])
       setPage(nextPage)
       setHasMore(data.hasMore || false)
+      // Fetch prices for newly loaded cards
+      fetchPrices(data.cards)
     } catch {
       toast('Failed to load more cards', 'error')
     } finally {
       setLoadingMore(false)
     }
-  }, [loadingMore, hasMore, page, toast, buildApiParams])
+  }, [loadingMore, hasMore, page, toast, buildApiParams, fetchPrices])
 
-  // Auto-fetch on mount when no server-prefetched data (e.g. after binder switch)
+  // Auto-fetch on mount when no server-prefetched data
   const didAutoFetch = useRef(false)
   useEffect(() => {
     if (didAutoFetch.current) return
     didAutoFetch.current = true
     if (!initialData?.cards?.length) {
       reload()
+    } else {
+      // Still fetch prices for server-prefetched data
+      fetchPrices(initialData.cards)
     }
-  }, [reload]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [reload, fetchPrices]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const sentinel = sentinelRef.current
@@ -421,6 +450,24 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
   const filterActive = hasActiveFilters(advFilters)
   const activeFilterCount = activeChips.length
 
+  // Build skeleton grid for initial load
+  const skeletonGrid = (
+    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+      {Array.from({ length: 12 }).map((_, i) => (
+        <div key={i} className="bg-dbb-secondary rounded-dbb overflow-hidden border border-dbb-tertiary/30">
+          <div className="aspect-[2/3] card-skeleton" />
+          <div className="p-2 space-y-1.5">
+            <div className="h-3 skeleton rounded w-3/4" />
+            <div className="flex justify-between">
+              <div className="h-2.5 skeleton rounded w-8" />
+              <div className="h-2.5 skeleton rounded w-10" />
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+
   return (
     <div>
       {/* Toolbar */}
@@ -432,7 +479,7 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
             placeholder="Search by name..."
             value={q}
             onChange={(e) => handleSearchChange(e.target.value)}
-            className="w-full bg-dbb-secondary border border-gray-700 rounded-lg pl-9 pr-4 py-2 text-sm focus:border-dbb-accent focus:outline-none placeholder-gray-600"
+            className="w-full bg-dbb-secondary border border-dbb-tertiary/50 rounded-dbb pl-9 pr-4 py-2 text-sm focus:border-dbb-accent focus:outline-none placeholder-gray-600"
           />
         </div>
         <div className="flex items-center gap-2">
@@ -440,7 +487,7 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
           <select
             value={sort}
             onChange={(e) => handleSortChange(e.target.value)}
-            className="bg-dbb-secondary border border-gray-700 rounded-lg px-3 py-2 text-sm focus:border-dbb-accent focus:outline-none"
+            className="bg-dbb-secondary border border-dbb-tertiary/50 rounded-dbb px-3 py-2 text-sm focus:border-dbb-accent focus:outline-none"
           >
             {SORTS.map(s => (
               <option key={s.value} value={s.value}>{s.label}</option>
@@ -459,10 +506,10 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
             else setMultiSelect(true)
           }}
           title={multiSelect ? 'Exit multi-select' : 'Multi-select'}
-          className={`p-2 rounded-lg border transition-colors ${
+          className={`p-2 rounded-dbb border transition-colors ${
             multiSelect
               ? 'border-dbb-accent text-dbb-accent bg-dbb-accent/10'
-              : 'border-gray-700 text-gray-400 hover:border-dbb-accent/50'
+              : 'border-dbb-tertiary/50 text-gray-400 hover:border-dbb-accent/50'
           }`}
         >
           <CheckSquare className="w-4 h-4" />
@@ -471,10 +518,10 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
         {/* Filters button */}
         <button
           onClick={() => setShowPanel(v => !v)}
-          className={`flex items-center gap-1.5 px-3 py-2 text-sm border rounded-lg transition-colors ${
+          className={`flex items-center gap-1.5 px-3 py-2 text-sm border rounded-dbb transition-colors ${
             showPanel || filterActive
               ? 'border-dbb-accent text-dbb-accent bg-dbb-accent/10'
-              : 'border-gray-700 text-gray-400 hover:border-dbb-accent/50'
+              : 'border-dbb-tertiary/50 text-gray-400 hover:border-dbb-accent/50'
           }`}
         >
           <Filter className="w-4 h-4" />
@@ -489,7 +536,7 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
         {/* Add card button */}
         <button
           onClick={() => setShowAddCard(true)}
-          className="flex items-center gap-1.5 px-3 py-2 text-sm border border-gray-700 text-gray-400 rounded-lg hover:border-dbb-accent/50 hover:text-dbb-accent transition-colors"
+          className="flex items-center gap-1.5 px-3 py-2 text-sm border border-dbb-tertiary/50 text-gray-400 rounded-dbb hover:border-dbb-accent/50 hover:text-dbb-accent transition-colors"
           title="Add individual card"
         >
           <PlusCircle className="w-4 h-4" />
@@ -533,7 +580,7 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
 
       {/* Multi-select header bar */}
       {multiSelect && (
-        <div className="flex items-center gap-3 mb-4 px-4 py-2 bg-dbb-secondary/80 border border-gray-700 rounded-lg">
+        <div className="flex items-center gap-3 mb-4 px-4 py-2 bg-dbb-secondary/80 border border-dbb-tertiary/50 rounded-dbb">
           <button
             onClick={selectAll}
             className="text-xs text-dbb-accent hover:underline"
@@ -555,7 +602,9 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
       )}
 
       {/* Grid */}
-      {cards.length === 0 ? (
+      {initialLoading ? (
+        skeletonGrid
+      ) : cards.length === 0 ? (
         <div className="text-center py-24">
           <div className="text-5xl mb-4">📦</div>
           <h2 className="text-xl font-semibold mb-2 text-gray-300">
@@ -568,15 +617,12 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
           </p>
           {!filterActive && !q && (
             <div className="flex flex-col sm:flex-row items-center gap-3 justify-center">
-              <Link
-                href="/import"
-                className="inline-block btn-primary px-6 py-2 rounded-lg"
-              >
+              <Link href="/import" className="btn btn-primary btn-md">
                 Import collection →
               </Link>
               <button
                 onClick={() => setShowAddCard(true)}
-                className="inline-flex items-center gap-2 px-6 py-2 rounded-lg border border-gray-600 text-gray-400 hover:border-dbb-accent hover:text-dbb-accent transition-colors"
+                className="btn btn-outline btn-md"
               >
                 <PlusCircle className="w-4 h-4" />
                 Add a card
@@ -586,7 +632,7 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
           {(filterActive || q) && (
             <button
               onClick={handleClearAllFilters}
-              className="inline-block px-6 py-2 rounded-lg border border-gray-600 text-gray-400 hover:border-dbb-accent hover:text-dbb-accent transition-colors"
+              className="btn btn-secondary btn-md"
             >
               Clear all filters
             </button>
@@ -619,6 +665,7 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
                   onDelete={multiSelect ? undefined : handleDelete}
                   onOpen={multiSelect ? () => toggleSelect(card.id) : setSelectedCard}
                   dimmed={multiSelect && selectedIds.size > 0 && !selectedIds.has(card.id)}
+                  priceData={priceMap[`${card.scryfall_id}:${card.foil || 'normal'}`]}
                 />
               </div>
             ))}
@@ -645,31 +692,31 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
             <div className="flex items-center gap-2 ml-auto flex-wrap">
               <button
                 onClick={() => handleBulkStar(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-600 rounded-lg text-gray-300 hover:border-dbb-gold hover:text-dbb-gold transition-colors"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-dbb-tertiary/50 rounded-dbb text-gray-300 hover:border-dbb-gold hover:text-dbb-gold transition-colors"
               >
                 <Star className="w-4 h-4" /> Star all
               </button>
               <button
                 onClick={() => handleBulkStar(false)}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-600 rounded-lg text-gray-300 hover:border-gray-400 transition-colors"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-dbb-tertiary/50 rounded-dbb text-gray-300 hover:border-gray-400 transition-colors"
               >
                 <StarOff className="w-4 h-4" /> Unstar all
               </button>
               <button
                 onClick={() => setShowBinderPicker(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-600 rounded-lg text-gray-300 hover:border-dbb-accent hover:text-dbb-accent transition-colors"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-dbb-tertiary/50 rounded-dbb text-gray-300 hover:border-dbb-accent hover:text-dbb-accent transition-colors"
               >
                 <FolderOpen className="w-4 h-4" /> Move to binder
               </button>
               <button
                 onClick={() => setShowListPicker(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-600 rounded-lg text-gray-300 hover:border-green-500 hover:text-green-400 transition-colors"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-dbb-tertiary/50 rounded-dbb text-gray-300 hover:border-green-500 hover:text-green-400 transition-colors"
               >
                 <Tag className="w-4 h-4" /> List on Bazaar
               </button>
               <button
                 onClick={handleBulkDelete}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-red-800 rounded-lg text-red-400 hover:border-red-500 hover:text-red-300 transition-colors"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-red-800 rounded-dbb text-red-400 hover:border-red-500 hover:text-red-300 transition-colors"
               >
                 <Trash2 className="w-4 h-4" /> Delete all
               </button>
@@ -725,7 +772,7 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
           className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
           onClick={(e) => { if (e.target === e.currentTarget) setShowListPicker(false) }}
         >
-          <div className="bg-dbb-primary border border-dbb-accent/30 rounded-xl max-w-sm w-full p-6 shadow-2xl">
+          <div className="bg-dbb-primary border border-dbb-accent/30 rounded-dbb max-w-sm w-full p-6 shadow-2xl">
             <h3 className="text-lg font-bold mb-1">List on Bazaar</h3>
             <p className="text-sm text-gray-400 mb-4">
               {selectedCount} card{selectedCount !== 1 ? 's' : ''} · Price = CKD USD × multiplier
@@ -737,10 +784,10 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
                 <button
                   key={m}
                   onClick={() => setListMultiplier(m)}
-                  className={`flex-1 py-3 rounded-lg border text-sm font-semibold transition-colors ${
+                  className={`flex-1 py-3 rounded-dbb border text-sm font-semibold transition-colors ${
                     listMultiplier === m
                       ? 'border-dbb-accent bg-dbb-accent/10 text-dbb-accent'
-                      : 'border-gray-700 text-gray-400 hover:border-dbb-accent/50'
+                      : 'border-dbb-tertiary/50 text-gray-400 hover:border-dbb-accent/50'
                   }`}
                 >
                   ×{m}
@@ -754,10 +801,10 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
                 <button
                   key={h}
                   onClick={() => setListDuration(h)}
-                  className={`flex-1 py-2 rounded-lg border text-xs font-medium transition-colors ${
+                  className={`flex-1 py-2 rounded-dbb border text-xs font-medium transition-colors ${
                     listDuration === h
                       ? 'border-dbb-accent bg-dbb-accent/10 text-dbb-accent'
-                      : 'border-gray-700 text-gray-500 hover:border-gray-500'
+                      : 'border-dbb-tertiary/50 text-gray-500 hover:border-gray-500'
                   }`}
                 >
                   {h}h
@@ -769,13 +816,13 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
               <button
                 onClick={handleBulkList}
                 disabled={listing}
-                className="flex-1 py-2 bg-dbb-accent hover:bg-red-600 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                className="flex-1 btn btn-primary btn-md"
               >
                 {listing ? 'Listing...' : 'Confirm'}
               </button>
               <button
                 onClick={() => setShowListPicker(false)}
-                className="px-4 py-2 text-sm text-gray-400 hover:text-white border border-gray-700 rounded-lg transition-colors"
+                className="btn btn-secondary btn-md"
               >
                 Cancel
               </button>

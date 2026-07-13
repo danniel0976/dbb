@@ -11,7 +11,7 @@ export default async function CartPage() {
   if (!user) redirect('/login')
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-dbb-primary to-dbb-secondary">
+    <div className="min-h-screen">
       <DBBNav userEmail={user.email} />
       <main className="container mx-auto px-4 py-8">
         <div className="mb-6">

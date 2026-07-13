@@ -93,7 +93,7 @@ export default function ProfilePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-dbb-primary to-dbb-secondary flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center">
         <Loader2 className="w-8 h-8 text-dbb-accent animate-spin" />
       </div>
     )
@@ -101,10 +101,10 @@ export default function ProfilePage() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-dbb-primary to-dbb-secondary flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <p className="text-red-400 mb-4">{error}</p>
-          <Link href="/library" className="text-dbb-accent hover:underline">Back to library</Link>
+          <Link href="/library" className="btn btn-outline btn-md">Back to library</Link>
         </div>
       </div>
     )
@@ -114,11 +114,11 @@ export default function ProfilePage() {
   const memberSince = created_at ? new Date(created_at).toLocaleDateString('en-MY', { year: 'numeric', month: 'long', day: 'numeric' }) : '—'
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-dbb-primary to-dbb-secondary">
+    <div className="min-h-screen">
       <DBBNav />
 
       <main className="container mx-auto px-4 py-8 max-w-3xl">
-        <h2 className="text-2xl font-bold text-white mb-6">Profile</h2>
+        <h1 className="text-2xl font-bold text-white mb-6">Profile</h1>
 
         {/* Account info card */}
         <div className="bg-dbb-secondary border border-gray-700 rounded-xl p-6 mb-6">
@@ -215,7 +215,7 @@ export default function ProfilePage() {
           <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4">Security</h3>
           <Link
             href="/reset-password"
-            className="inline-flex items-center gap-2 px-4 py-2 text-sm text-gray-300 border border-gray-700 hover:border-gray-500 hover:text-white rounded-lg transition-colors"
+            className="btn btn-outline btn-md inline-flex items-center gap-2"
           >
             Change password
           </Link>
@@ -233,7 +233,7 @@ export default function ProfilePage() {
               </div>
               <button
                 onClick={() => setShowDeactivate(true)}
-                className="flex-shrink-0 px-4 py-2 text-sm text-red-400 border border-red-800 hover:bg-red-900/20 rounded-lg transition-colors"
+                className="flex-shrink-0 btn btn-danger btn-md"
               >
                 Deactivate
               </button>
@@ -259,7 +259,7 @@ export default function ProfilePage() {
                 <button
                   onClick={handleDeactivate}
                   disabled={confirmText !== 'deactivate' || deactivating}
-                  className="flex items-center gap-2 px-4 py-2 text-sm bg-red-700 hover:bg-red-600 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
+                  className="btn btn-danger btn-md disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
                 >
                   {deactivating ? <Loader2 className="w-4 h-4 animate-spin" /> : <AlertTriangle className="w-4 h-4" />}
                   Confirm deactivate
@@ -267,7 +267,7 @@ export default function ProfilePage() {
                 <button
                   onClick={() => { setShowDeactivate(false); setConfirmText('') }}
                   disabled={deactivating}
-                  className="px-4 py-2 text-sm text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 rounded-lg transition-colors"
+                  className="btn btn-secondary btn-md"
                 >
                   Cancel
                 </button>
