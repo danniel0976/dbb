@@ -248,7 +248,7 @@ export default function ImportWizard() {
           <button
             disabled={!file || !preview}
             onClick={() => setStep(2)}
-            className="w-full py-3 bg-dbb-accent hover:bg-dbb-accent/80 disabled:bg-gray-200 dark:disabled:bg-gray-700 disabled:text-gray-400 dark:disabled:text-gray-500 text-white font-medium rounded-xl transition-colors flex items-center justify-center gap-2"
+            className="w-full py-3 bg-dbb-accent hover:bg-dbb-accent-hov disabled:bg-gray-200 dark:disabled:bg-gray-700 disabled:text-gray-400 dark:disabled:text-gray-500 text-white font-medium rounded-xl transition-colors flex items-center justify-center gap-2"
           >
             Next <ArrowRight className="w-4 h-4" />
           </button>
@@ -295,7 +295,7 @@ export default function ImportWizard() {
             <button
               disabled={uploading || !binderName.trim()}
               onClick={handleImport}
-              className="flex-[2] py-3 bg-dbb-accent hover:bg-dbb-accent/80 disabled:bg-gray-200 dark:disabled:bg-gray-700 disabled:text-gray-400 dark:disabled:text-gray-500 text-white font-medium rounded-xl transition-colors flex items-center justify-center gap-2"
+              className="flex-[2] py-3 bg-dbb-accent hover:bg-dbb-accent-hov disabled:bg-gray-200 dark:disabled:bg-gray-700 disabled:text-gray-400 dark:disabled:text-gray-500 text-white font-medium rounded-xl transition-colors flex items-center justify-center gap-2"
             >
               {uploading ? (
                 <>
@@ -393,7 +393,7 @@ export default function ImportWizard() {
             </button>
             <Link
               href="/library"
-              className="flex-1 py-3 bg-dbb-accent hover:bg-dbb-accent/80 text-white font-medium rounded-xl transition-colors text-center text-sm"
+              className="flex-1 py-3 bg-dbb-accent hover:bg-dbb-accent-hov text-white font-medium rounded-xl transition-colors text-center text-sm"
             >
               Go to Library →
             </Link>

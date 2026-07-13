@@ -2,16 +2,66 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── CSS Variables: Design Tokens v2 (Phase 23 — Red Accent) ── */
+:root {
+  /* Light mode (default) — RGB channels for Tailwind opacity support */
+  --dbb-accent-rgb: 220 38 38;       /* red-600 */
+  --dbb-accent-hov-rgb: 185 28 28;   /* red-700 */
+  --dbb-surface-rgb: 255 255 255;    /* white */
+  --dbb-bg-rgb: 248 248 248;        /* page bg */
+  --dbb-text-rgb: 18 18 18;         /* primary text */
+  --dbb-text-secondary-rgb: 94 97 108;
+  --dbb-border-rgb: 222 227 231;
+  --dbb-price-rgb: 5 119 45;         /* price green */
+
+  /* Non-RGB vars for scrollbar and other direct uses */
+  --dbb-accent: #DC2626;
+  --dbb-accent-hov: #B91C1C;
+  --dbb-surface: #FFFFFF;
+  --dbb-bg: #F8F8F8;
+  --dbb-text: #121212;
+  --dbb-text-secondary: #5E616C;
+  --dbb-border: #DEE3E7;
+  --dbb-price: #05772D;
+  --dbb-scrollbar-thumb: #94a3b8;
+  --dbb-scrollbar-track: #e2e8f0;
+  --dbb-scrollbar-thumb-hover: #64748b;
+}
+
+.dark {
+  /* Dark mode */
+  --dbb-accent-rgb: 239 68 68;       /* red-500 */
+  --dbb-accent-hov-rgb: 220 38 38;   /* red-600 */
+  --dbb-surface-rgb: 30 41 59;      /* slate-800 */
+  --dbb-bg-rgb: 15 23 42;          /* slate-900 */
+  --dbb-text-rgb: 241 245 249;
+  --dbb-text-secondary-rgb: 148 163 184;
+  --dbb-border-rgb: 51 65 85;
+  --dbb-price-rgb: 34 197 94;       /* green-500 */
+
+  --dbb-accent: #EF4444;
+  --dbb-accent-hov: #DC2626;
+  --dbb-surface: #1E293B;
+  --dbb-bg: #0F172A;
+  --dbb-text: #F1F5F9;
+  --dbb-text-secondary: #94A3B8;
+  --dbb-border: #334155;
+  --dbb-price: #22C55E;
+  --dbb-scrollbar-thumb: #EF4444;
+  --dbb-scrollbar-track: #0F172A;
+  --dbb-scrollbar-thumb-hover: #DC2626;
+}
+
 /* ── Light mode (default) ── */
 body {
-  color: #121212;
-  background-color: #F8F8F8;
+  color: var(--dbb-text);
+  background-color: var(--dbb-bg);
   min-height: 100vh;
 }
 
 /* ── Dark mode body ── */
 .dark body {
-  color: #FFFFFF;
+  color: #F1F5F9;
   background: linear-gradient(
       to bottom,
       #0f172a,
@@ -26,26 +76,26 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: #e2e8f0;
+  background: var(--dbb-scrollbar-track);
 }
 .dark ::-webkit-scrollbar-track {
-  background: #0f172a;
+  background: var(--dbb-scrollbar-track);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #94a3b8;
+  background: var(--dbb-scrollbar-thumb);
   border-radius: 4px;
 }
 .dark ::-webkit-scrollbar-thumb {
-  background: #0835DB;
+  background: var(--dbb-scrollbar-thumb);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #64748b;
+  background: var(--dbb-scrollbar-thumb-hover);
 }
 .dark ::-webkit-scrollbar-thumb:hover {
-  background: #1944E8;
+  background: var(--dbb-scrollbar-thumb-hover);
 }
 
 /* Card hover effects — TCGPlayer-style elevation */
@@ -176,7 +226,7 @@ body {
   100% { background-position: -200% -200%; }
 }
 
-/* ── Button system (TCGPlayer-inspired) ── */
+/* ── Button system v2 (Phase 23 — Red Accent) ── */
 .btn {
   display: inline-flex;
   align-items: center;
@@ -195,12 +245,13 @@ body {
 .btn-md { padding: 0.5rem 1rem; }
 .btn-sm { padding: 0.5rem 0.75rem; }
 
+/* btn-primary: red accent via CSS variable — auto light/dark */
 .btn-primary {
-  background-color: #0835DB;
+  background-color: var(--dbb-accent);
   color: white;
 }
 .btn-primary:hover {
-  background-color: #1944E8;
+  background-color: var(--dbb-accent-hov);
 }
 
 .btn-mint {
@@ -229,13 +280,14 @@ body {
   background-color: #334155;
 }
 
+/* btn-outline: red accent outline via CSS variable — auto light/dark */
 .btn-outline {
   background-color: transparent;
-  color: #0835DB;
-  border: 1.5px solid #0835DB;
+  color: var(--dbb-accent);
+  border: 1.5px solid var(--dbb-accent);
 }
 .btn-outline:hover {
-  background-color: #0835DB;
+  background-color: var(--dbb-accent);
   color: white;
 }
 
@@ -254,8 +306,8 @@ body {
   cursor: not-allowed;
 }
 
-/* Price display — green per TCGPlayer convention */
+/* Price display — green per TCGPlayer convention, auto light/dark */
 .price-green {
-  color: #05772D;
+  color: var(--dbb-price);
   font-weight: 600;
 }

@@ -93,7 +93,7 @@ export default function LoginPage() {
 
       <p className="mt-6 text-center text-sm text-gray-500 dark:text-gray-400">
         {"Don't have an account? "}
-        <Link href="/register" className="text-dbb-accent hover:text-dbb-accent/80 transition-colors font-medium">
+        <Link href="/register" className="text-dbb-accent hover:text-dbb-accent-hov transition-colors font-medium">
           Register
         </Link>
       </p>

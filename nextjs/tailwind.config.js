@@ -9,16 +9,17 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        // DBB design system (TCGPlayer-inspired, dark theme)
-        'dbb-primary': '#0f172a',      // slate-900 — page background
-        'dbb-secondary': '#1e293b',     // slate-800 — cards/surfaces
-        'dbb-tertiary': '#334155',      // slate-700 — borders/hover
-        'dbb-accent': '#0835DB',        // brand blue — CTAs, links, active
-        'dbb-accent-hov': '#1944E8',    // brand blue hover
-        'dbb-mint': '#3AC692',          // mint green — positive accents
-        'dbb-mint-hov': '#2DA27C',      // mint green hover
-        'dbb-price': '#05772D',         // price green
-        'dbb-pink': '#E02179',          // NEW tag pink
+        // DBB design system v2 — RED accent (Phase 23)
+        // Uses RGB CSS variables for auto light/dark switching with opacity support
+        'dbb-primary': 'rgb(var(--dbb-bg-rgb) / <alpha-value>)',
+        'dbb-secondary': 'rgb(var(--dbb-surface-rgb) / <alpha-value>)',
+        'dbb-tertiary': 'rgb(var(--dbb-border-rgb) / <alpha-value>)',
+        'dbb-accent': 'rgb(var(--dbb-accent-rgb) / <alpha-value>)',
+        'dbb-accent-hov': 'rgb(var(--dbb-accent-hov-rgb) / <alpha-value>)',
+        'dbb-mint': '#3AC692',
+        'dbb-mint-hov': '#2DA27C',
+        'dbb-price': 'rgb(var(--dbb-price-rgb) / <alpha-value>)',
+        'dbb-pink': '#E02179',
         'dbb-gold': '#f4d03f',
         'dbb-silver': '#bdc3c7',
         'dbb-bronze': '#cd7f32',
@@ -29,7 +30,7 @@ module.exports = {
         'rarity-rare': '#f4d03f',
         'rarity-mythic': '#e94560',
         
-        // Color pie
+        // Color pie (MTG)
         'white': '#f5f5dc',
         'blue': '#4a90e2',
         'black': '#2c2c2c',

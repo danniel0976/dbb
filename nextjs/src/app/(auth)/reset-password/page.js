@@ -70,7 +70,7 @@ export default function ResetPasswordPage() {
   if (hasSession) {
     return (
       <>
-        <h2 className="text-2xl font-bold text-white mb-6">Choose new password</h2>
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Choose new password</h2>
 
         {error && (
           <div className="mb-4 p-3 rounded-lg bg-red-900/40 border border-red-500/40 text-red-300 text-sm">
@@ -80,26 +80,26 @@ export default function ResetPasswordPage() {
 
         <form onSubmit={handleUpdatePassword} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">New Password</label>
+            <label className="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">New Password</label>
             <input
               type="password"
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full bg-dbb-primary border border-gray-700 rounded-lg px-4 py-2.5 text-white text-sm focus:border-dbb-accent focus:outline-none placeholder-gray-600"
+              className="w-full bg-gray-50 dark:bg-dbb-primary border border-gray-200 dark:border-gray-700 rounded-lg px-4 py-2.5 text-gray-900 dark:text-white text-sm focus:border-dbb-accent focus:outline-none placeholder-gray-400 dark:placeholder-gray-600"
               placeholder="Min. 8 characters"
               autoComplete="new-password"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">Confirm New Password</label>
+            <label className="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">Confirm New Password</label>
             <input
               type="password"
               required
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
-              className="w-full bg-dbb-primary border border-gray-700 rounded-lg px-4 py-2.5 text-white text-sm focus:border-dbb-accent focus:outline-none placeholder-gray-600"
+              className="w-full bg-gray-50 dark:bg-dbb-primary border border-gray-200 dark:border-gray-700 rounded-lg px-4 py-2.5 text-gray-900 dark:text-white text-sm focus:border-dbb-accent focus:outline-none placeholder-gray-400 dark:placeholder-gray-600"
               placeholder="••••••••"
               autoComplete="new-password"
             />
@@ -108,7 +108,7 @@ export default function ResetPasswordPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-dbb-accent hover:bg-dbb-accent/90 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-2.5 rounded-lg transition-colors"
+            className="w-full bg-dbb-accent hover:bg-dbb-accent-hov disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-2.5 rounded-lg transition-colors"
           >
             {loading ? 'Updating…' : 'Update password'}
           </button>
@@ -119,8 +119,8 @@ export default function ResetPasswordPage() {
 
   return (
     <>
-      <h2 className="text-2xl font-bold text-white mb-2">Reset password</h2>
-      <p className="text-gray-400 text-sm mb-6">{"Enter your email and we'll send you a reset link."}</p>
+      <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Reset password</h2>
+      <p className="text-gray-500 dark:text-gray-400 text-sm mb-6">{"Enter your email and we'll send you a reset link."}</p>
 
       {error && (
         <div className="mb-4 p-3 rounded-lg bg-red-900/40 border border-red-500/40 text-red-300 text-sm">
@@ -135,13 +135,13 @@ export default function ResetPasswordPage() {
       ) : (
         <form onSubmit={handleRequestReset} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">Email</label>
+            <label className="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">Email</label>
             <input
               type="email"
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full bg-dbb-primary border border-gray-700 rounded-lg px-4 py-2.5 text-white text-sm focus:border-dbb-accent focus:outline-none placeholder-gray-600"
+              className="w-full bg-gray-50 dark:bg-dbb-primary border border-gray-200 dark:border-gray-700 rounded-lg px-4 py-2.5 text-gray-900 dark:text-white text-sm focus:border-dbb-accent focus:outline-none placeholder-gray-400 dark:placeholder-gray-600"
               placeholder="you@example.com"
               autoComplete="email"
             />
@@ -150,15 +150,15 @@ export default function ResetPasswordPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-dbb-accent hover:bg-dbb-accent/90 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-2.5 rounded-lg transition-colors"
+            className="w-full bg-dbb-accent hover:bg-dbb-accent-hov disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-2.5 rounded-lg transition-colors"
           >
             {loading ? 'Sending…' : 'Send reset link'}
           </button>
         </form>
       )}
 
-      <p className="mt-6 text-center text-sm text-gray-400">
-        <Link href="/login" className="text-dbb-accent hover:text-dbb-accent/80 transition-colors">
+      <p className="mt-6 text-center text-sm text-gray-500 dark:text-gray-400">
+        <Link href="/login" className="text-dbb-accent hover:text-dbb-accent-hov transition-colors">
           Back to sign in
         </Link>
       </p>

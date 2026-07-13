@@ -107,7 +107,7 @@ function BinderItem({ binder, isSelected, onSelect, onRename, onDelete, onMerge 
           onChange={e => setName(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter') saveRename(); if (e.key === 'Escape') cancelEdit() }}
           maxLength={60}
-          className="flex-1 min-w-0 bg-dbb-primary border border-dbb-accent/50 rounded px-2 py-0.5 text-sm text-white focus:outline-none"
+          className="flex-1 min-w-0 bg-gray-50 dark:bg-dbb-primary border border-dbb-accent/50 dark:border-dbb-accent/50 rounded px-2 py-0.5 text-sm text-gray-900 dark:text-white focus:outline-none"
         />
         <button onClick={saveRename} disabled={saving} className="flex-shrink-0 text-green-400 hover:text-green-300 disabled:opacity-50">
           {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
@@ -151,7 +151,7 @@ function BinderItem({ binder, isSelected, onSelect, onRename, onDelete, onMerge 
             </button>
             <button
               onClick={() => { setMenuOpen(false); onMerge(binder) }}
-              className="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-gray-300 hover:text-blue-300 hover:bg-gray-100 dark:hover:bg-white/5 transition-colors"
+              className="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-gray-300 hover:text-dbb-accent hover:bg-gray-100 dark:hover:bg-white/5 transition-colors"
             >
               <GitMerge className="w-3 h-3" /> Merge into…
             </button>
@@ -318,7 +318,7 @@ export default function BinderRail({ initialBinders = [], selectedId, onSelect, 
             onChange={e => setNewName(e.target.value)}
             placeholder="Binder name..."
             maxLength={60}
-            className="flex-1 min-w-0 bg-dbb-primary border border-gray-700 rounded px-2 py-1 text-xs text-white focus:border-dbb-accent focus:outline-none placeholder-gray-600"
+            className="flex-1 min-w-0 bg-gray-50 dark:bg-dbb-primary border border-gray-200 dark:border-gray-700 rounded px-2 py-1 text-xs text-gray-900 dark:text-white focus:border-dbb-accent focus:outline-none placeholder-gray-400 dark:placeholder-gray-600"
           />
           <button
             type="submit"

@@ -487,7 +487,7 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
           <select
             value={sort}
             onChange={(e) => handleSortChange(e.target.value)}
-            className="bg-dbb-secondary border border-dbb-tertiary/50 rounded-dbb px-3 py-2 text-sm focus:border-dbb-accent focus:outline-none"
+            className="bg-white dark:bg-dbb-secondary border border-gray-200 dark:border-dbb-tertiary/50 rounded-dbb px-3 py-2 text-sm text-gray-900 dark:text-white focus:border-dbb-accent focus:outline-none"
           >
             {SORTS.map(s => (
               <option key={s.value} value={s.value}>{s.label}</option>
@@ -583,7 +583,7 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
         <div className="flex items-center gap-3 mb-4 px-4 py-2 bg-gray-100 dark:bg-dbb-secondary/80 border border-gray-200 dark:border-dbb-tertiary/50 rounded-dbb">
           <button
             onClick={selectAll}
-            className="text-xs text-blue-600 dark:text-dbb-accent hover:underline"
+            className="text-xs text-dbb-accent hover:underline"
           >
             Select all ({cards.length})
           </button>

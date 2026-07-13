@@ -291,7 +291,7 @@ export default function CardDetail({ card, onClose, onCopyCaption }) {
                   href={ckUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="block w-full text-center py-2.5 px-4 rounded-lg bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white font-semibold transition-all hover:shadow-lg hover:shadow-purple-500/25"
+                  className="block w-full text-center py-2.5 px-4 rounded-lg bg-gradient-to-r from-purple-600 to-red-600 hover:from-purple-500 hover:to-red-500 text-white font-semibold transition-all hover:shadow-lg hover:shadow-purple-500/25"
                 >
                   🛒 View on CardKingdom
                 </a>
@@ -300,7 +300,7 @@ export default function CardDetail({ card, onClose, onCopyCaption }) {
                   href={`https://www.cardkingdom.com/mtg-singles/${card.card_name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="block w-full text-center py-2.5 px-4 rounded-lg bg-gradient-to-r from-purple-600/50 to-blue-600/50 hover:from-purple-600/70 hover:to-blue-600/70 text-white font-semibold transition-all hover:shadow-lg hover:shadow-purple-500/25 opacity-70"
+                  className="block w-full text-center py-2.5 px-4 rounded-lg bg-gradient-to-r from-purple-600/50 to-red-600/50 hover:from-purple-600/70 hover:to-red-600/70 text-white font-semibold transition-all hover:shadow-lg hover:shadow-purple-500/25 opacity-70"
                   title="Best-guess link — may not match exact printing"
                 >
                   🛒 Search on CardKingdom
