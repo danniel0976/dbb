@@ -1048,8 +1048,8 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
                   } else {
                     setMissingPhotoIds([])
                     setPhotoCaptureIndex(0)
-                    setShowListPicker(true)
-                    toast('All required photos added. Review and confirm your listing.', 'success')
+                    toast('All required photos added. Resuming your listing.', 'success')
+                    setTimeout(() => handleBulkList(), 0)
                   }
                 }}
               />

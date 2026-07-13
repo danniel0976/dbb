@@ -32,7 +32,7 @@ function relativeTime(isoString, future = false) {
 
 // PhotoSection — shows current card photo + camera capture for owner.
 // Uses small variant (640px) for inline display; full-size available via lightbox.
-function PhotoSection({ libraryRow, listing, onPhotoChange, forceCamera, onCameraOpened }) {
+function PhotoSection({ libraryRow, listing, onPhotoChange, forceCamera, onCameraOpened, onCaptureComplete }) {
   const { toast } = useToast()
   const [photoUrl, setPhotoUrl] = useState(undefined) // undefined=loading, null=none, string=url
   const [showCamera, setShowCamera] = useState(false)
@@ -55,6 +55,7 @@ function PhotoSection({ libraryRow, listing, onPhotoChange, forceCamera, onCamer
     setShowCamera(false)
     toast('Photo saved', 'success')
     onPhotoChange?.(true)
+    onCaptureComplete?.()
   }
 
   useEffect(() => {
@@ -159,7 +160,7 @@ function PhotoSection({ libraryRow, listing, onPhotoChange, forceCamera, onCamer
   )
 }
 
-function ClaimSaleForm({ libraryRow, onCancel }) {
+function ClaimSaleForm({ libraryRow, onCancel, onRequirePhoto }) {
   const { toast } = useToast()
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
@@ -189,6 +190,10 @@ function ClaimSaleForm({ libraryRow, onCancel }) {
       })
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
+        if (res.status === 422 && err.missing_photos?.includes(libraryRow.id)) {
+          onRequirePhoto?.(handleCreate)
+          return
+        }
         throw new Error(err.error || 'Failed')
       }
       toast('Claim sale created on Bazaar', 'success')
@@ -352,6 +357,10 @@ function ListingSection({ libraryRow, hasPhoto, onRequirePhoto }) {
       })
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
+        if (res.status === 422 && err.missing_photos?.includes(libraryRow.id)) {
+          onRequirePhoto?.(handleList)
+          return
+        }
         throw new Error(err.error || 'Failed')
       }
       const data = await res.json()
@@ -475,6 +484,7 @@ function ListingSection({ libraryRow, hasPhoto, onRequirePhoto }) {
       <ClaimSaleForm
         libraryRow={libraryRow}
         onCancel={() => setShowClaimSale(false)}
+        onRequirePhoto={onRequirePhoto}
       />
     )
   }
@@ -641,6 +651,7 @@ export default function CardDetailModal({ libraryRow, onClose, onSave, onDelete 
   const [hasPhoto, setHasPhoto] = useState(false)
   const [currentListing, setCurrentListing] = useState(undefined)
   const [forcePhotoCamera, setForcePhotoCamera] = useState(false)
+  const [pendingPhotoAction, setPendingPhotoAction] = useState(null)
 
   const [quantity, setQuantity] = useState(libraryRow.quantity)
   const [condition, setCondition] = useState(libraryRow.condition)
@@ -847,13 +858,23 @@ export default function CardDetailModal({ libraryRow, onClose, onSave, onDelete 
               onPhotoChange={setHasPhoto}
               forceCamera={forcePhotoCamera}
               onCameraOpened={() => setForcePhotoCamera(false)}
+              onCaptureComplete={() => {
+                if (pendingPhotoAction) {
+                  const retry = pendingPhotoAction
+                  setPendingPhotoAction(null)
+                  retry()
+                }
+              }}
             />
 
             {/* Bazaar listing */}
             <ListingSection
               libraryRow={libraryRow}
               hasPhoto={hasPhoto}
-              onRequirePhoto={() => setForcePhotoCamera(true)}
+              onRequirePhoto={(retry) => {
+                if (retry) setPendingPhotoAction(() => retry)
+                setForcePhotoCamera(true)
+              }}
             />
 
             {/* Actions */}
