@@ -4,7 +4,7 @@ import { createClient as createServiceClient } from '@supabase/supabase-js'
 export const runtime = 'nodejs'
 
 const BUCKET = 'card-photos'
-const SIGNED_URL_TTL = 60  // 1 minute — short TTL for buyer-facing seller photo
+const SIGNED_URL_TTL = 300  // 5 minutes — condition proof photo for buyer
 
 function makeServiceClient() {
   return createServiceClient(
@@ -14,9 +14,9 @@ function makeServiceClient() {
 }
 
 // GET /api/listings/[id]/seller
-// Returns the seller profile + card photo for an active listing.
-// Used by BazaarDetailModal to show the seller popup when a buyer clicks a seller.
-// No auth required (listing is public); service role fetches and signs the photo URL.
+// Returns the seller profile (display name, member since) for an active listing.
+// Used by BazaarDetailModal SellerPopup — name/member-since ONLY (no photo).
+// Photo is now served via /api/listings/[id]/condition-proof for explicit viewing.
 export async function GET(request, { params }) {
   const { id: listingId } = await params
 
@@ -48,48 +48,28 @@ export async function GET(request, { params }) {
       if (!fallbackListing) {
         return NextResponse.json({ error: 'Listing not found or no longer active' }, { status: 404 })
       }
-      return buildResponse(sc, fallbackListing)
+      return buildSellerResponse(sc, fallbackListing)
     }
     return NextResponse.json({ error: 'Listing not found or no longer active' }, { status: 404 })
   }
 
-  return buildResponse(sc, listing)
+  return buildSellerResponse(sc, listing)
 }
 
-async function buildResponse(sc, listing) {
-  const { user_id, library_card_id, multiplier } = listing
-  const lc = listing.library_cards
+async function buildSellerResponse(sc, listing) {
+  const { user_id } = listing
 
-  // Load seller profile
+  // Load seller profile (name + member-since ONLY — no photo in seller popup)
   const { data: profile } = await sc
     .from('profiles')
     .select('display_name, created_at')
     .eq('id', user_id)
     .maybeSingle()
 
-  // Load card photo if it exists
-  let photoUrl = null
-  const { data: photo } = await sc
-    .from('card_photos')
-    .select('storage_path')
-    .eq('library_card_id', library_card_id)
-    .maybeSingle()
-
-  if (photo?.storage_path) {
-    const { data: signedData } = await sc.storage
-      .from(BUCKET)
-      .createSignedUrl(photo.storage_path, SIGNED_URL_TTL)
-    photoUrl = signedData?.signedUrl || null
-  }
-
   return NextResponse.json({
     seller: {
       display_name: profile?.display_name || 'Seller',
       member_since: profile?.created_at || null,
-      condition: lc?.condition || 'NM',
-      foil: lc?.foil || 'normal',
-      multiplier: Number(multiplier),
-      photo_url: photoUrl,
     },
   })
 }

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { X, Loader2, User, Camera, Calendar } from 'lucide-react'
+import { X, Loader2, User, Camera, Calendar, Maximize2 } from 'lucide-react'
 
 function relativeTime(isoString, future = false) {
   if (!isoString) return null
@@ -31,6 +31,89 @@ const RARITY_COLORS = {
 }
 
 const FOIL_LABELS = { foil: 'Foil', etched: 'Etched', normal: 'Non-foil' }
+
+// ConditionProof — lazy-loaded lightbox showing the seller's real-life card photo.
+// Only fetched when the buyer explicitly clicks "View card condition".
+function ConditionProof({ listingId, onClose }) {
+  const [photoUrl, setPhotoUrl] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [enlarged, setEnlarged] = useState(false)
+
+  useEffect(() => {
+    fetch(`/api/listings/${listingId}/condition-proof`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => setPhotoUrl(data?.photo_url || null))
+      .catch(() => setPhotoUrl(null))
+      .finally(() => setLoading(false))
+  }, [listingId])
+
+  return (
+    <div
+      className="fixed inset-0 z-[70] bg-black/80 flex items-center justify-center p-4"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
+    >
+      <div className="bg-dbb-primary border border-dbb-accent/30 rounded-xl max-w-md w-full shadow-2xl">
+        <div className="flex items-center justify-between p-3 border-b border-gray-700">
+          <h3 className="text-sm font-semibold text-white flex items-center gap-1.5">
+            <Camera className="w-4 h-4 text-dbb-accent" /> Condition proof
+          </h3>
+          <button onClick={onClose} className="p-1 hover:text-dbb-accent transition-colors">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="p-3">
+          {loading ? (
+            <div className="flex items-center justify-center gap-2 py-8 text-sm text-gray-600">
+              <Loader2 className="w-4 h-4 animate-spin" /> Loading photo...
+            </div>
+          ) : photoUrl ? (
+            <div className="relative">
+              <img
+                src={photoUrl}
+                alt="Card condition proof"
+                className="w-full rounded-lg border border-gray-700"
+              />
+              <button
+                onClick={() => setEnlarged(true)}
+                className="absolute bottom-2 right-2 p-1.5 bg-black/60 rounded-lg text-white hover:bg-black/80 transition-colors"
+                title="View full size"
+              >
+                <Maximize2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 py-6 text-xs text-gray-500 justify-center">
+              <Camera className="w-4 h-4" /> No condition photo available
+            </div>
+          )}
+          <p className="text-[10px] text-gray-600 mt-2 text-center">
+            Seller's real-life card photo — condition evidence for this listing.
+          </p>
+        </div>
+      </div>
+
+      {/* Full-size lightbox */}
+      {enlarged && photoUrl && (
+        <div
+          className="fixed inset-0 z-[80] bg-black/95 flex items-center justify-center p-4"
+          onClick={() => setEnlarged(false)}
+        >
+          <button
+            className="absolute top-4 right-4 p-2 text-white hover:text-dbb-accent transition-colors"
+            onClick={() => setEnlarged(false)}
+          >
+            <X className="w-6 h-6" />
+          </button>
+          <img
+            src={photoUrl.split('?')[0]}
+            alt="Card condition proof — full size"
+            className="max-w-full max-h-full object-contain rounded-lg"
+          />
+        </div>
+      )}
+    </div>
+  )
+}
 
 function SellerPopup({ listingId, onClose }) {
   const [data, setData] = useState(null)
@@ -62,7 +145,7 @@ function SellerPopup({ listingId, onClose }) {
           </button>
         </div>
 
-        <div className="p-4 space-y-4">
+        <div className="p-4 space-y-3">
           {loading ? (
             <div className="flex items-center justify-center gap-2 py-6 text-sm text-gray-600">
               <Loader2 className="w-4 h-4 animate-spin" /> Loading...
@@ -70,56 +153,20 @@ function SellerPopup({ listingId, onClose }) {
           ) : !data ? (
             <p className="text-sm text-gray-500 text-center py-4">Seller info unavailable.</p>
           ) : (
-            <>
-              {/* Display name */}
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-dbb-accent/20 flex items-center justify-center flex-shrink-0">
-                  <User className="w-5 h-5 text-dbb-accent" />
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-white">{data.display_name}</p>
-                  {data.member_since && (
-                    <p className="text-xs text-gray-500 flex items-center gap-1">
-                      <Calendar className="w-3 h-3" />
-                      Member since {formatDate(data.member_since)}
-                    </p>
-                  )}
-                </div>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-dbb-accent/20 flex items-center justify-center flex-shrink-0">
+                <User className="w-5 h-5 text-dbb-accent" />
               </div>
-
-              {/* Card copy details */}
-              <div className="flex items-center gap-3 p-3 bg-dbb-secondary rounded-lg text-sm">
-                <div className="space-y-0.5">
-                  <p className="text-xs text-gray-500">Their copy</p>
-                  <p className="text-white font-medium">
-                    {data.condition}
-                    {data.foil && data.foil !== 'normal' && (
-                      <span className="ml-2 text-yellow-400 text-xs">{FOIL_LABELS[data.foil] || data.foil}</span>
-                    )}
+              <div>
+                <p className="text-sm font-semibold text-white">{data.display_name}</p>
+                {data.member_since && (
+                  <p className="text-xs text-gray-500 flex items-center gap-1">
+                    <Calendar className="w-3 h-3" />
+                    Member since {formatDate(data.member_since)}
                   </p>
-                </div>
+                )}
               </div>
-
-              {/* Card photo */}
-              {data.photo_url ? (
-                <div>
-                  <p className="text-xs text-gray-500 mb-2 flex items-center gap-1">
-                    <Camera className="w-3 h-3" /> Card photo
-                  </p>
-                  <img
-                    src={data.photo_url}
-                    alt="Seller's card"
-                    className="w-full rounded-lg border border-gray-700 object-cover"
-                    style={{ maxHeight: '220px', objectFit: 'cover' }}
-                  />
-                </div>
-              ) : (
-                <div className="flex items-center gap-2 p-3 bg-dbb-secondary rounded-lg text-xs text-gray-500">
-                  <Camera className="w-3.5 h-3.5" />
-                  No card photo available
-                </div>
-              )}
-            </>
+            </div>
           )}
         </div>
       </div>
@@ -141,6 +188,7 @@ export default function BazaarDetailModal({ listing, onClose, onSelectListing })
   const [sellersLoading, setSellersLoading] = useState(true)
   const [selectedListingId, setSelectedListingId] = useState(null)
   const [sellerPopupId, setSellerPopupId] = useState(null)
+  const [proofListingId, setProofListingId] = useState(null)
 
   // Fetch Scryfall card data (cached in sessionStorage)
   useEffect(() => {
@@ -375,6 +423,13 @@ export default function BazaarDetailModal({ listing, onClose, onSelectListing })
                             {s.expires_at && `expires ${relativeTime(s.expires_at, true)}`}
                           </p>
                         )}
+                        {/* View card condition (lazy fetch — no auto-load) */}
+                        <button
+                          onClick={() => setProofListingId(s.id)}
+                          className="text-[10px] text-gray-500 hover:text-dbb-accent transition-colors flex items-center gap-1 pl-0.5"
+                        >
+                          <Camera className="w-3 h-3" /> View card condition
+                        </button>
                       </div>
                     )
                   })}
@@ -390,6 +445,12 @@ export default function BazaarDetailModal({ listing, onClose, onSelectListing })
       <SellerPopup
         listingId={sellerPopupId}
         onClose={() => setSellerPopupId(null)}
+      />
+    )}
+    {proofListingId && (
+      <ConditionProof
+        listingId={proofListingId}
+        onClose={() => setProofListingId(null)}
       />
     )}
   </>

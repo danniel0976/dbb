@@ -16,9 +16,12 @@ function makeServiceClient() {
 
 // GET /api/photos/[libraryCardId]
 // Returns a short-TTL signed URL for the owner's card photo.
+// Query param ?size=small for thumbnail variant (640px), default full size.
 // 404 if no photo exists. 403 if caller doesn't own the card.
 export async function GET(request, { params }) {
   const { libraryCardId } = await params
+  const url = new URL(request.url)
+  const wantSmall = url.searchParams.get('size') === 'small'
 
   const authClient = await createAuthClient()
   const { data: { user }, error: authError } = await authClient.auth.getUser()
@@ -43,9 +46,10 @@ export async function GET(request, { params }) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
+  const signOpts = wantSmall ? { transform: { width: 640 } } : undefined
   const { data: signedData, error: signErr } = await sc.storage
     .from(BUCKET)
-    .createSignedUrl(photo.storage_path, SIGNED_URL_TTL)
+    .createSignedUrl(photo.storage_path, SIGNED_URL_TTL, signOpts)
 
   if (signErr || !signedData?.signedUrl) {
     return NextResponse.json({ error: 'Could not generate photo URL' }, { status: 500 })

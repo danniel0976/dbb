@@ -38,54 +38,12 @@ if [[ "$HTTP_CODE" -ge 200 && "$HTTP_CODE" -lt 300 ]]; then
   COUNT="$(echo "$BODY" | grep -o '"library_card_id":"[^"]*"' | wc -l | tr -d ' ')"
   echo "[$(date -u +%H:%M:%S)] expire-listings: ${COUNT} listing(s) expired (HTTP ${HTTP_CODE})"
 
-  # ---- Phase 15: Self-destruct card photos for newly-expired listings ----
-  # Extract library_card_ids from the expired listings response
-  LIBRARY_CARD_IDS="$(echo "$BODY" | grep -oP '"library_card_id":"\K[^"]*' 2>/dev/null || true)"
-
-  if [[ -n "$LIBRARY_CARD_IDS" ]]; then
-    PHOTO_COUNT=0
-    while IFS= read -r LC_ID; do
-      [[ -z "$LC_ID" ]] && continue
-
-      # Get the storage_path for this library_card_id from card_photos
-      PHOTO_RESP="$(curl -sS -w "\n%{http_code}" \
-        "${SUPABASE_URL}/rest/v1/card_photos?library_card_id=eq.${LC_ID}&select=storage_path" \
-        -H "apikey: ${SERVICE_ROLE_KEY}" \
-        -H "Authorization: Bearer ${SERVICE_ROLE_KEY}")"
-
-      PHOTO_HTTP="$(echo "$PHOTO_RESP" | tail -n1)"
-      PHOTO_BODY="$(echo "$PHOTO_RESP" | head -n-1)"
-
-      if [[ "$PHOTO_HTTP" -ge 200 && "$PHOTO_HTTP" -lt 300 ]]; then
-        STORAGE_PATH="$(echo "$PHOTO_BODY" | grep -oP '"storage_path":"\K[^"]*' 2>/dev/null || true)"
-
-        if [[ -n "$STORAGE_PATH" ]]; then
-          # Delete storage object from card-photos bucket
-          DEL_STORAGE="$(curl -sS -w "\n%{http_code}" -X DELETE \
-            "${SUPABASE_URL}/storage/v1/object/card-photos/${STORAGE_PATH}" \
-            -H "apikey: ${SERVICE_ROLE_KEY}" \
-            -H "Authorization: Bearer ${SERVICE_ROLE_KEY}")"
-          DEL_HTTP="$(echo "$DEL_STORAGE" | tail -n1)"
-
-          # Delete card_photos DB row
-          curl -sS -X DELETE \
-            "${SUPABASE_URL}/rest/v1/card_photos?library_card_id=eq.${LC_ID}" \
-            -H "apikey: ${SERVICE_ROLE_KEY}" \
-            -H "Authorization: Bearer ${SERVICE_ROLE_KEY}" \
-            -H "Prefer: return=minimal" > /dev/null 2>&1 || true
-
-          if [[ "$DEL_HTTP" -ge 200 && "$DEL_HTTP" -lt 300 ]]; then
-            PHOTO_COUNT=$((PHOTO_COUNT + 1))
-          fi
-        fi
-      fi
-    done <<< "$LIBRARY_CARD_IDS"
-
-    if [[ "$PHOTO_COUNT" -gt 0 ]]; then
-      echo "[$(date -u +%H:%M:%S)] expire-listings: ${PHOTO_COUNT} card photo(s) purged"
-    fi
-  fi
-  # ---- End Phase 15 extension ----
+  # ---- Phase 18: Photo self-destruct REMOVED ----
+  # Photos belong to the library CARD, not the listing. They persist through
+  # listing expiry and relisting. Photos are only deleted when:
+  #   1. The owner explicitly retakes/removes the photo
+  #   2. The library card itself is deleted (CASCADE)
+  # ---- End Phase 18 change ----
 
 elif echo "$BODY" | grep -q '"42703"'; then
   # migration-009 not applied yet — no expires_at column, nothing to sweep

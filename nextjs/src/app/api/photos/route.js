@@ -39,6 +39,17 @@ export async function POST(request) {
     return NextResponse.json({ error: 'library_card_id and photo are required' }, { status: 400 })
   }
 
+  // Phase 18: Server-side upload size enforcement (500KB max)
+  const MAX_UPLOAD_BYTES = 500 * 1024  // 500KB
+  const arrayBuffer = await photoFile.arrayBuffer()
+  const uploadBytes = new Uint8Array(arrayBuffer)
+  if (uploadBytes.byteLength > MAX_UPLOAD_BYTES) {
+    return NextResponse.json(
+      { error: `Photo too large (${(uploadBytes.byteLength / 1024).toFixed(0)}KB). Maximum 500KB.` },
+      { status: 413 }
+    )
+  }
+
   const sc = makeServiceClient()
 
   // Verify ownership
@@ -53,40 +64,16 @@ export async function POST(request) {
     return NextResponse.json({ error: 'Card not found in your library' }, { status: 403 })
   }
 
-  // Check if a photo already exists (retake scenario) — block if card is actively listed
-  const { data: existingPhoto } = await sc
-    .from('card_photos')
-    .select('id')
-    .eq('library_card_id', libraryCardId)
-    .maybeSingle()
-
-  if (existingPhoto) {
-    const now = new Date().toISOString()
-    const { data: activeListing } = await sc
-      .from('listings')
-      .select('id')
-      .eq('library_card_id', libraryCardId)
-      .eq('status', 'active')
-      .gt('expires_at', now)
-      .maybeSingle()
-
-    if (activeListing) {
-      return NextResponse.json(
-        { error: 'Cannot retake photo while card is actively listed. Unlist the card first.' },
-        { status: 409 }
-      )
-    }
-  }
-
-  // Read the file bytes
-  const arrayBuffer = await photoFile.arrayBuffer()
-  const bytes = new Uint8Array(arrayBuffer)
+  // Phase 18: Photo belongs to the library CARD, not the listing.
+  // Owner can retake/replace the photo at any time (active listing or not).
+  // The photo persists across listing cycles until the owner retakes it or removes the card.
+  // No retake restriction while listed.
 
   const storagePath = `${user.id}/${libraryCardId}.jpg`
 
   const { error: uploadErr } = await sc.storage
     .from(BUCKET)
-    .upload(storagePath, bytes, {
+    .upload(storagePath, uploadBytes, {
       contentType: 'image/jpeg',
       upsert: true,
     })

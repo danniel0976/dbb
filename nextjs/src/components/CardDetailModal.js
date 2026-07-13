@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { getCardById, getImageUrl } from '@/lib/scryfall'
 import { useToast } from '@/components/Toast'
 import CameraCapture from '@/components/CameraCapture'
-import { X, Star, Minus, Plus, Trash2, Tag, Loader2, Camera, RotateCcw } from 'lucide-react'
+import { X, Star, Minus, Plus, Trash2, Tag, Loader2, Camera, RotateCcw, Maximize2 } from 'lucide-react'
 
 const MULTIPLIERS = [2.5, 2.8, 3.0]
 const DURATION_OPTIONS = [
@@ -30,17 +30,17 @@ function relativeTime(isoString, future = false) {
   return future ? (diffMs > 0 ? `in ${label}` : 'expired') : `${label} ago`
 }
 
-// PhotoSection — shows current card photo + camera capture for owner
+// PhotoSection — shows current card photo + camera capture for owner.
+// Uses small variant (640px) for inline display; full-size available via lightbox.
 function PhotoSection({ libraryRow, listing, onPhotoChange }) {
   const { toast } = useToast()
   const [photoUrl, setPhotoUrl] = useState(undefined) // undefined=loading, null=none, string=url
   const [showCamera, setShowCamera] = useState(false)
-
-  const isActiveListing = listing && listing.status === 'active' &&
-    (!listing.expires_at || new Date(listing.expires_at) > new Date())
+  const [showLightbox, setShowLightbox] = useState(false)
+  const [fullSizeUrl, setFullSizeUrl] = useState(null)
 
   useEffect(() => {
-    fetch(`/api/photos/${libraryRow.id}`)
+    fetch(`/api/photos/${libraryRow.id}?size=small`)
       .then(r => r.status === 404 ? null : r.ok ? r.json() : null)
       .then(data => {
         const url = data?.url || null
@@ -57,6 +57,16 @@ function PhotoSection({ libraryRow, listing, onPhotoChange }) {
     onPhotoChange?.(true)
   }
 
+  const handleOpenLightbox = () => {
+    setShowLightbox(true)
+    if (!fullSizeUrl) {
+      fetch(`/api/photos/${libraryRow.id}`)
+        .then(r => r.ok ? r.json() : null)
+        .then(data => setFullSizeUrl(data?.url || '__none__'))
+        .catch(() => setFullSizeUrl('__none__'))
+    }
+  }
+
   if (photoUrl === undefined) {
     return (
       <div className="pt-2 border-t border-gray-700">
@@ -71,16 +81,13 @@ function PhotoSection({ libraryRow, listing, onPhotoChange }) {
     <div className="pt-2 border-t border-gray-700 space-y-2">
       <div className="flex items-center justify-between">
         <p className="text-xs font-medium text-gray-400">Card photo</p>
-        {photoUrl && !isActiveListing && !showCamera && (
+        {photoUrl && !showCamera && (
           <button
             onClick={() => setShowCamera(true)}
             className="flex items-center gap-1 text-xs text-gray-500 hover:text-white transition-colors"
           >
             <RotateCcw className="w-3 h-3" /> Retake
           </button>
-        )}
-        {photoUrl && isActiveListing && (
-          <span className="text-xs text-gray-600">Unlist to retake</span>
         )}
       </div>
 
@@ -91,11 +98,19 @@ function PhotoSection({ libraryRow, listing, onPhotoChange }) {
           onCancel={() => setShowCamera(false)}
         />
       ) : photoUrl ? (
-        <img
-          src={photoUrl}
-          alt="Card photo"
-          className="w-full max-h-40 object-cover rounded-lg border border-gray-700"
-        />
+        <div className="relative">
+          <img
+            src={photoUrl}
+            alt="Card photo"
+            className="w-full max-h-40 object-cover rounded-lg border border-gray-700"
+          />
+          <button
+            onClick={handleOpenLightbox}
+            className="absolute bottom-1.5 right-1.5 p-1 bg-black/60 rounded text-white hover:bg-black/80 transition-colors text-[10px] flex items-center gap-1"
+          >
+            <Maximize2 className="w-3 h-3" /> Full size
+          </button>
+        </div>
       ) : (
         <div className="space-y-2">
           <p className="text-xs text-gray-600">No photo yet — required before listing.</p>
@@ -106,6 +121,31 @@ function PhotoSection({ libraryRow, listing, onPhotoChange }) {
             <Camera className="w-4 h-4" />
             Take Photo
           </button>
+        </div>
+      )}
+
+      {showLightbox && (
+        <div
+          className="fixed inset-0 z-[80] bg-black/95 flex items-center justify-center p-4"
+          onClick={() => { setShowLightbox(false); setFullSizeUrl(null) }}
+        >
+          <button
+            className="absolute top-4 right-4 p-2 text-white hover:text-dbb-accent transition-colors"
+            onClick={() => { setShowLightbox(false); setFullSizeUrl(null) }}
+          >
+            <X className="w-6 h-6" />
+          </button>
+          {!fullSizeUrl ? (
+            <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+          ) : fullSizeUrl === '__none__' ? (
+            <span className="text-gray-500">Photo unavailable</span>
+          ) : (
+            <img
+              src={fullSizeUrl}
+              alt="Card photo — full size"
+              className="max-w-full max-h-full object-contain rounded-lg"
+            />
+          )}
         </div>
       )}
     </div>
