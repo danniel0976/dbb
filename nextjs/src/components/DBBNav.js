@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useState, useEffect } from 'react'
+import { Menu, X } from 'lucide-react'
 
 const NAV_LINKS = [
   { href: '/library', label: 'Library' },
@@ -50,44 +51,61 @@ function CartBadge() {
 
 export default function DBBNav({ userEmail, extra }) {
   const pathname = usePathname()
+  const [drawerOpen, setDrawerOpen] = useState(false)
+
+  // Close drawer on route change
+  useEffect(() => {
+    setDrawerOpen(false)
+  }, [pathname])
+
+  // Lock body scroll when drawer is open
+  useEffect(() => {
+    if (drawerOpen) {
+      document.body.style.overflow = 'hidden'
+      return () => { document.body.style.overflow = '' }
+    }
+  }, [drawerOpen])
+
+  const isActive = (href) => pathname?.startsWith(href)
 
   return (
-    <header className="sticky top-0 z-40 bg-dbb-primary/95 backdrop-blur border-b border-dbb-accent/20">
-      <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <span className="text-xl font-bold text-dbb-accent">Dan's Bizarre Bazaar</span>
-          <nav className="hidden sm:flex items-center gap-3 text-sm text-gray-400">
-            {NAV_LINKS.map(({ href, label }) => (
-              <Link
-                key={href}
-                href={href}
-                className={
-                  pathname?.startsWith(href)
-                    ? 'text-white font-medium'
-                    : 'hover:text-white transition-colors'
-                }
-              >
-                {label}
-              </Link>
-            ))}
-            {userEmail && (
-              <Link
-                href="/cart"
-                className={`flex items-center ${
-                  pathname?.startsWith('/cart')
-                    ? 'text-white font-medium'
-                    : 'hover:text-white transition-colors'
-                }`}
-              >
-                Cart
-                <CartBadge />
-              </Link>
-            )}
-          </nav>
-        </div>
-        <div className="flex items-center gap-3">
-          {extra}
-          {userEmail ? (
+    <>
+      <header className="sticky top-0 z-40 bg-dbb-primary/95 backdrop-blur border-b border-dbb-accent/20">
+        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <span className="text-xl font-bold text-dbb-accent">Dan's Bizarre Bazaar</span>
+            <nav className="hidden sm:flex items-center gap-3 text-sm text-gray-400">
+              {NAV_LINKS.map(({ href, label }) => (
+                <Link
+                  key={href}
+                  href={href}
+                  className={
+                    isActive(href)
+                      ? 'text-white font-medium'
+                      : 'hover:text-white transition-colors'
+                  }
+                >
+                  {label}
+                </Link>
+              ))}
+              {userEmail && (
+                <Link
+                  href="/cart"
+                  className={`flex items-center ${
+                    isActive('/cart')
+                      ? 'text-white font-medium'
+                      : 'hover:text-white transition-colors'
+                  }`}
+                >
+                  Cart
+                  <CartBadge />
+                </Link>
+              )}
+            </nav>
+          </div>
+          <div className="flex items-center gap-3">
+            {extra}
+            {userEmail ? (
             <>
               <span className="text-xs text-gray-500 hidden sm:inline">{userEmail}</span>
               <form action="/api/auth/signout" method="POST">
@@ -99,16 +117,94 @@ export default function DBBNav({ userEmail, extra }) {
                 </button>
               </form>
             </>
-          ) : (
-            <Link
-              href="/login"
-              className="text-sm text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 rounded-lg px-3 py-1.5 transition-colors"
+            ) : (
+              <Link
+                href="/login"
+                className="text-sm text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 rounded-lg px-3 py-1.5 transition-colors"
+              >
+                Sign in
+              </Link>
+            )}
+            {/* Hamburger button — visible only below sm breakpoint */}
+            <button
+              type="button"
+              onClick={() => setDrawerOpen(true)}
+              className="sm:hidden flex items-center justify-center w-11 h-11 -mr-2 text-gray-400 hover:text-white transition-colors"
+              aria-label="Open navigation menu"
+              aria-expanded={drawerOpen}
             >
-              Sign in
-            </Link>
-          )}
+              <Menu size={24} />
+            </button>
+          </div>
         </div>
-      </div>
-    </header>
+      </header>
+
+      {/* Mobile slide-in drawer */}
+      {drawerOpen && (
+        <div className="sm:hidden fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label="Navigation menu">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/60"
+            onClick={() => setDrawerOpen(false)}
+          />
+          {/* Drawer panel */}
+          <div className="absolute right-0 top-0 h-full w-72 max-w-[80vw] bg-dbb-primary border-l border-dbb-accent/20 shadow-2xl flex flex-col">
+            <div className="flex items-center justify-between px-4 py-4 border-b border-dbb-accent/20">
+              <span className="text-lg font-bold text-dbb-accent">Menu</span>
+              <button
+                type="button"
+                onClick={() => setDrawerOpen(false)}
+                className="flex items-center justify-center w-11 h-11 -mr-2 text-gray-400 hover:text-white transition-colors"
+                aria-label="Close navigation menu"
+              >
+                <X size={24} />
+              </button>
+            </div>
+            <nav className="flex-1 overflow-y-auto py-2">
+              {NAV_LINKS.map(({ href, label }) => (
+                <Link
+                  key={href}
+                  href={href}
+                  className={`flex items-center min-h-[44px] px-4 py-3 text-base transition-colors ${
+                    isActive(href)
+                      ? 'text-white font-medium bg-dbb-accent/10 border-l-2 border-dbb-accent'
+                      : 'text-gray-400 hover:text-white hover:bg-white/5'
+                  }`}
+                >
+                  {label}
+                </Link>
+              ))}
+              {userEmail && (
+                <Link
+                  href="/cart"
+                  className={`flex items-center min-h-[44px] px-4 py-3 text-base transition-colors ${
+                    isActive('/cart')
+                      ? 'text-white font-medium bg-dbb-accent/10 border-l-2 border-dbb-accent'
+                      : 'text-gray-400 hover:text-white hover:bg-white/5'
+                  }`}
+                >
+                  Cart
+                  <CartBadge />
+                </Link>
+              )}
+            </nav>
+            {/* Footer area: email + sign out */}
+            {userEmail && (
+              <div className="border-t border-dbb-accent/20 px-4 py-4 space-y-3">
+                <span className="block text-xs text-gray-500 truncate">{userEmail}</span>
+                <form action="/api/auth/signout" method="POST">
+                  <button
+                    type="submit"
+                    className="w-full text-sm text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 rounded-lg px-3 py-2.5 min-h-[44px] transition-colors"
+                  >
+                    Sign out
+                  </button>
+                </form>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </>
   )
 }
