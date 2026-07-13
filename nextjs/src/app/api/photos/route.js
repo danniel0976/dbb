@@ -5,7 +5,8 @@ import { createClient as createServiceClient } from '@supabase/supabase-js'
 export const runtime = 'nodejs'
 
 const BUCKET = 'card-photos'
-const SIGNED_URL_TTL = 300  // 5 minutes
+const SIGNED_UPLOAD_TTL = 120   // 2 minutes for upload
+const SIGNED_DOWNLOAD_TTL = 300 // 5 minutes for viewing
 
 function makeServiceClient() {
   return createServiceClient(
@@ -15,9 +16,9 @@ function makeServiceClient() {
 }
 
 // POST /api/photos
-// Multipart form: library_card_id (string) + photo (File, JPEG)
-// Uploads the card photo to storage and upserts a card_photos row.
-// Retake is allowed only when the card has no active/non-expired listing.
+// Body: { library_card_id } — creates a signed upload URL for direct client→Supabase upload.
+// The file NEVER touches the VPS or Vercel functions — it goes directly to Supabase Storage.
+// Client uploads via PUT to the returned URL, then calls POST /api/photos/confirm.
 export async function POST(request) {
   const authClient = await createAuthClient()
   const { data: { user }, error: authError } = await authClient.auth.getUser()
@@ -25,29 +26,14 @@ export async function POST(request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  let formData
-  try {
-    formData = await request.formData()
-  } catch {
-    return NextResponse.json({ error: 'Invalid form data' }, { status: 400 })
+  let body
+  try { body = await request.json() } catch {
+    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
   }
 
-  const libraryCardId = formData.get('library_card_id')
-  const photoFile = formData.get('photo')
-
-  if (!libraryCardId || !photoFile) {
-    return NextResponse.json({ error: 'library_card_id and photo are required' }, { status: 400 })
-  }
-
-  // Phase 18: Server-side upload size enforcement (500KB max)
-  const MAX_UPLOAD_BYTES = 500 * 1024  // 500KB
-  const arrayBuffer = await photoFile.arrayBuffer()
-  const uploadBytes = new Uint8Array(arrayBuffer)
-  if (uploadBytes.byteLength > MAX_UPLOAD_BYTES) {
-    return NextResponse.json(
-      { error: `Photo too large (${(uploadBytes.byteLength / 1024).toFixed(0)}KB). Maximum 500KB.` },
-      { status: 413 }
-    )
+  const { library_card_id: libraryCardId } = body
+  if (!libraryCardId) {
+    return NextResponse.json({ error: 'library_card_id is required' }, { status: 400 })
   }
 
   const sc = makeServiceClient()
@@ -67,48 +53,33 @@ export async function POST(request) {
   // Phase 18: Photo belongs to the library CARD, not the listing.
   // Owner can retake/replace the photo at any time (active listing or not).
   // The photo persists across listing cycles until the owner retakes it or removes the card.
-  // No retake restriction while listed.
 
   const storagePath = `${user.id}/${libraryCardId}.jpg`
 
-  const { error: uploadErr } = await sc.storage
+  // Create signed upload URL — client uploads directly to Supabase Storage
+  const { data: uploadData, error: uploadUrlErr } = await sc.storage
     .from(BUCKET)
-    .upload(storagePath, uploadBytes, {
-      contentType: 'image/jpeg',
-      upsert: true,
-    })
+    .createSignedUploadUrl(storagePath)
 
-  if (uploadErr) {
-    console.error('[POST /api/photos] upload error:', uploadErr.message)
-    // Defensive: if bucket doesn't exist yet (migration not applied), return informative error
-    if (uploadErr.message?.includes('Bucket not found') || uploadErr.statusCode === 404) {
+  if (uploadUrlErr || !uploadData?.signedUrl) {
+    console.error('[POST /api/photos] signed upload URL error:', uploadUrlErr?.message)
+    if (uploadUrlErr?.message?.includes('Bucket not found') || uploadUrlErr?.statusCode === 404) {
       return NextResponse.json(
         { error: 'Photo storage not configured yet. Ask support to apply migration-010.' },
         { status: 503 }
       )
     }
-    return NextResponse.json({ error: 'Photo upload failed' }, { status: 500 })
+    return NextResponse.json({ error: 'Could not create upload URL' }, { status: 500 })
   }
 
-  // Upsert card_photos row
-  const { error: dbErr } = await sc
-    .from('card_photos')
-    .upsert(
-      { user_id: user.id, library_card_id: libraryCardId, storage_path: storagePath },
-      { onConflict: 'library_card_id' }
-    )
+  // For upsert, the signed upload URL needs to be used with PUT and the x-upsert header
+  // The Supabase SDK returns a signed_url that can be used with a PUT request
+  // Build the full URL with upsert param
+  const uploadUrl = uploadData.signedUrl
 
-  if (dbErr) {
-    console.error('[POST /api/photos] db upsert error:', dbErr.message)
-    // DB row failed but storage succeeded — not catastrophic for the user; still return success
-  }
-
-  // Return a short-lived signed URL so the UI can display the photo immediately
-  const { data: signedData, error: signErr } = await sc.storage
-    .from(BUCKET)
-    .createSignedUrl(storagePath, SIGNED_URL_TTL)
-
-  const url = signErr ? null : signedData?.signedUrl
-
-  return NextResponse.json({ success: true, url }, { status: 200 })
+  return NextResponse.json({
+    upload_url: uploadUrl,
+    storage_path: storagePath,
+    library_card_id: libraryCardId,
+  })
 }

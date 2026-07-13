@@ -111,13 +111,40 @@ export default function CameraCapture({ libraryCardId, onUploaded, onCancel }) {
     setUploading(true)
     setStatus('uploading')
     try {
-      const form = new FormData()
-      form.append('library_card_id', libraryCardId)
-      form.append('photo', capturedBlob, 'card.jpg')
-      const res = await fetch('/api/photos', { method: 'POST', body: form })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(data.error || 'Upload failed')
-      onUploaded(data.url)
+      // Phase 18: Direct-to-Supabase upload via signed upload URL.
+      // The file NEVER touches our server — it goes client → Supabase Storage.
+      // Step 1: Get a signed upload URL from our API (validates ownership + path)
+      const urlRes = await fetch('/api/photos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ library_card_id: libraryCardId }),
+      })
+      const urlData = await urlRes.json().catch(() => ({}))
+      if (!urlRes.ok) throw new Error(urlData.error || 'Could not get upload URL')
+
+      // Step 2: Upload directly to Supabase Storage via PUT with upsert header
+      const uploadRes = await fetch(urlData.upload_url, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'image/jpeg',
+          'x-upsert': 'true',
+        },
+        body: capturedBlob,
+      })
+      if (!uploadRes.ok) throw new Error('Direct upload to storage failed')
+
+      // Step 3: Confirm the upload with our server (verifies + creates DB row + returns signed URL)
+      const confirmRes = await fetch('/api/photos/confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          library_card_id: libraryCardId,
+          storage_path: urlData.storage_path,
+        }),
+      })
+      const confirmData = await confirmRes.json().catch(() => ({}))
+      if (!confirmRes.ok) throw new Error(confirmData.error || 'Upload confirmation failed')
+      onUploaded(confirmData.url)
     } catch (e) {
       setErrorMsg(e.message || 'Upload failed. Please try again.')
       setStatus('captured')
