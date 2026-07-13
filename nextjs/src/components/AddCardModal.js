@@ -42,8 +42,8 @@ function CardImage({ card }) {
 
   if (!src) {
     return (
-      <div className="w-14 h-20 bg-dbb-secondary border border-gray-700 rounded flex items-center justify-center flex-shrink-0">
-        <span className="text-gray-600 text-xs">?</span>
+      <div className="w-14 h-20 bg-gray-100 dark:bg-dbb-secondary border border-gray-200 dark:border-gray-700 rounded flex items-center justify-center flex-shrink-0">
+        <span className="text-gray-400 dark:text-gray-600 text-xs">?</span>
       </div>
     )
   }
@@ -71,11 +71,11 @@ function AddForm({ card, binders, onAdd, onBack, adding }) {
   return (
     <div className="space-y-4">
       {/* Card summary */}
-      <div className="flex gap-3 p-3 bg-dbb-secondary/50 rounded-lg border border-gray-700/50">
+      <div className="flex gap-3 p-3 bg-gray-50 dark:bg-dbb-secondary/50 rounded-lg border border-gray-200 dark:border-gray-700/50">
         <CardImage card={card} />
         <div className="flex-1 min-w-0">
           <h3 className="font-semibold text-white truncate">{card.name}</h3>
-          <p className="text-xs text-gray-400">{card.set_name} · {card.set_code?.toUpperCase()} #{card.collector_number}</p>
+          <p className="text-xs text-gray-500 dark:text-gray-400">{card.set_name} · {card.set_code?.toUpperCase()} #{card.collector_number}</p>
           {card.rarity && (
             <span className={`text-xs capitalize ${RARITY_COLORS[card.rarity] || 'text-gray-400'}`}>
               {card.rarity}
@@ -86,11 +86,11 @@ function AddForm({ card, binders, onAdd, onBack, adding }) {
 
       {/* Binder */}
       <div>
-        <label className="block text-xs text-gray-400 mb-1">Add to binder</label>
+        <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">Add to binder</label>
         <select
           value={binderId}
           onChange={e => setBinderId(e.target.value)}
-          className="w-full bg-dbb-secondary border border-gray-700 rounded-lg px-3 py-2 text-sm focus:border-dbb-accent focus:outline-none"
+          className="w-full bg-white dark:bg-dbb-secondary border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-sm focus:border-dbb-accent focus:outline-none"
         >
           {binders.map(b => (
             <option key={b.id} value={b.id}>{b.name}{b.is_default ? ' (default)' : ''}</option>
@@ -100,11 +100,11 @@ function AddForm({ card, binders, onAdd, onBack, adding }) {
 
       {/* Condition */}
       <div>
-        <label className="block text-xs text-gray-400 mb-1">Condition</label>
+        <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">Condition</label>
         <select
           value={condition}
           onChange={e => setCondition(e.target.value)}
-          className="w-full bg-dbb-secondary border border-gray-700 rounded-lg px-3 py-2 text-sm focus:border-dbb-accent focus:outline-none"
+          className="w-full bg-white dark:bg-dbb-secondary border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-sm focus:border-dbb-accent focus:outline-none"
         >
           {CONDITIONS.map(c => (
             <option key={c.value} value={c.value}>{c.label}</option>
@@ -114,18 +114,18 @@ function AddForm({ card, binders, onAdd, onBack, adding }) {
 
       {/* Foil */}
       <div>
-        <label className="block text-xs text-gray-400 mb-1">Printing</label>
+        <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">Printing</label>
         <div className="flex gap-2">
           <button
             onClick={() => setFoil('normal')}
-            className={`flex-1 py-2 text-sm rounded-lg border transition-colors ${foil === 'normal' ? 'border-dbb-accent bg-dbb-accent/10 text-dbb-accent' : 'border-gray-700 text-gray-400 hover:border-gray-600'}`}
+            className={`flex-1 py-2 text-sm rounded-lg border transition-colors ${foil === 'normal' ? 'border-dbb-accent bg-dbb-accent/10 text-dbb-accent' : 'border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600'}`}
           >
             Non-foil
           </button>
           {hasFoil && (
             <button
               onClick={() => setFoil('foil')}
-              className={`flex-1 py-2 text-sm rounded-lg border transition-colors ${foil === 'foil' ? 'border-yellow-500 bg-yellow-500/10 text-yellow-400' : 'border-gray-700 text-gray-400 hover:border-gray-600'}`}
+              className={`flex-1 py-2 text-sm rounded-lg border transition-colors ${foil === 'foil' ? 'border-yellow-500 bg-yellow-500/10 text-yellow-400' : 'border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600'}`}
             >
               Foil
             </button>
@@ -133,7 +133,7 @@ function AddForm({ card, binders, onAdd, onBack, adding }) {
           {hasEtched && (
             <button
               onClick={() => setFoil('etched')}
-              className={`flex-1 py-2 text-sm rounded-lg border transition-colors ${foil === 'etched' ? 'border-purple-500 bg-purple-500/10 text-purple-400' : 'border-gray-700 text-gray-400 hover:border-gray-600'}`}
+              className={`flex-1 py-2 text-sm rounded-lg border transition-colors ${foil === 'etched' ? 'border-purple-500 bg-purple-500/10 text-purple-400' : 'border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600'}`}
             >
               Etched
             </button>
@@ -143,11 +143,11 @@ function AddForm({ card, binders, onAdd, onBack, adding }) {
 
       {/* Quantity */}
       <div>
-        <label className="block text-xs text-gray-400 mb-1">Quantity</label>
+        <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">Quantity</label>
         <div className="flex items-center gap-2">
           <button
             onClick={() => setQuantity(q => Math.max(1, q - 1))}
-            className="w-8 h-8 rounded border border-gray-700 text-gray-400 hover:border-dbb-accent hover:text-white transition-colors flex items-center justify-center text-lg"
+            className="w-8 h-8 rounded border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:border-dbb-accent hover:text-gray-900 dark:hover:text-white transition-colors flex items-center justify-center text-lg"
           >
             −
           </button>
@@ -157,11 +157,11 @@ function AddForm({ card, binders, onAdd, onBack, adding }) {
             max={9999}
             value={quantity}
             onChange={e => setQuantity(Math.min(9999, Math.max(1, parseInt(e.target.value) || 1)))}
-            className="w-16 text-center bg-dbb-secondary border border-gray-700 rounded-lg px-2 py-1.5 text-sm focus:border-dbb-accent focus:outline-none"
+            className="w-16 text-center bg-white dark:bg-dbb-secondary border border-gray-200 dark:border-gray-700 rounded-lg px-2 py-1.5 text-sm focus:border-dbb-accent focus:outline-none"
           />
           <button
             onClick={() => setQuantity(q => Math.min(9999, q + 1))}
-            className="w-8 h-8 rounded border border-gray-700 text-gray-400 hover:border-dbb-accent hover:text-white transition-colors flex items-center justify-center text-lg"
+            className="w-8 h-8 rounded border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:border-dbb-accent hover:text-gray-900 dark:hover:text-white transition-colors flex items-center justify-center text-lg"
           >
             +
           </button>
@@ -173,7 +173,7 @@ function AddForm({ card, binders, onAdd, onBack, adding }) {
         <button
           onClick={onBack}
           disabled={adding}
-          className="flex-1 py-2 text-sm border border-gray-700 text-gray-400 rounded-lg hover:border-gray-600 hover:text-white transition-colors disabled:opacity-50"
+          className="flex-1 py-2 text-sm border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 rounded-lg hover:border-gray-300 dark:hover:border-gray-600 hover:text-white transition-colors disabled:opacity-50"
         >
           ← Back
         </button>
@@ -260,13 +260,13 @@ export default function AddCardModal({ binders = [], onClose, onAdded }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70">
-      <div className="bg-dbb-primary border border-gray-700 rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] flex flex-col">
+      <div className="bg-white dark:bg-dbb-primary border border-gray-200 dark:border-gray-700 rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-gray-700">
-          <h2 className="text-lg font-semibold text-white">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
             {selectedCard ? 'Add to library' : 'Search card catalog'}
           </h2>
-          <button onClick={onClose} className="p-1 text-gray-400 hover:text-white rounded transition-colors">
+          <button onClick={onClose} className="p-1 text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white rounded transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -276,17 +276,17 @@ export default function AddCardModal({ binders = [], onClose, onAdded }) {
             <div className="space-y-3">
               {/* Search input */}
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500" />
                 <input
                   ref={inputRef}
                   type="text"
                   placeholder="Search by card name..."
                   value={q}
                   onChange={handleInput}
-                  className="w-full bg-dbb-secondary border border-gray-700 rounded-lg pl-9 pr-4 py-2.5 text-sm focus:border-dbb-accent focus:outline-none placeholder-gray-600"
+                  className="w-full bg-white dark:bg-dbb-secondary border border-gray-200 dark:border-gray-700 rounded-lg pl-9 pr-4 py-2.5 text-sm focus:border-dbb-accent focus:outline-none placeholder-gray-400 dark:placeholder-gray-600"
                 />
                 {loading && (
-                  <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 animate-spin" />
+                  <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500 animate-spin" />
                 )}
               </div>
 
@@ -299,19 +299,19 @@ export default function AddCardModal({ binders = [], onClose, onAdded }) {
                     <button
                       key={card.scryfall_id}
                       onClick={() => setSelectedCard(card)}
-                      className="w-full flex items-center gap-3 p-2.5 rounded-lg hover:bg-dbb-secondary/70 border border-transparent hover:border-gray-700 transition-colors text-left"
+                      className="w-full flex items-center gap-3 p-2.5 rounded-lg hover:bg-gray-100 dark:hover:bg-dbb-secondary/70 border border-transparent hover:border-gray-200 dark:hover:border-gray-700 transition-colors text-left"
                     >
                       <CardImage card={card} />
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-white truncate">{card.name}</p>
-                        <p className="text-xs text-gray-400">{card.set_name} · #{card.collector_number}</p>
+                        <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{card.name}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">{card.set_name} · #{card.collector_number}</p>
                         {card.rarity && (
                           <span className={`text-xs capitalize ${RARITY_COLORS[card.rarity] || 'text-gray-400'}`}>
                             {card.rarity}
                           </span>
                         )}
                       </div>
-                      <ChevronRight className="w-4 h-4 text-gray-600 flex-shrink-0" />
+                      <ChevronRight className="w-4 h-4 text-gray-400 dark:text-gray-600 flex-shrink-0" />
                     </button>
                   ))}
                 </div>
@@ -324,7 +324,7 @@ export default function AddCardModal({ binders = [], onClose, onAdded }) {
               )}
 
               {!q && (
-                <p className="text-sm text-gray-600 text-center py-6">
+                <p className="text-sm text-gray-400 dark:text-gray-600 text-center py-6">
                   Type a card name to search the catalog
                 </p>
               )}

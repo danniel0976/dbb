@@ -161,12 +161,12 @@ export default function CameraCapture({ libraryCardId, onUploaded, onCancel }) {
     <div className="space-y-3">
       {/* Error state */}
       {status === 'error' && (
-        <div className="rounded-lg bg-gray-800 border border-gray-700 p-4 text-center">
-          <Camera className="w-8 h-8 text-gray-600 mx-auto mb-2" />
-          <p className="text-sm text-gray-400">{errorMsg}</p>
+        <div className="rounded-lg bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-4 text-center">
+          <Camera className="w-8 h-8 text-gray-400 dark:text-gray-600 mx-auto mb-2" />
+          <p className="text-sm text-gray-500 dark:text-gray-400">{errorMsg}</p>
           <button
             onClick={onCancel}
-            className="mt-3 text-xs text-gray-500 hover:text-white transition-colors"
+            className="mt-3 text-xs text-gray-500 hover:text-gray-900 dark:hover:text-white transition-colors"
           >
             Cancel
           </button>
@@ -179,7 +179,7 @@ export default function CameraCapture({ libraryCardId, onUploaded, onCancel }) {
           <div className="relative bg-black rounded-lg overflow-hidden aspect-video">
             {status === 'init' && (
               <div className="absolute inset-0 flex items-center justify-center">
-                <Loader2 className="w-6 h-6 text-gray-600 animate-spin" />
+                <Loader2 className="w-6 h-6 text-gray-400 dark:text-gray-600 animate-spin" />
               </div>
             )}
             <video
@@ -201,7 +201,7 @@ export default function CameraCapture({ libraryCardId, onUploaded, onCancel }) {
             </button>
             <button
               onClick={onCancel}
-              className="px-3 py-2.5 text-sm text-gray-400 hover:text-white border border-gray-700 rounded-lg transition-colors"
+              className="px-3 py-2.5 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white border border-gray-200 dark:border-gray-700 rounded-lg transition-colors"
             >
               <X className="w-4 h-4" />
             </button>
@@ -215,7 +215,7 @@ export default function CameraCapture({ libraryCardId, onUploaded, onCancel }) {
           <img
             src={previewUrl}
             alt="Card photo preview"
-            className="w-full rounded-lg border border-gray-700 object-cover"
+            className="w-full rounded-lg border border-gray-200 dark:border-gray-700 object-cover"
             style={{ maxHeight: '200px', objectFit: 'cover' }}
           />
           {errorMsg && (
@@ -233,7 +233,7 @@ export default function CameraCapture({ libraryCardId, onUploaded, onCancel }) {
             <button
               onClick={handleRetake}
               disabled={uploading}
-              className="flex items-center gap-1 px-3 py-2 text-sm text-gray-400 hover:text-white border border-gray-700 rounded-lg transition-colors disabled:opacity-40"
+              className="flex items-center gap-1 px-3 py-2 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white border border-gray-200 dark:border-gray-700 rounded-lg transition-colors disabled:opacity-40"
             >
               <RefreshCw className="w-3.5 h-3.5" />
               Retake

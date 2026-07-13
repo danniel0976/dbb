@@ -18,20 +18,20 @@ function MergeModal({ source, binders, onConfirm, onClose }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-dbb-secondary border border-dbb-tertiary/50 rounded-dbb w-full max-w-md p-6 shadow-xl">
+      <div className="bg-white dark:bg-dbb-secondary border border-gray-200 dark:border-dbb-tertiary/50 rounded-dbb w-full max-w-md p-6 shadow-xl">
         <div className="flex items-center justify-between mb-5">
-          <h3 className="text-lg font-bold text-white">Merge binder</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-white"><X className="w-5 h-5" /></button>
+          <h3 className="text-lg font-bold text-gray-900 dark:text-white">Merge binder</h3>
+          <button onClick={onClose} className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"><X className="w-5 h-5" /></button>
         </div>
         <div className="space-y-4">
           <div>
-            <p className="text-sm text-gray-400 mb-1">Source binder</p>
-            <p className="text-white font-medium">
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Source binder</p>
+            <p className="text-gray-900 dark:text-white font-medium">
               {source.name} <span className="text-gray-500 font-normal">({source.card_count} card{source.card_count !== 1 ? 's' : ''})</span>
             </p>
           </div>
           <div>
-            <label className="block text-sm text-gray-400 mb-1">Merge into</label>
+            <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">Merge into</label>
             {targets.length === 0 ? (
               <p className="text-gray-500 text-sm">No other binders available.</p>
             ) : (
@@ -39,7 +39,7 @@ function MergeModal({ source, binders, onConfirm, onClose }) {
                 <select
                   value={targetId}
                   onChange={e => setTargetId(e.target.value)}
-                  className="w-full appearance-none bg-dbb-primary border border-gray-600 focus:border-dbb-accent rounded-lg px-3 py-2 text-white text-sm outline-none pr-8"
+                  className="w-full appearance-none bg-white dark:bg-dbb-primary border border-gray-300 dark:border-gray-600 focus:border-dbb-accent rounded-lg px-3 py-2 text-gray-900 dark:text-white text-sm outline-none pr-8"
                 >
                   {targets.map(b => (
                     <option key={b.id} value={b.id}>{b.name} ({b.card_count ?? '?'} cards)</option>
@@ -120,13 +120,13 @@ function BinderItem({ binder, isSelected, onSelect, onRename, onDelete, onMerge 
   }
 
   return (
-    <div className={`group relative flex items-center rounded-lg flex-shrink-0 md:flex-shrink md:w-full transition-colors ${isSelected ? 'bg-dbb-accent/15' : 'hover:bg-white/5'}`}>
+    <div className={`group relative flex items-center rounded-lg flex-shrink-0 md:flex-shrink md:w-full transition-colors ${isSelected ? 'bg-dbb-accent/15' : 'hover:bg-gray-100 dark:hover:bg-white/5'}`}>
       <button
         onClick={() => onSelect(binder.id)}
-        className={`flex-1 min-w-0 text-left px-3 py-1.5 md:py-2 transition-colors ${isSelected ? 'text-white' : 'text-gray-400 hover:text-white'}`}
+        className={`flex-1 min-w-0 text-left px-3 py-1.5 md:py-2 transition-colors ${isSelected ? 'text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'}`}
       >
         <span className="block text-sm truncate">{binder.name}</span>
-        <span className="text-xs text-gray-500">
+        <span className="text-xs text-gray-500 dark:text-gray-500">
           {binder.card_count === null ? '…' : `${binder.card_count} card${binder.card_count !== 1 ? 's' : ''}`}
         </span>
       </button>
@@ -136,29 +136,29 @@ function BinderItem({ binder, isSelected, onSelect, onRename, onDelete, onMerge 
           onClick={e => { e.stopPropagation(); setMenuOpen(v => !v) }}
           title="Binder actions"
           className={`p-1.5 rounded mr-1 transition-colors ${
-            menuOpen ? 'text-white' : 'text-gray-600 hover:text-gray-300 opacity-0 group-hover:opacity-100 focus:opacity-100'
+            menuOpen ? 'text-white' : 'text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-300 opacity-0 group-hover:opacity-100 focus:opacity-100'
           }`}
         >
           <MoreVertical className="w-3.5 h-3.5" />
         </button>
         {menuOpen && (
-          <div className="absolute right-0 top-full mt-1 w-36 bg-dbb-secondary border border-gray-700 rounded-lg shadow-xl z-50 py-1">
+          <div className="absolute right-0 top-full mt-1 w-36 bg-white dark:bg-dbb-secondary border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl z-50 py-1">
             <button
               onClick={() => { setMenuOpen(false); setEditing(true) }}
-              className="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-gray-300 hover:text-white hover:bg-white/5 transition-colors"
+              className="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5 transition-colors"
             >
               <Pencil className="w-3 h-3" /> Rename
             </button>
             <button
               onClick={() => { setMenuOpen(false); onMerge(binder) }}
-              className="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-gray-300 hover:text-blue-300 hover:bg-white/5 transition-colors"
+              className="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-gray-300 hover:text-blue-300 hover:bg-gray-100 dark:hover:bg-white/5 transition-colors"
             >
               <GitMerge className="w-3 h-3" /> Merge into…
             </button>
             <button
               onClick={() => { setMenuOpen(false); onDelete(binder) }}
               disabled={binder.is_default}
-              className="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-red-400 hover:text-red-300 hover:bg-white/5 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              className="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-red-600 dark:text-red-400 hover:text-red-600 dark:hover:text-red-300 hover:bg-gray-100 dark:hover:bg-white/5 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
             >
               <Trash2 className="w-3 h-3" /> Delete
             </button>
@@ -288,7 +288,7 @@ export default function BinderRail({ initialBinders = [], selectedId, onSelect, 
       <button
         onClick={() => onSelect(null)}
         className={`flex items-center gap-2 px-3 py-1.5 md:py-2 rounded-lg text-sm transition-colors flex-shrink-0 md:flex-shrink md:w-full ${
-          !selectedId ? 'bg-dbb-accent/15 text-white font-medium' : 'text-gray-400 hover:bg-white/5 hover:text-white'
+          !selectedId ? 'bg-dbb-accent/15 text-white font-medium' : 'text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5 hover:text-white'
         }`}
       >
         <BookOpen className="w-4 h-4 flex-shrink-0" />
@@ -338,7 +338,7 @@ export default function BinderRail({ initialBinders = [], selectedId, onSelect, 
       ) : (
         <button
           onClick={() => setShowCreate(true)}
-          className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs text-gray-500 hover:text-dbb-accent hover:bg-white/5 transition-colors flex-shrink-0 md:flex-shrink md:w-full"
+          className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs text-gray-500 hover:text-dbb-accent hover:bg-gray-100 dark:hover:bg-white/5 transition-colors flex-shrink-0 md:flex-shrink md:w-full"
         >
           <Plus className="w-3.5 h-3.5" />
           <span>New binder</span>

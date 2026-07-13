@@ -69,8 +69,8 @@ function PhotoSection({ libraryRow, listing, onPhotoChange }) {
 
   if (photoUrl === undefined) {
     return (
-      <div className="pt-2 border-t border-gray-700">
-        <div className="flex items-center gap-2 text-xs text-gray-600">
+      <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
+        <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-600">
           <Loader2 className="w-3 h-3 animate-spin" /> Loading photo...
         </div>
       </div>
@@ -78,13 +78,13 @@ function PhotoSection({ libraryRow, listing, onPhotoChange }) {
   }
 
   return (
-    <div className="pt-2 border-t border-gray-700 space-y-2">
+    <div className="pt-2 border-t border-gray-200 dark:border-gray-700 space-y-2">
       <div className="flex items-center justify-between">
-        <p className="text-xs font-medium text-gray-400">Card photo</p>
+        <p className="text-xs font-medium text-gray-600 dark:text-gray-400">Card photo</p>
         {photoUrl && !showCamera && (
           <button
             onClick={() => setShowCamera(true)}
-            className="flex items-center gap-1 text-xs text-gray-500 hover:text-white transition-colors"
+            className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-900 dark:hover:text-white transition-colors"
           >
             <RotateCcw className="w-3 h-3" /> Retake
           </button>
@@ -113,10 +113,10 @@ function PhotoSection({ libraryRow, listing, onPhotoChange }) {
         </div>
       ) : (
         <div className="space-y-2">
-          <p className="text-xs text-gray-600">No photo yet — required before listing.</p>
+          <p className="text-xs text-gray-500 dark:text-gray-600">No photo yet — required before listing.</p>
           <button
             onClick={() => setShowCamera(true)}
-            className="flex items-center justify-center gap-2 w-full py-2 border border-dashed border-gray-600 hover:border-dbb-accent text-gray-400 hover:text-dbb-accent rounded-lg text-xs transition-colors"
+            className="flex items-center justify-center gap-2 w-full py-2 border border-dashed border-gray-300 dark:border-gray-600 hover:border-dbb-accent text-gray-400 hover:text-dbb-accent rounded-lg text-xs transition-colors"
           >
             <Camera className="w-4 h-4" />
             Take Photo
@@ -255,7 +255,7 @@ function ListingSection({ libraryRow, hasPhoto }) {
 
   if (listing === undefined) {
     return (
-      <div className="flex items-center gap-2 text-xs text-gray-600 pt-2 border-t border-gray-700">
+      <div className="flex items-center gap-2 text-xs text-gray-600 pt-2 border-t border-gray-200 dark:border-gray-700">
         <Loader2 className="w-3 h-3 animate-spin" /> Checking bazaar status...
       </div>
     )
@@ -269,12 +269,12 @@ function ListingSection({ libraryRow, hasPhoto }) {
   // Not listed yet — show a "List on Bazaar" button (not the picker right away)
   if (!listing && !showPicker) {
     return (
-      <div className="pt-2 border-t border-gray-700">
+      <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
         <button
           onClick={() => {
             if (!hasPhoto) { setPhotoRequired(true) } else { setShowPicker(true) }
           }}
-          className="flex items-center justify-center gap-2 w-full py-1.5 border border-gray-700 hover:border-dbb-accent text-gray-400 hover:text-dbb-accent rounded-lg text-xs font-medium transition-colors"
+          className="flex items-center justify-center gap-2 w-full py-1.5 border border-gray-200 dark:border-gray-700 hover:border-dbb-accent text-gray-500 dark:text-gray-400 hover:text-dbb-accent rounded-lg text-xs font-medium transition-colors"
         >
           <Tag className="w-3 h-3" />
           List on Bazaar
@@ -295,13 +295,13 @@ function ListingSection({ libraryRow, hasPhoto }) {
     // Photo gate — shouldn't happen (button above checks), but block at render level too
     if (!hasPhoto) {
       return (
-        <div className="pt-2 border-t border-gray-700 space-y-2">
+        <div className="pt-2 border-t border-gray-200 dark:border-gray-700 space-y-2">
           <p className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded px-2 py-1.5">
             A card photo is required before listing. Please take a photo above.
           </p>
           <button
             onClick={() => { setShowPicker(false); setIsRelist(false); setPhotoRequired(false) }}
-            className="text-xs text-gray-500 hover:text-white transition-colors"
+            className="text-xs text-gray-500 hover:text-gray-900 dark:hover:text-white transition-colors"
           >
             Cancel
           </button>
@@ -310,9 +310,9 @@ function ListingSection({ libraryRow, hasPhoto }) {
     }
 
     return (
-      <div className="pt-2 border-t border-gray-700">
+      <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
         <div className="space-y-3">
-          <p className="text-xs text-gray-400 font-medium">
+          <p className="text-xs text-gray-600 dark:text-gray-400 font-medium">
             {isRelisting ? 'Relist on Bazaar' : 'List on Bazaar'}
           </p>
 
@@ -329,7 +329,7 @@ function ListingSection({ libraryRow, hasPhoto }) {
                     className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-colors ${
                       multiplier === m
                         ? 'border-dbb-accent bg-dbb-accent/10 text-dbb-accent'
-                        : 'border-gray-700 text-gray-400 hover:border-dbb-accent/50'
+                        : 'border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:border-dbb-accent/50'
                     }`}
                   >
                     <div>×{m}</div>
@@ -355,7 +355,7 @@ function ListingSection({ libraryRow, hasPhoto }) {
                   className={`flex-1 py-1.5 rounded border text-xs font-medium transition-colors ${
                     durationHours === hours
                       ? 'border-dbb-accent bg-dbb-accent/10 text-dbb-accent'
-                      : 'border-gray-700 text-gray-500 hover:border-gray-500'
+                      : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-500 hover:border-gray-400 dark:hover:border-gray-500'
                   }`}
                 >
                   {label}
@@ -374,7 +374,7 @@ function ListingSection({ libraryRow, hasPhoto }) {
             </button>
             <button
               onClick={() => { setShowPicker(false); setIsRelist(false) }}
-              className="px-3 py-1.5 text-sm text-gray-400 hover:text-white transition-colors"
+              className="px-3 py-1.5 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
             >
               Cancel
             </button>
@@ -387,7 +387,7 @@ function ListingSection({ libraryRow, hasPhoto }) {
   // Expired listing state
   if (isExpired) {
     return (
-      <div className="pt-2 border-t border-gray-700">
+      <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
         <div className="flex items-center justify-between">
           <span className="flex items-center gap-1 text-xs font-medium text-orange-400 bg-orange-500/10 border border-orange-500/30 rounded px-2 py-0.5">
             <Tag className="w-3 h-3" /> Listing Expired
@@ -408,7 +408,7 @@ function ListingSection({ libraryRow, hasPhoto }) {
   const expiresIn = listing.expires_at ? relativeTime(listing.expires_at, true) : null
 
   return (
-    <div className="pt-2 border-t border-gray-700">
+    <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <span className="flex items-center gap-1 text-xs font-medium text-green-400 bg-green-500/10 border border-green-500/30 rounded px-2 py-0.5">
@@ -525,10 +525,10 @@ export default function CardDetailModal({ libraryRow, onClose, onSave, onDelete 
       className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
-      <div className="bg-dbb-primary border border-dbb-accent/30 rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl">
+      <div className="bg-white dark:bg-dbb-primary border border-dbb-accent/30 rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-gray-700">
-          <h2 className="text-lg font-bold text-white truncate pr-4">
+        <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
+          <h2 className="text-lg font-bold text-gray-900 dark:text-white truncate pr-4">
             {ci?.name || cardData?.name || 'Card Details'}
           </h2>
           <button onClick={onClose} className="p-1 hover:text-dbb-accent transition-colors flex-shrink-0">
@@ -548,7 +548,7 @@ export default function CardDetailModal({ libraryRow, onClose, onSave, onDelete 
                 className="w-full rounded-lg shadow-lg"
               />
             ) : (
-              <div className="aspect-[2/3] bg-dbb-secondary rounded-lg flex items-center justify-center">
+              <div className="aspect-[2/3] bg-gray-100 dark:bg-dbb-secondary rounded-lg flex items-center justify-center">
                 <span className="text-gray-500 text-sm text-center p-2">{ci?.name}</span>
               </div>
             )}
@@ -557,7 +557,7 @@ export default function CardDetailModal({ libraryRow, onClose, onSave, onDelete 
           {/* Details + edit */}
           <div className="flex-1 flex flex-col gap-4">
             {/* Card metadata */}
-            <div className="text-sm text-gray-400 space-y-1">
+            <div className="text-sm text-gray-500 dark:text-gray-400 space-y-1">
               {(ci?.set_name || cardData?.set_name) && (
                 <div><span className="text-gray-500">Set:</span> {ci?.set_name || cardData?.set_name}</div>
               )}
@@ -568,7 +568,7 @@ export default function CardDetailModal({ libraryRow, onClose, onSave, onDelete 
                 <div><span className="text-gray-500">Type:</span> {ci?.type_line || cardData?.type_line}</div>
               )}
               {cardData?.oracle_text && (
-                <div className="mt-2 p-2 bg-dbb-secondary rounded text-xs leading-relaxed whitespace-pre-line">
+                <div className="mt-2 p-2 bg-gray-100 dark:bg-dbb-secondary rounded text-xs leading-relaxed whitespace-pre-line">
                   {cardData.oracle_text}
                 </div>
               )}
@@ -578,11 +578,11 @@ export default function CardDetailModal({ libraryRow, onClose, onSave, onDelete 
             <div className="space-y-3">
               {/* Quantity */}
               <div className="flex items-center gap-3">
-                <label className="text-sm text-gray-400 w-24">Quantity</label>
+                <label className="text-sm text-gray-600 dark:text-gray-400 w-24">Quantity</label>
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => setQuantity(q => Math.max(1, q - 1))}
-                    className="p-1 rounded bg-dbb-secondary hover:bg-gray-700 transition-colors"
+                    className="p-1 rounded bg-gray-100 dark:bg-dbb-secondary hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
                   >
                     <Minus className="w-4 h-4" />
                   </button>
@@ -592,11 +592,11 @@ export default function CardDetailModal({ libraryRow, onClose, onSave, onDelete 
                     max="9999"
                     value={quantity}
                     onChange={(e) => setQuantity(Math.max(1, Math.min(9999, parseInt(e.target.value) || 1)))}
-                    className="w-16 text-center bg-dbb-secondary border border-gray-700 rounded px-2 py-1 text-sm focus:border-dbb-accent focus:outline-none"
+                    className="w-16 text-center bg-white dark:bg-dbb-secondary border border-gray-200 dark:border-gray-700 rounded px-2 py-1 text-sm focus:border-dbb-accent focus:outline-none"
                   />
                   <button
                     onClick={() => setQuantity(q => Math.min(9999, q + 1))}
-                    className="p-1 rounded bg-dbb-secondary hover:bg-gray-700 transition-colors"
+                    className="p-1 rounded bg-gray-100 dark:bg-dbb-secondary hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
                   >
                     <Plus className="w-4 h-4" />
                   </button>
@@ -605,11 +605,11 @@ export default function CardDetailModal({ libraryRow, onClose, onSave, onDelete 
 
               {/* Condition */}
               <div className="flex items-center gap-3">
-                <label className="text-sm text-gray-400 w-24">Condition</label>
+                <label className="text-sm text-gray-600 dark:text-gray-400 w-24">Condition</label>
                 <select
                   value={condition}
                   onChange={(e) => setCondition(e.target.value)}
-                  className="bg-dbb-secondary border border-gray-700 rounded px-3 py-1.5 text-sm focus:border-dbb-accent focus:outline-none"
+                  className="bg-white dark:bg-dbb-secondary border border-gray-200 dark:border-gray-700 rounded px-3 py-1.5 text-sm focus:border-dbb-accent focus:outline-none"
                 >
                   {CONDITIONS.map(c => (
                     <option key={c} value={c}>{c}</option>
@@ -619,11 +619,11 @@ export default function CardDetailModal({ libraryRow, onClose, onSave, onDelete 
 
               {/* Foil */}
               <div className="flex items-center gap-3">
-                <label className="text-sm text-gray-400 w-24">Finish</label>
+                <label className="text-sm text-gray-600 dark:text-gray-400 w-24">Finish</label>
                 <select
                   value={foil}
                   onChange={(e) => setFoil(e.target.value)}
-                  className="bg-dbb-secondary border border-gray-700 rounded px-3 py-1.5 text-sm focus:border-dbb-accent focus:outline-none"
+                  className="bg-white dark:bg-dbb-secondary border border-gray-200 dark:border-gray-700 rounded px-3 py-1.5 text-sm focus:border-dbb-accent focus:outline-none"
                 >
                   {FOILS.map(f => (
                     <option key={f} value={f}>{f.charAt(0).toUpperCase() + f.slice(1)}</option>
@@ -633,7 +633,7 @@ export default function CardDetailModal({ libraryRow, onClose, onSave, onDelete 
 
               {/* Star */}
               <div className="flex items-center gap-3">
-                <label className="text-sm text-gray-400 w-24">Starred</label>
+                <label className="text-sm text-gray-600 dark:text-gray-400 w-24">Starred</label>
                 <button
                   onClick={() => setStarred(s => !s)}
                   className={`flex items-center gap-2 px-3 py-1.5 rounded border transition-colors ${
@@ -659,7 +659,7 @@ export default function CardDetailModal({ libraryRow, onClose, onSave, onDelete 
             <ListingSection libraryRow={libraryRow} hasPhoto={hasPhoto} />
 
             {/* Actions */}
-            <div className="flex items-center justify-between pt-2 border-t border-gray-700">
+            <div className="flex items-center justify-between pt-2 border-t border-gray-200 dark:border-gray-700">
               {!confirmDelete ? (
                 <button
                   onClick={() => setConfirmDelete(true)}
@@ -680,7 +680,7 @@ export default function CardDetailModal({ libraryRow, onClose, onSave, onDelete 
                   </button>
                   <button
                     onClick={() => setConfirmDelete(false)}
-                    className="text-sm text-gray-400 hover:text-white transition-colors"
+                    className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
                   >
                     Cancel
                   </button>
@@ -690,7 +690,7 @@ export default function CardDetailModal({ libraryRow, onClose, onSave, onDelete 
               <div className="flex items-center gap-2">
                 <button
                   onClick={onClose}
-                  className="px-4 py-1.5 text-sm text-gray-400 hover:text-white transition-colors"
+                  className="px-4 py-1.5 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
                 >
                   Cancel
                 </button>

@@ -38,13 +38,13 @@ function CardItem({ card, onClick }) {
     <div
       onClick={onClick}
       className={`
-        group relative bg-dbb-secondary rounded-lg overflow-hidden
+        group relative bg-white dark:bg-dbb-secondary rounded-lg overflow-hidden
         border-2 ${rarityBorderColors[card.rarity]}
         card-hover cursor-pointer
       `}
     >
       {/* Card Image */}
-      <div className="aspect-[2/3] relative bg-dbb-primary">
+      <div className="aspect-[2/3] relative bg-gray-100 dark:bg-dbb-primary">
         {imageUrl ? (
           <Image
             src={imageUrl}
@@ -54,8 +54,8 @@ function CardItem({ card, onClick }) {
             sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 20vw"
           />
         ) : (
-          <div className="w-full h-full bg-dbb-primary flex items-center justify-center">
-            <span className="text-gray-600 text-xs text-center p-2">
+          <div className="w-full h-full bg-gray-100 dark:bg-dbb-primary flex items-center justify-center">
+            <span className="text-gray-400 dark:text-gray-600 text-xs text-center p-2">
               No Image
             </span>
           </div>
@@ -82,7 +82,7 @@ function CardItem({ card, onClick }) {
         </h3>
 
         {/* Set and Collector Number */}
-        <div className="flex items-center justify-between text-xs text-gray-400">
+        <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
           <span>{card.set_code}</span>
           <span className="flex items-center gap-1">
             <span className={getRarityColor(card.rarity)}>
@@ -93,10 +93,10 @@ function CardItem({ card, onClick }) {
         </div>
 
         {/* Price */}
-        <div className="pt-2 border-t border-gray-700">
+        <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
           <div className="flex items-center justify-between">
-            <span className="text-xs text-gray-400">CKD</span>
-            <span className="text-xs text-gray-400">
+            <span className="text-xs text-gray-500 dark:text-gray-400">CKD</span>
+            <span className="text-xs text-gray-500 dark:text-gray-400">
               {priceUtils.formatUSD(card.ckd_usd_price)}
             </span>
           </div>

@@ -12,7 +12,7 @@ const RARITY_COLORS = {
   mythic: 'text-rarity-mythic',
   rare: 'text-rarity-rare',
   uncommon: 'text-rarity-uncommon',
-  common: 'text-gray-400',
+  common: 'text-gray-500 dark:text-gray-400',
 }
 
 export default function BazaarCard({ listing, onClick }) {
@@ -69,18 +69,18 @@ export default function BazaarCard({ listing, onClick }) {
   }, [lc?.scryfall_id, lc?.foil, listing.multiplier])
 
   const foilBadge = lc?.foil && FOIL_BADGE[lc.foil]
-  const rarityColor = RARITY_COLORS[ci?.rarity] || 'text-gray-400'
+  const rarityColor = RARITY_COLORS[ci?.rarity] || 'text-gray-500 dark:text-gray-400'
 
   return (
     <div
-      className="group relative bg-dbb-secondary border border-dbb-tertiary/40 rounded-dbb overflow-hidden card-hover cursor-pointer"
+      className="group relative bg-white dark:bg-dbb-secondary border border-gray-200 dark:border-dbb-tertiary/40 rounded-dbb overflow-hidden card-hover cursor-pointer"
       onClick={onClick}
       role="button"
       tabIndex={0}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onClick?.() }}
     >
       {/* Card image */}
-      <div className="relative aspect-[2/3] bg-dbb-primary">
+      <div className="relative aspect-[2/3] bg-gray-100 dark:bg-dbb-primary">
         {!imgLoaded && !imageUrl && (
           <div className="w-full h-full card-skeleton" />
         )}
@@ -102,25 +102,25 @@ export default function BazaarCard({ listing, onClick }) {
 
       {/* Info */}
       <div className="p-2.5 space-y-1.5">
-        <p className="text-sm font-medium text-white leading-tight line-clamp-2">
+        <p className="text-sm font-medium text-gray-900 dark:text-white leading-tight line-clamp-2">
           {ci?.name || '—'}
         </p>
 
         <div className="flex items-center gap-1.5 text-[10px]">
           <span className={rarityColor}>{ci?.rarity || ''}</span>
           {ci?.set_code && (
-            <span className="text-gray-600">· {ci.set_code.toUpperCase()}</span>
+            <span className="text-gray-500 dark:text-gray-600">· {ci.set_code.toUpperCase()}</span>
           )}
         </div>
 
         <div className="flex items-center gap-1 text-[10px] text-gray-500">
-          <span className="border border-dbb-tertiary/50 rounded px-1 py-0.5">{lc?.condition || 'NM'}</span>
-          <span className="text-gray-600">by</span>
-          <span className="text-gray-400 truncate max-w-[80px]">{listing.seller_name || 'Seller'}</span>
+          <span className="border border-gray-200 dark:border-dbb-tertiary/50 rounded px-1 py-0.5">{lc?.condition || 'NM'}</span>
+          <span className="text-gray-500 dark:text-gray-600">by</span>
+          <span className="text-gray-500 dark:text-gray-400 truncate max-w-[80px]">{listing.seller_name || 'Seller'}</span>
         </div>
 
         {/* Price */}
-        <div className="pt-1 border-t border-dbb-tertiary/30">
+        <div className="pt-1 border-t border-gray-200 dark:border-dbb-tertiary/30">
           {priceLoading ? (
             <div className="h-4 skeleton rounded w-16" />
           ) : myrPrice != null ? (
@@ -131,7 +131,7 @@ export default function BazaarCard({ listing, onClick }) {
               </span>
             </p>
           ) : (
-            <p className="text-xs text-gray-600">Price unavailable</p>
+            <p className="text-xs text-gray-500 dark:text-gray-600">Price unavailable</p>
           )}
         </div>
       </div>

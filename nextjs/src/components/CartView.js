@@ -81,7 +81,7 @@ export default function CartView() {
       <div className="text-center py-20">
         <ShoppingCart className="w-16 h-16 mx-auto mb-4 text-gray-600" />
         <h2 className="text-xl font-semibold mb-2">Your cart is empty</h2>
-        <p className="text-gray-400 mb-6">Browse the Bazaar to find cards you'd like to buy.</p>
+        <p className="text-gray-500 dark:text-gray-400 mb-6">Browse the Bazaar to find cards you'd like to buy.</p>
         <Link href="/bazaar" className="btn btn-primary btn-md inline-block">
           Browse the Bazaar →
         </Link>
@@ -99,17 +99,17 @@ export default function CartView() {
   return (
     <div className="max-w-3xl mx-auto space-y-6">
       {groups.map(group => (
-        <div key={group.seller_id || '__unknown__'} className="bg-dbb-secondary rounded-xl border border-gray-700 overflow-hidden">
+        <div key={group.seller_id || '__unknown__'} className="bg-white dark:bg-dbb-secondary rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
           {/* Seller header */}
-          <div className="px-4 py-3 border-b border-gray-700 bg-dbb-primary/60 flex items-center justify-between">
-            <span className="text-sm font-semibold text-white">{group.seller_name}</span>
-            <span className="text-xs text-gray-500">
+          <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-dbb-primary/60 flex items-center justify-between">
+            <span className="text-sm font-semibold text-gray-900 dark:text-white">{group.seller_name}</span>
+            <span className="text-xs text-gray-600 dark:text-gray-500">
               {group.items.length} item{group.items.length !== 1 ? 's' : ''}
             </span>
           </div>
 
           {/* Items */}
-          <div className="divide-y divide-gray-700/50">
+          <div className="divide-y divide-gray-200 dark:divide-gray-700/50">
             {group.items.map(item => {
               const ci = item.library_card?.card_index
               const foilBadge = item.library_card?.foil && FOIL_BADGES[item.library_card.foil]
@@ -122,7 +122,7 @@ export default function CartView() {
                   {/* Card info */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-sm font-medium text-white truncate">
+                      <span className="text-sm font-medium text-gray-900 dark:text-white truncate">
                         {ci?.name || 'Unknown card'}
                       </span>
                       {!item.is_available && (
@@ -136,11 +136,11 @@ export default function CartView() {
                         </span>
                       )}
                     </div>
-                    <div className="text-xs text-gray-500 mt-0.5 space-x-2">
+                    <div className="text-xs text-gray-600 dark:text-gray-500 mt-0.5 space-x-2">
                       {ci?.set_name && <span>{ci.set_name}</span>}
                       {ci?.collector_number && <span>#{ci.collector_number}</span>}
                       {item.library_card?.condition && (
-                        <span className="border border-gray-600 rounded px-1 py-0.5 text-gray-400">
+                        <span className="border border-gray-300 dark:border-gray-600 rounded px-1 py-0.5 text-gray-500 dark:text-gray-400">
                           {item.library_card.condition}
                         </span>
                       )}
@@ -165,7 +165,7 @@ export default function CartView() {
                   <button
                     onClick={() => handleRemove(item.id)}
                     disabled={isRemoving}
-                    className="p-1.5 text-gray-500 hover:text-red-400 transition-colors disabled:opacity-50"
+                    className="p-1.5 text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 transition-colors disabled:opacity-50"
                     title="Remove from cart"
                   >
                     {isRemoving
@@ -179,9 +179,9 @@ export default function CartView() {
           </div>
 
           {/* Seller subtotal */}
-          <div className="px-4 py-2.5 border-t border-gray-700 bg-dbb-primary/40 flex justify-between items-center">
-            <span className="text-xs text-gray-500">Subtotal ({group.seller_name})</span>
-            <span className="text-sm font-medium text-white">
+          <div className="px-4 py-2.5 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-dbb-primary/40 flex justify-between items-center">
+            <span className="text-xs text-gray-600 dark:text-gray-500">Subtotal ({group.seller_name})</span>
+            <span className="text-sm font-medium text-gray-900 dark:text-white">
               RM {group.subtotal.toFixed(2)}
             </span>
           </div>
@@ -189,16 +189,16 @@ export default function CartView() {
       ))}
 
       {/* Grand total */}
-      <div className="bg-dbb-primary border border-dbb-accent/30 rounded-xl px-5 py-4 flex items-center justify-between">
+      <div className="bg-white dark:bg-dbb-primary border border-dbb-accent/30 rounded-xl px-5 py-4 flex items-center justify-between">
         <div>
-          <p className="text-sm text-gray-400">Grand Total</p>
+          <p className="text-sm text-gray-600 dark:text-gray-400">Grand Total</p>
           {items.some(i => !i.is_available) && (
-            <p className="text-xs text-gray-600 mt-0.5">Unavailable items not included</p>
+            <p className="text-xs text-gray-500 dark:text-gray-600 mt-0.5">Unavailable items not included</p>
           )}
         </div>
         <div className="text-right">
           <p className="text-2xl font-bold text-dbb-accent">RM {grandTotal.toFixed(2)}</p>
-          <p className="text-xs text-gray-500">{availableItems.length} item{availableItems.length !== 1 ? 's' : ''}</p>
+          <p className="text-xs text-gray-600 dark:text-gray-500">{availableItems.length} item{availableItems.length !== 1 ? 's' : ''}</p>
         </div>
       </div>
 
@@ -206,7 +206,7 @@ export default function CartView() {
         <Link href="/bazaar" className="btn btn-outline btn-sm inline-flex items-center gap-1">
           <ExternalLink className="w-3.5 h-3.5" /> Continue shopping
         </Link>
-        <p className="text-gray-500 text-xs">Checkout coming soon</p>
+        <p className="text-gray-600 dark:text-gray-500 text-xs">Checkout coming soon</p>
       </div>
     </div>
   )

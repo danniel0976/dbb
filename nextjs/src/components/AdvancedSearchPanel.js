@@ -103,17 +103,17 @@ export default function AdvancedSearchPanel({
   if (!open) return null
 
   return (
-    <div className="bg-dbb-secondary border border-gray-700 rounded-xl p-4 mb-4 space-y-4">
+    <div className="bg-white dark:bg-dbb-secondary border border-gray-200 dark:border-gray-700 rounded-xl p-4 mb-4 space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="font-semibold text-sm text-gray-200">Advanced Filters</h3>
-        <button onClick={onClose} className="text-gray-500 hover:text-white transition-colors">
+        <h3 className="font-semibold text-sm text-gray-800 dark:text-gray-200">Advanced Filters</h3>
+        <button onClick={onClose} className="text-gray-400 dark:text-gray-500 hover:text-gray-900 dark:hover:text-white transition-colors">
           <X className="w-4 h-4" />
         </button>
       </div>
 
       {/* Colors */}
       <div className="space-y-2">
-        <div className="text-xs text-gray-400 uppercase tracking-wider">Colors</div>
+        <div className="text-xs text-gray-600 dark:text-gray-400 uppercase tracking-wider">Colors</div>
         <div className="flex items-center gap-2 flex-wrap">
           {COLORS.map(c => (
             <button
@@ -136,7 +136,7 @@ export default function AdvancedSearchPanel({
                 className={`px-2 py-0.5 text-xs rounded border transition-colors ${
                   (localFilters.color_mode || 'or') === 'or'
                     ? 'border-dbb-accent text-dbb-accent'
-                    : 'border-gray-600 text-gray-400 hover:border-gray-400'
+                    : 'border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:border-gray-400 dark:hover:border-gray-400'
                 }`}
               >OR</button>
               <button
@@ -144,7 +144,7 @@ export default function AdvancedSearchPanel({
                 className={`px-2 py-0.5 text-xs rounded border transition-colors ${
                   localFilters.color_mode === 'and'
                     ? 'border-dbb-accent text-dbb-accent'
-                    : 'border-gray-600 text-gray-400 hover:border-gray-400'
+                    : 'border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:border-gray-400 dark:hover:border-gray-400'
                 }`}
               >AND</button>
             </div>
@@ -155,19 +155,19 @@ export default function AdvancedSearchPanel({
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {/* Type line */}
         <div className="space-y-1">
-          <label className="text-xs text-gray-400 uppercase tracking-wider">Type line</label>
+          <label className="text-xs text-gray-600 dark:text-gray-400 uppercase tracking-wider">Type line</label>
           <input
             type="text"
             value={localFilters.type_line || ''}
             onChange={e => update({ type_line: e.target.value })}
             placeholder="e.g. Creature"
-            className="w-full bg-dbb-primary border border-gray-600 rounded-lg px-3 py-1.5 text-sm focus:border-dbb-accent focus:outline-none placeholder-gray-600"
+            className="w-full bg-white dark:bg-dbb-primary border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-1.5 text-sm focus:border-dbb-accent focus:outline-none placeholder-gray-400 dark:placeholder-gray-600"
           />
         </div>
 
         {/* CMC */}
         <div className="space-y-1">
-          <label className="text-xs text-gray-400 uppercase tracking-wider">Mana value (CMC)</label>
+          <label className="text-xs text-gray-600 dark:text-gray-400 uppercase tracking-wider">Mana value (CMC)</label>
           <div className="flex items-center gap-2">
             <input
               type="number"
@@ -175,27 +175,27 @@ export default function AdvancedSearchPanel({
               onChange={e => update({ cmc_min: e.target.value })}
               placeholder="Min"
               min="0"
-              className="w-full bg-dbb-primary border border-gray-600 rounded-lg px-3 py-1.5 text-sm focus:border-dbb-accent focus:outline-none placeholder-gray-600"
+              className="w-full bg-white dark:bg-dbb-primary border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-1.5 text-sm focus:border-dbb-accent focus:outline-none placeholder-gray-400 dark:placeholder-gray-600"
             />
-            <span className="text-gray-500 text-sm">–</span>
+            <span className="text-gray-400 dark:text-gray-500 text-sm">–</span>
             <input
               type="number"
               value={localFilters.cmc_max ?? ''}
               onChange={e => update({ cmc_max: e.target.value })}
               placeholder="Max"
               min="0"
-              className="w-full bg-dbb-primary border border-gray-600 rounded-lg px-3 py-1.5 text-sm focus:border-dbb-accent focus:outline-none placeholder-gray-600"
+              className="w-full bg-white dark:bg-dbb-primary border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-1.5 text-sm focus:border-dbb-accent focus:outline-none placeholder-gray-400 dark:placeholder-gray-600"
             />
           </div>
         </div>
 
         {/* Set */}
         <div className="space-y-1">
-          <label className="text-xs text-gray-400 uppercase tracking-wider">Set</label>
+          <label className="text-xs text-gray-600 dark:text-gray-400 uppercase tracking-wider">Set</label>
           <select
             value={localFilters.set_code || ''}
             onChange={e => update({ set_code: e.target.value || undefined })}
-            className="w-full bg-dbb-primary border border-gray-600 rounded-lg px-3 py-1.5 text-sm focus:border-dbb-accent focus:outline-none"
+            className="w-full bg-white dark:bg-dbb-primary border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-1.5 text-sm focus:border-dbb-accent focus:outline-none"
           >
             <option value="">Any set</option>
             {sets.map(s => (
@@ -210,7 +210,7 @@ export default function AdvancedSearchPanel({
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {/* Rarity */}
         <div className="space-y-1">
-          <label className="text-xs text-gray-400 uppercase tracking-wider">Rarity</label>
+          <label className="text-xs text-gray-600 dark:text-gray-400 uppercase tracking-wider">Rarity</label>
           <div className="flex gap-1.5 flex-wrap">
             {RARITIES.map(r => (
               <button
@@ -219,7 +219,7 @@ export default function AdvancedSearchPanel({
                 className={`px-2.5 py-0.5 text-xs rounded-full border transition-colors ${
                   (localFilters.rarity || []).includes(r.value)
                     ? `border-dbb-accent bg-dbb-accent/10 ${r.color}`
-                    : 'border-gray-600 text-gray-400 hover:border-gray-400'
+                    : 'border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:border-gray-400 dark:hover:border-gray-400'
                 }`}
               >
                 {r.label}
@@ -230,7 +230,7 @@ export default function AdvancedSearchPanel({
 
         {/* Foil */}
         <div className="space-y-1">
-          <label className="text-xs text-gray-400 uppercase tracking-wider">Foil</label>
+          <label className="text-xs text-gray-600 dark:text-gray-400 uppercase tracking-wider">Foil</label>
           <div className="flex gap-1.5 flex-wrap">
             {FOIL_OPTIONS.map(f => (
               <button
@@ -239,7 +239,7 @@ export default function AdvancedSearchPanel({
                 className={`px-2.5 py-0.5 text-xs rounded-full border transition-colors ${
                   (localFilters.foil || 'all') === f.value
                     ? 'border-dbb-accent bg-dbb-accent/10 text-dbb-accent'
-                    : 'border-gray-600 text-gray-400 hover:border-gray-400'
+                    : 'border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:border-gray-400 dark:hover:border-gray-400'
                 }`}
               >
                 {f.label}
@@ -251,11 +251,11 @@ export default function AdvancedSearchPanel({
         {/* Binder (only on /library, not on /binders/[id]) */}
         {!binderId && binders.length > 0 && (
           <div className="space-y-1">
-            <label className="text-xs text-gray-400 uppercase tracking-wider">Binder</label>
+            <label className="text-xs text-gray-600 dark:text-gray-400 uppercase tracking-wider">Binder</label>
             <select
               value={localFilters.binder_id || ''}
               onChange={e => update({ binder_id: e.target.value || undefined })}
-              className="w-full bg-dbb-primary border border-gray-600 rounded-lg px-3 py-1.5 text-sm focus:border-dbb-accent focus:outline-none"
+              className="w-full bg-white dark:bg-dbb-primary border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-1.5 text-sm focus:border-dbb-accent focus:outline-none"
             >
               <option value="">All binders</option>
               {binders.map(b => (
@@ -273,7 +273,7 @@ export default function AdvancedSearchPanel({
               className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-colors ${
                 localFilters.starred
                   ? 'bg-dbb-gold border-dbb-gold'
-                  : 'border-gray-600 hover:border-dbb-gold'
+                  : 'border-gray-300 dark:border-gray-600 hover:border-dbb-gold'
               }`}
             >
               {localFilters.starred && (
@@ -282,7 +282,7 @@ export default function AdvancedSearchPanel({
                 </svg>
               )}
             </div>
-            <span className="text-sm text-gray-300">Starred only</span>
+            <span className="text-sm text-gray-700 dark:text-gray-300">Starred only</span>
           </label>
         </div>
       </div>

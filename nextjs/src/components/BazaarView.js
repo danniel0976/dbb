@@ -155,18 +155,18 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
   return (
     <div className="min-h-screen">
       {/* Sub-header */}
-      <div className="sticky top-[57px] z-30 bg-dbb-primary/95 backdrop-blur border-b border-dbb-tertiary/30">
+      <div className="sticky top-[57px] z-30 bg-white/95 dark:bg-dbb-primary/95 backdrop-blur border-b border-gray-200 dark:border-dbb-tertiary/30">
         <div className="container mx-auto px-4 py-3 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="lg:hidden p-2 hover:bg-dbb-secondary rounded-dbb transition-colors"
+              className="lg:hidden p-2 hover:bg-gray-100 dark:hover:bg-dbb-secondary rounded-dbb transition-colors"
             >
               <Filter className="w-5 h-5" />
             </button>
-            <h1 className="text-lg font-semibold text-white">Bazaar</h1>
+            <h1 className="text-lg font-semibold text-gray-900 dark:text-white">Bazaar</h1>
             {!loading && (
-              <span className="text-sm text-gray-500">
+              <span className="text-sm text-gray-600 dark:text-gray-500">
                 {total} listing{total !== 1 ? 's' : ''}
               </span>
             )}
@@ -179,7 +179,7 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
                 placeholder="Search cards..."
                 value={filters.search}
                 onChange={(e) => updateFilter('search', e.target.value)}
-                className="w-40 sm:w-64 bg-dbb-secondary border border-dbb-tertiary/50 rounded-dbb pl-9 pr-8 py-2 text-sm focus:border-dbb-accent focus:outline-none placeholder-gray-500"
+                className="w-40 sm:w-64 bg-white dark:bg-dbb-secondary border border-gray-200 dark:border-dbb-tertiary/50 rounded-dbb pl-9 pr-8 py-2 text-sm focus:border-dbb-accent focus:outline-none placeholder-gray-400 dark:placeholder-gray-500"
               />
               {filters.search && (
                 <button
@@ -204,7 +204,7 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
 
       <div className="flex">
         {/* Sidebar — Desktop */}
-        <aside className="hidden lg:block w-72 fixed left-0 top-[105px] bottom-0 overflow-y-auto border-r border-dbb-tertiary/30 bg-dbb-primary/50">
+        <aside className="hidden lg:block w-72 fixed left-0 top-[105px] bottom-0 overflow-y-auto border-r border-dbb-tertiary/30 bg-gray-50 dark:bg-dbb-primary/50">
           <Sidebar
             filters={filters}
             updateFilter={updateFilter}
@@ -221,10 +221,10 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
               onClick={() => setSidebarOpen(false)}
             />
             <aside className="fixed left-0 top-0 bottom-0 w-80 z-50 lg:hidden">
-              <div className="h-full bg-dbb-primary overflow-y-auto">
-                <div className="p-4 border-b border-dbb-tertiary/30 flex items-center justify-between">
+              <div className="h-full bg-white dark:bg-dbb-primary overflow-y-auto">
+                <div className="p-4 border-b border-gray-200 dark:border-dbb-tertiary/30 flex items-center justify-between">
                   <h2 className="text-lg font-semibold">Filters</h2>
-                  <button onClick={() => setSidebarOpen(false)} className="p-2 hover:bg-dbb-secondary rounded-dbb">
+                  <button onClick={() => setSidebarOpen(false)} className="p-2 hover:bg-gray-100 dark:hover:bg-dbb-secondary rounded-dbb">
                     <X className="w-5 h-5" />
                   </button>
                 </div>
@@ -246,7 +246,7 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
             <select
               value={filters.sortBy}
               onChange={(e) => updateFilter('sortBy', e.target.value)}
-              className="bg-dbb-secondary border border-dbb-tertiary/50 rounded-dbb px-3 py-1.5 text-sm focus:border-dbb-accent focus:outline-none"
+              className="bg-white dark:bg-dbb-secondary border border-gray-200 dark:border-dbb-tertiary/50 rounded-dbb px-3 py-1.5 text-sm focus:border-dbb-accent focus:outline-none"
             >
               <option value="newest">Newest</option>
               <option value="price_high">Price: High → Low</option>
@@ -263,7 +263,7 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
             <LoadingSkeleton count={12} />
           ) : error ? (
             <div className="text-center py-12">
-              <p className="text-red-400 mb-4">{error}</p>
+              <p className="text-red-600 dark:text-red-400 mb-4">{error}</p>
               <button onClick={() => loadListings()} className="btn btn-primary btn-md">
                 Try Again
               </button>
@@ -274,7 +274,7 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
               <h2 className="text-xl font-semibold mb-2">
                 {hasActiveFilters ? 'No listings match your filters' : 'No cards on the bazaar yet'}
               </h2>
-              <p className="text-gray-400 mb-4">
+              <p className="text-gray-500 dark:text-gray-400 mb-4">
                 {hasActiveFilters
                   ? 'Try adjusting your filters or clearing them.'
                   : 'List yours from your library to get started.'}
@@ -302,12 +302,12 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
               </div>
               <div id="bazaar-sentinel" className="h-20 flex items-center justify-center py-4">
                 {loadingMore && (
-                  <div className="flex items-center gap-2 text-gray-400 text-sm">
+                  <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400 text-sm">
                     <Loader2 className="w-4 h-4 animate-spin" /> Loading more...
                   </div>
                 )}
                 {!hasMore && listings.length > 0 && (
-                  <div className="text-gray-500 text-sm">All {total} listings shown</div>
+                  <div className="text-gray-600 dark:text-gray-500 text-sm">All {total} listings shown</div>
                 )}
               </div>
             </>

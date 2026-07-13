@@ -52,9 +52,9 @@ function ConditionProof({ listingId, onClose }) {
       className="fixed inset-0 z-[70] bg-black/80 flex items-center justify-center p-4"
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
-      <div className="bg-dbb-primary border border-dbb-accent/30 rounded-xl max-w-md w-full shadow-2xl">
-        <div className="flex items-center justify-between p-3 border-b border-gray-700">
-          <h3 className="text-sm font-semibold text-white flex items-center gap-1.5">
+      <div className="bg-white dark:bg-dbb-primary border border-dbb-accent/30 rounded-xl max-w-md w-full shadow-2xl">
+        <div className="flex items-center justify-between p-3 border-b border-gray-200 dark:border-gray-700">
+          <h3 className="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-1.5">
             <Camera className="w-4 h-4 text-dbb-accent" /> Condition proof
           </h3>
           <button onClick={onClose} className="p-1 hover:text-dbb-accent transition-colors">
@@ -63,7 +63,7 @@ function ConditionProof({ listingId, onClose }) {
         </div>
         <div className="p-3">
           {loading ? (
-            <div className="flex items-center justify-center gap-2 py-8 text-sm text-gray-600">
+            <div className="flex items-center justify-center gap-2 py-8 text-sm text-gray-500 dark:text-gray-600">
               <Loader2 className="w-4 h-4 animate-spin" /> Loading photo...
             </div>
           ) : photoUrl ? (
@@ -86,7 +86,7 @@ function ConditionProof({ listingId, onClose }) {
               <Camera className="w-4 h-4" /> No condition photo available
             </div>
           )}
-          <p className="text-[10px] text-gray-600 mt-2 text-center">
+          <p className="text-[10px] text-gray-500 dark:text-gray-600 mt-2 text-center">
             Seller's real-life card photo — condition evidence for this listing.
           </p>
         </div>
@@ -137,9 +137,9 @@ function SellerPopup({ listingId, onClose }) {
       className="fixed inset-0 z-[60] bg-black/60 flex items-center justify-center p-4"
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
-      <div className="bg-dbb-primary border border-dbb-accent/30 rounded-xl max-w-sm w-full shadow-2xl">
-        <div className="flex items-center justify-between p-4 border-b border-gray-700">
-          <h3 className="text-sm font-semibold text-white">Seller info</h3>
+      <div className="bg-white dark:bg-dbb-primary border border-dbb-accent/30 rounded-xl max-w-sm w-full shadow-2xl">
+        <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
+          <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Seller info</h3>
           <button onClick={onClose} className="p-1 hover:text-dbb-accent transition-colors">
             <X className="w-4 h-4" />
           </button>
@@ -147,7 +147,7 @@ function SellerPopup({ listingId, onClose }) {
 
         <div className="p-4 space-y-3">
           {loading ? (
-            <div className="flex items-center justify-center gap-2 py-6 text-sm text-gray-600">
+            <div className="flex items-center justify-center gap-2 py-6 text-sm text-gray-500 dark:text-gray-600">
               <Loader2 className="w-4 h-4 animate-spin" /> Loading...
             </div>
           ) : !data ? (
@@ -158,7 +158,7 @@ function SellerPopup({ listingId, onClose }) {
                 <User className="w-5 h-5 text-dbb-accent" />
               </div>
               <div>
-                <p className="text-sm font-semibold text-white">{data.display_name}</p>
+                <p className="text-sm font-semibold text-gray-900 dark:text-white">{data.display_name}</p>
                 {data.member_since && (
                   <p className="text-xs text-gray-500 flex items-center gap-1">
                     <Calendar className="w-3 h-3" />
@@ -272,10 +272,10 @@ export default function BazaarDetailModal({ listing, onClose, onSelectListing })
       className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4"
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
-      <div className="bg-dbb-primary border border-dbb-accent/30 rounded-xl max-w-3xl w-full max-h-[92vh] overflow-y-auto shadow-2xl">
+      <div className="bg-white dark:bg-dbb-primary border border-dbb-accent/30 rounded-xl max-w-3xl w-full max-h-[92vh] overflow-y-auto shadow-2xl">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-gray-700 sticky top-0 bg-dbb-primary z-10">
-          <h2 className="text-lg font-bold text-white truncate pr-4">{cardName}</h2>
+        <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white dark:bg-dbb-primary z-10">
+          <h2 className="text-lg font-bold text-gray-900 dark:text-white truncate pr-4">{cardName}</h2>
           <button onClick={onClose} className="p-1 hover:text-dbb-accent transition-colors flex-shrink-0">
             <X className="w-5 h-5" />
           </button>
@@ -289,7 +289,7 @@ export default function BazaarDetailModal({ listing, onClose, onSelectListing })
             ) : imageUrl ? (
               <img src={imageUrl} alt={cardName} className="w-full rounded-lg shadow-lg" />
             ) : (
-              <div className="aspect-[2/3] bg-dbb-secondary rounded-lg flex items-center justify-center">
+              <div className="aspect-[2/3] bg-gray-100 dark:bg-dbb-secondary rounded-lg flex items-center justify-center">
                 <span className="text-gray-500 text-sm text-center p-2">{cardName}</span>
               </div>
             )}
@@ -320,32 +320,32 @@ export default function BazaarDetailModal({ listing, onClose, onSelectListing })
                 <div><span className="text-gray-500">Type:</span> {typeLine}</div>
               )}
               {oracleText && (
-                <div className="mt-2 p-2.5 bg-dbb-secondary rounded text-xs leading-relaxed whitespace-pre-line text-gray-300">
+                <div className="mt-2 p-2.5 bg-dbb-secondary rounded text-xs leading-relaxed whitespace-pre-line text-gray-600 dark:text-gray-300">
                   {oracleText}
                 </div>
               )}
             </div>
 
             {/* CKD reference price */}
-            <div className="p-3 bg-dbb-secondary rounded-lg">
-              <p className="text-xs text-gray-500 mb-1">CardKingdom Reference Price</p>
+            <div className="p-3 bg-gray-100 dark:bg-dbb-secondary rounded-lg">
+              <p className="text-xs text-gray-600 dark:text-gray-500 mb-1">CardKingdom Reference Price</p>
               {priceLoading ? (
-                <div className="flex items-center gap-1.5 text-xs text-gray-600">
+                <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-600">
                   <Loader2 className="w-3 h-3 animate-spin" /> Loading...
                 </div>
               ) : ckdPrice != null ? (
                 <div className="flex items-baseline gap-2">
-                  <span className="text-base font-semibold text-white">${ckdPrice.toFixed(2)}</span>
+                  <span className="text-base font-semibold text-gray-900 dark:text-white">${ckdPrice.toFixed(2)}</span>
                   <span className="text-xs text-gray-500">CKD USD</span>
                 </div>
               ) : (
-                <span className="text-xs text-gray-600">No price data available</span>
+                <span className="text-xs text-gray-500 dark:text-gray-600">No price data available</span>
               )}
             </div>
 
             {/* Sellers / listings */}
             <div>
-              <h3 className="text-sm font-semibold text-white mb-2">
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">
                 {sellersLoading
                   ? 'Loading sellers...'
                   : sellers?.length === 0
@@ -354,7 +354,7 @@ export default function BazaarDetailModal({ listing, onClose, onSelectListing })
               </h3>
 
               {sellersLoading ? (
-                <div className="flex items-center gap-2 text-xs text-gray-600 py-3">
+                <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-600 py-3">
                   <Loader2 className="w-4 h-4 animate-spin" /> Fetching listings...
                 </div>
               ) : sellers && sellers.length > 0 ? (
@@ -370,7 +370,7 @@ export default function BazaarDetailModal({ listing, onClose, onSelectListing })
                         className={`flex flex-col gap-1.5 p-2.5 rounded-lg border transition-colors ${
                           isSelected
                             ? 'border-dbb-accent bg-dbb-accent/10'
-                            : 'border-gray-700 bg-dbb-secondary hover:border-gray-600'
+                            : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-dbb-secondary hover:border-gray-300 dark:hover:border-gray-600'
                         }`}
                       >
                         <div className="flex items-center justify-between gap-2">
@@ -378,12 +378,12 @@ export default function BazaarDetailModal({ listing, onClose, onSelectListing })
                           <User className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
                           <button
                             onClick={() => setSellerPopupId(s.id)}
-                            className="text-sm text-gray-300 hover:text-dbb-accent transition-colors truncate max-w-[120px] text-left"
+                            className="text-sm text-gray-600 dark:text-gray-300 hover:text-dbb-accent transition-colors truncate max-w-[120px] text-left"
                             title="View seller profile"
                           >
                             {s.seller_name || 'Seller'}
                           </button>
-                          <span className="text-xs border border-gray-600 rounded px-1 py-0.5 text-gray-400 flex-shrink-0">
+                          <span className="text-xs border border-gray-300 dark:border-gray-600 rounded px-1 py-0.5 text-gray-500 dark:text-gray-400 flex-shrink-0">
                             {slc?.condition || 'NM'}
                           </span>
                           {foilBadge && (
@@ -397,7 +397,7 @@ export default function BazaarDetailModal({ listing, onClose, onSelectListing })
                             <div className="text-sm font-semibold text-dbb-accent">
                               {myr != null ? `RM ${myr.toFixed(2)}` : '—'}
                             </div>
-                            <div className="text-[10px] text-gray-600">×{s.multiplier}</div>
+                            <div className="text-[10px] text-gray-500 dark:text-gray-600">×{s.multiplier}</div>
                           </div>
                           {/* onSelectListing stub — Phase 11 wires this to cart */}
                           <button
@@ -417,7 +417,7 @@ export default function BazaarDetailModal({ listing, onClose, onSelectListing })
                         </div>
                         {/* Listed-at / expires-in timestamps */}
                         {(s.created_at || s.expires_at) && (
-                          <p className="text-[10px] text-gray-600 pl-0.5">
+                          <p className="text-[10px] text-gray-500 dark:text-gray-600 pl-0.5">
                             {s.created_at && `listed ${relativeTime(s.created_at, false)}`}
                             {s.created_at && s.expires_at && ' · '}
                             {s.expires_at && `expires ${relativeTime(s.expires_at, true)}`}
