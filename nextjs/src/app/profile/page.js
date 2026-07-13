@@ -3,11 +3,19 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { User, Mail, Calendar, BookOpen, Layers, Star, Pencil, Check, X, Loader2, AlertTriangle } from 'lucide-react'
+import { User, Mail, Calendar, BookOpen, Layers, Star, Pencil, Check, X, Loader2, AlertTriangle, Sun, Moon, Monitor } from 'lucide-react'
 import DBBNav from '@/components/DBBNav'
+import { useTheme } from '@/components/ThemeProvider'
+
+const THEME_OPTIONS = [
+  { value: 'light', label: 'Light', icon: Sun },
+  { value: 'dark', label: 'Dark', icon: Moon },
+  { value: 'system', label: 'System', icon: Monitor },
+]
 
 export default function ProfilePage() {
   const router = useRouter()
+  const { theme, setTheme } = useTheme()
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -26,6 +34,9 @@ export default function ProfilePage() {
   const [deactivating, setDeactivating] = useState(false)
   const [confirmText, setConfirmText] = useState('')
 
+  // Theme saving state
+  const [savingTheme, setSavingTheme] = useState(false)
+
   useEffect(() => {
     fetch('/api/profile')
       .then(r => {
@@ -35,10 +46,14 @@ export default function ProfilePage() {
       .then(data => {
         setProfile(data)
         setNameInput(data.display_name || '')
+        // Sync theme from DB if different from localStorage
+        if (data.theme_preference && data.theme_preference !== theme) {
+          setTheme(data.theme_preference)
+        }
       })
       .catch(e => setError(e.message))
       .finally(() => setLoading(false))
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const saveName = async () => {
     setSavingName(true)
@@ -66,13 +81,20 @@ export default function ProfilePage() {
     setEditingName(false)
   }
 
-  const handleChangePassword = async () => {
-    setChangingPassword(true)
+  const handleThemeChange = async (newTheme) => {
+    setTheme(newTheme)
+    setSavingTheme(true)
     try {
-      const res = await fetch('/auth/callback', { method: 'GET' })
-    } catch {}
-    // Redirect to reset password page
-    router.push('/reset-password')
+      await fetch('/api/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ theme_preference: newTheme }),
+      })
+    } catch {
+      // Silently ignore — localStorage is already updated
+    } finally {
+      setSavingTheme(false)
+    }
   }
 
   const handleDeactivate = async () => {
@@ -118,11 +140,11 @@ export default function ProfilePage() {
       <DBBNav />
 
       <main className="container mx-auto px-4 py-8 max-w-3xl">
-        <h1 className="text-2xl font-bold text-white mb-6">Profile</h1>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Profile</h1>
 
         {/* Account info card */}
-        <div className="bg-dbb-secondary border border-gray-700 rounded-xl p-6 mb-6">
-          <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4">Account</h3>
+        <div className="bg-white dark:bg-dbb-secondary border border-gray-200 dark:border-gray-700 rounded-xl p-6 mb-6">
+          <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-4">Account</h3>
 
           {/* Display name */}
           <div className="flex items-center gap-3 mb-4">
@@ -140,21 +162,21 @@ export default function ProfilePage() {
                     onKeyDown={(e) => { if (e.key === 'Enter') saveName(); if (e.key === 'Escape') cancelName() }}
                     maxLength={60}
                     placeholder="Enter display name…"
-                    className="flex-1 bg-dbb-primary border border-dbb-accent/50 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-dbb-accent min-w-0"
+                    className="flex-1 bg-gray-50 dark:bg-dbb-primary border border-dbb-accent/50 rounded px-2 py-1 text-sm text-gray-900 dark:text-white focus:outline-none focus:border-dbb-accent min-w-0"
                   />
-                  <button onClick={saveName} disabled={savingName} className="text-green-400 hover:text-green-300 flex-shrink-0">
+                  <button onClick={saveName} disabled={savingName} className="text-green-600 dark:text-green-400 hover:text-green-500 flex-shrink-0">
                     {savingName ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
                   </button>
-                  <button onClick={cancelName} className="text-gray-400 hover:text-white flex-shrink-0">
+                  <button onClick={cancelName} className="text-gray-400 hover:text-gray-700 dark:hover:text-white flex-shrink-0">
                     <X className="w-4 h-4" />
                   </button>
                 </div>
               ) : (
                 <div className="flex items-center gap-2">
-                  <span className="text-sm text-white">{display_name || <span className="text-gray-500 italic">Not set</span>}</span>
+                  <span className="text-sm text-gray-900 dark:text-white">{display_name || <span className="text-gray-400 italic">Not set</span>}</span>
                   <button
                     onClick={() => setEditingName(true)}
-                    className="text-gray-500 hover:text-dbb-accent transition-colors"
+                    className="text-gray-400 hover:text-dbb-accent transition-colors"
                     title="Edit display name"
                   >
                     <Pencil className="w-3.5 h-3.5" />
@@ -172,7 +194,7 @@ export default function ProfilePage() {
             </div>
             <div>
               <p className="text-xs text-gray-500 mb-0.5">Email</p>
-              <p className="text-sm text-white">{email}</p>
+              <p className="text-sm text-gray-900 dark:text-white">{email}</p>
             </div>
           </div>
 
@@ -183,14 +205,14 @@ export default function ProfilePage() {
             </div>
             <div>
               <p className="text-xs text-gray-500 mb-0.5">Member since</p>
-              <p className="text-sm text-white">{memberSince}</p>
+              <p className="text-sm text-gray-900 dark:text-white">{memberSince}</p>
             </div>
           </div>
         </div>
 
         {/* Collection stats */}
-        <div className="bg-dbb-secondary border border-gray-700 rounded-xl p-6 mb-6">
-          <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4">Collection</h3>
+        <div className="bg-white dark:bg-dbb-secondary border border-gray-200 dark:border-gray-700 rounded-xl p-6 mb-6">
+          <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-4">Collection</h3>
           <div className="grid grid-cols-3 gap-4">
             <StatTile
               icon={<Layers className="w-5 h-5 text-dbb-accent" />}
@@ -210,9 +232,31 @@ export default function ProfilePage() {
           </div>
         </div>
 
+        {/* Appearance */}
+        <div className="bg-white dark:bg-dbb-secondary border border-gray-200 dark:border-gray-700 rounded-xl p-6 mb-6">
+          <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-4">Appearance</h3>
+          <div className="flex gap-3">
+            {THEME_OPTIONS.map(({ value, label, icon: Icon }) => (
+              <button
+                key={value}
+                onClick={() => handleThemeChange(value)}
+                className={`flex-1 flex flex-col items-center gap-2 py-3 px-2 rounded-lg border text-sm font-medium transition-colors ${
+                  theme === value
+                    ? 'border-dbb-accent bg-dbb-accent/10 text-dbb-accent'
+                    : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-500'
+                }`}
+              >
+                <Icon className="w-5 h-5" />
+                {label}
+              </button>
+            ))}
+          </div>
+          <p className="text-xs text-gray-500 mt-2">System follows your device's light/dark preference.</p>
+        </div>
+
         {/* Security */}
-        <div className="bg-dbb-secondary border border-gray-700 rounded-xl p-6 mb-6">
-          <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4">Security</h3>
+        <div className="bg-white dark:bg-dbb-secondary border border-gray-200 dark:border-gray-700 rounded-xl p-6 mb-6">
+          <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-4">Security</h3>
           <Link
             href="/reset-password"
             className="btn btn-outline btn-md inline-flex items-center gap-2"
@@ -222,13 +266,13 @@ export default function ProfilePage() {
         </div>
 
         {/* Danger zone */}
-        <div className="bg-dbb-secondary border border-red-900/40 rounded-xl p-6">
-          <h3 className="text-sm font-semibold text-red-400 uppercase tracking-wider mb-4">Danger zone</h3>
+        <div className="bg-white dark:bg-dbb-secondary border border-red-200 dark:border-red-900/40 rounded-xl p-6">
+          <h3 className="text-sm font-semibold text-red-500 dark:text-red-400 uppercase tracking-wider mb-4">Danger zone</h3>
 
           {!showDeactivate ? (
             <div className="flex items-start gap-4">
               <div className="flex-1">
-                <p className="text-sm text-white font-medium mb-1">Deactivate account</p>
+                <p className="text-sm text-gray-900 dark:text-white font-medium mb-1">Deactivate account</p>
                 <p className="text-xs text-gray-500">Disables your account. Contact support to restore it.</p>
               </div>
               <button
@@ -240,20 +284,20 @@ export default function ProfilePage() {
             </div>
           ) : (
             <div className="space-y-3">
-              <div className="flex items-start gap-2 p-3 bg-red-900/20 border border-red-800 rounded-lg">
-                <AlertTriangle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
-                <p className="text-sm text-red-300">
+              <div className="flex items-start gap-2 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+                <AlertTriangle className="w-4 h-4 text-red-500 dark:text-red-400 flex-shrink-0 mt-0.5" />
+                <p className="text-sm text-red-600 dark:text-red-300">
                   This will immediately lock your account. Your data is kept — contact support to reactivate.
                 </p>
               </div>
-              <p className="text-xs text-gray-500">Type <span className="text-gray-300 font-mono">deactivate</span> to confirm:</p>
+              <p className="text-xs text-gray-500">Type <span className="text-gray-700 dark:text-gray-300 font-mono">deactivate</span> to confirm:</p>
               <input
                 autoFocus
                 type="text"
                 value={confirmText}
                 onChange={(e) => setConfirmText(e.target.value)}
                 placeholder="deactivate"
-                className="w-full bg-dbb-primary border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:border-red-500 focus:outline-none placeholder-gray-600"
+                className="w-full bg-gray-50 dark:bg-dbb-primary border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-white focus:border-red-500 focus:outline-none placeholder-gray-400 dark:placeholder-gray-600"
               />
               <div className="flex gap-2">
                 <button
@@ -282,13 +326,13 @@ export default function ProfilePage() {
 
 function StatTile({ icon, label, value }) {
   return (
-    <div className="bg-dbb-primary/50 rounded-lg p-4 flex flex-col gap-2">
+    <div className="bg-gray-50 dark:bg-dbb-primary/50 rounded-lg p-4 flex flex-col gap-2">
       <div className="w-8 h-8 bg-dbb-accent/10 rounded-lg flex items-center justify-center">
         {icon}
       </div>
       <div>
         <p className="text-xs text-gray-500 mb-0.5">{label}</p>
-        <p className="text-lg font-semibold text-white">{value}</p>
+        <p className="text-lg font-semibold text-gray-900 dark:text-white">{value}</p>
       </div>
     </div>
   )

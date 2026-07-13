@@ -2,38 +2,49 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --foreground-rgb: 255, 255, 255;
-  --background-start-rgb: 15, 23, 42;    /* slate-900 */
-  --background-end-rgb: 10, 15, 30;       /* darker slate */
-}
-
+/* ── Light mode (default) ── */
 body {
-  color: rgb(var(--foreground-rgb));
-  background: linear-gradient(
-      to bottom,
-      rgb(var(--background-start-rgb)),
-      rgb(var(--background-end-rgb))
-    );
+  color: #121212;
+  background-color: #F8F8F8;
   min-height: 100vh;
 }
 
-/* Custom scrollbar */
+/* ── Dark mode body ── */
+.dark body {
+  color: #FFFFFF;
+  background: linear-gradient(
+      to bottom,
+      #0f172a,
+      #0a0f1e
+    );
+}
+
+/* Custom scrollbar — light */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 
 ::-webkit-scrollbar-track {
+  background: #e2e8f0;
+}
+.dark ::-webkit-scrollbar-track {
   background: #0f172a;
 }
 
 ::-webkit-scrollbar-thumb {
+  background: #94a3b8;
+  border-radius: 4px;
+}
+.dark ::-webkit-scrollbar-thumb {
   background: #0835DB;
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+}
+.dark ::-webkit-scrollbar-thumb:hover {
   background: #1944E8;
 }
 
@@ -77,8 +88,18 @@ body {
   transition: transform 0.3s ease-in-out;
 }
 
-/* Skeleton/shimmer loading */
+/* Skeleton/shimmer loading — light mode */
 .skeleton {
+  background: linear-gradient(
+    90deg,
+    #e2e8f0 0%,
+    #f1f5f9 50%,
+    #e2e8f0 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+.dark .skeleton {
   background: linear-gradient(
     90deg,
     #1e293b 0%,
@@ -86,7 +107,6 @@ body {
     #1e293b 100%
   );
   background-size: 200% 100%;
-  animation: shimmer 1.5s infinite;
 }
 
 @keyframes shimmer {
@@ -94,8 +114,18 @@ body {
   100% { background-position: -200% 0; }
 }
 
-/* Card image skeleton — TCG card silhouette */
+/* Card image skeleton — light mode */
 .card-skeleton {
+  background: linear-gradient(
+    135deg,
+    #e2e8f0 0%,
+    #f1f5f9 40%,
+    #e2e8f0 80%
+  );
+  background-size: 200% 200%;
+  animation: shimmer 1.5s infinite;
+}
+.dark .card-skeleton {
   background: linear-gradient(
     135deg,
     #1e293b 0%,
@@ -103,7 +133,6 @@ body {
     #1e293b 80%
   );
   background-size: 200% 200%;
-  animation: shimmer 1.5s infinite;
 }
 
 /* Toast notifications */
@@ -182,12 +211,21 @@ body {
   background-color: #2DA27C;
 }
 
+/* btn-secondary: light mode default, dark mode override */
 .btn-secondary {
+  background-color: #F7F7F8;
+  color: #374151;
+  border: 1px solid #DEE3E7;
+}
+.btn-secondary:hover {
+  background-color: #e5e7eb;
+}
+.dark .btn-secondary {
   background-color: #1e293b;
   color: #e2e8f0;
   border: 1px solid #334155;
 }
-.btn-secondary:hover {
+.dark .btn-secondary:hover {
   background-color: #334155;
 }
 

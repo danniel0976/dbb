@@ -16,8 +16,8 @@ export default async function ImportPage() {
 
       <main className="container mx-auto px-4 py-10">
         <div className="mb-8">
-          <h1 className="text-2xl font-bold text-white">Import Collection</h1>
-          <p className="text-gray-400 text-sm mt-1">Import your ManaBox collection export into your DBB library.</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Import Collection</h1>
+          <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">Import your ManaBox collection export into your DBB library.</p>
         </div>
         <ImportWizard />
       </main>

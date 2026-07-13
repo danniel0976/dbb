@@ -45,11 +45,11 @@ export default function LibraryCard({ libraryRow, onStar, onDelete, onOpen, dimm
 
   return (
     <div
-      className={`group relative bg-dbb-secondary rounded-dbb overflow-hidden border border-dbb-tertiary/40 card-hover cursor-pointer flex flex-col ${isFoil ? 'foil-card' : ''} ${dimmed ? 'opacity-50' : ''}`}
+      className={`group relative bg-white dark:bg-dbb-secondary rounded-dbb overflow-hidden border border-gray-200 dark:border-dbb-tertiary/40 card-hover cursor-pointer flex flex-col ${isFoil ? 'foil-card' : ''} ${dimmed ? 'opacity-50' : ''}`}
     >
       {/* Image area */}
       <div
-        className="aspect-[2/3] relative bg-dbb-primary"
+        className="aspect-[2/3] relative bg-gray-100 dark:bg-dbb-primary"
         onClick={() => onOpen(libraryRow)}
       >
         {!imgLoaded && !imgError && (
@@ -67,7 +67,7 @@ export default function LibraryCard({ libraryRow, onStar, onDelete, onOpen, dimm
         )}
         {imgError && (
           <div className="absolute inset-0 flex items-center justify-center p-2">
-            <span className="text-gray-500 text-xs text-center">{ci?.name || 'Unknown card'}</span>
+            <span className="text-gray-400 dark:text-gray-500 text-xs text-center">{ci?.name || 'Unknown card'}</span>
           </div>
         )}
 
@@ -94,7 +94,7 @@ export default function LibraryCard({ libraryRow, onStar, onDelete, onOpen, dimm
       {/* Card info */}
       <div className="p-2 flex flex-col gap-1">
         <div className="flex items-start justify-between gap-1">
-          <h3 className="text-xs font-semibold truncate flex-1 leading-tight text-gray-200" title={ci?.name}>
+          <h3 className="text-xs font-semibold truncate flex-1 leading-tight text-gray-900 dark:text-gray-200" title={ci?.name}>
             {ci?.name || '—'}
           </h3>
           <button
@@ -102,7 +102,7 @@ export default function LibraryCard({ libraryRow, onStar, onDelete, onOpen, dimm
             className={`flex-shrink-0 p-0.5 rounded transition-colors ${
               libraryRow.starred
                 ? 'text-yellow-400 hover:text-yellow-300'
-                : 'text-gray-600 hover:text-yellow-400'
+                : 'text-gray-400 dark:text-gray-600 hover:text-yellow-400'
             }`}
             title={libraryRow.starred ? 'Unstar' : 'Star'}
           >
@@ -112,14 +112,14 @@ export default function LibraryCard({ libraryRow, onStar, onDelete, onOpen, dimm
 
         <div className="flex items-center justify-between gap-1">
           <span className="text-gray-500 text-xs uppercase">{ci?.set_code}</span>
-          <span className={`text-xs px-1 py-0.5 rounded font-medium ${CONDITION_COLORS[libraryRow.condition] || 'bg-gray-700 text-gray-300'}`}>
+          <span className={`text-xs px-1 py-0.5 rounded font-medium ${CONDITION_COLORS[libraryRow.condition] || 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300'}`}>
             {libraryRow.condition}
           </span>
         </div>
 
         {/* Price display in thumbnail (MYR @ ×3.0) */}
         {myrPrice != null && (
-          <div className="pt-0.5 border-t border-dbb-tertiary/30">
+          <div className="pt-0.5 border-t border-gray-200 dark:border-dbb-tertiary/30">
             <span className="text-xs font-semibold price-green">
               RM {myrPrice.toFixed(2)}
             </span>

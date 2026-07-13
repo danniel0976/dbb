@@ -43,7 +43,7 @@ export function ToastProvider({ children }) {
               flex items-center gap-2 cursor-pointer toast
               ${t.type === 'success' ? 'bg-green-700 text-white' : ''}
               ${t.type === 'error' ? 'bg-red-700 text-white' : ''}
-              ${t.type === 'info' ? 'bg-dbb-secondary border border-dbb-accent/40 text-white' : ''}
+              ${t.type === 'info' ? 'bg-white dark:bg-dbb-secondary border border-gray-200 dark:border-dbb-accent/40 text-gray-900 dark:text-white' : ''}
             `}
           >
             {t.type === 'success' && <span>✓</span>}

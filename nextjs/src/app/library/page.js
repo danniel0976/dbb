@@ -44,7 +44,7 @@ export default async function LibraryPage({ searchParams }) {
 
       <main className="container mx-auto px-4 py-6">
         <div className="mb-4">
-          <h1 className="text-2xl font-bold text-white">Your Library</h1>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Your Library</h1>
         </div>
 
         <LibraryWithRail

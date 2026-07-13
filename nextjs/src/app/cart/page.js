@@ -15,8 +15,8 @@ export default async function CartPage() {
       <DBBNav userEmail={user.email} />
       <main className="container mx-auto px-4 py-8">
         <div className="mb-6">
-          <h1 className="text-2xl font-bold text-white">Your Cart</h1>
-          <p className="text-gray-400 text-sm mt-1">Items are grouped by seller</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Your Cart</h1>
+          <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">Items are grouped by seller</p>
         </div>
         <CartView />
       </main>

@@ -26,7 +26,7 @@ export default function CollectionValue() {
   if (!value || value.total_usd == null) return null
 
   return (
-    <span className="hidden sm:inline-flex items-center gap-1 text-xs text-gray-500 border border-gray-700 rounded px-2 py-0.5">
+    <span className="hidden sm:inline-flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 rounded px-2 py-0.5">
       <span className="text-dbb-accent font-medium">${value.total_usd.toFixed(2)}</span>
       <span className="text-gray-600">/</span>
       <span>RM {value.total_myr?.toFixed(2) ?? (value.total_usd * 3).toFixed(2)}</span>

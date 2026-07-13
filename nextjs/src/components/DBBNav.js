@@ -67,12 +67,12 @@ export default function DBBNav({ userEmail, extra }) {
 
   return (
     <>
-      <header className="sticky top-0 z-40 bg-dbb-primary/95 backdrop-blur border-b border-dbb-tertiary/50">
+      <header className="sticky top-0 z-40 bg-white/95 dark:bg-dbb-primary/95 backdrop-blur border-b border-gray-200 dark:border-dbb-tertiary/50">
         <div className="container mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Link href="/library" className="text-lg font-bold text-white hover:text-dbb-accent transition-colors tracking-tight">
+            <Link href="/library" className="text-lg font-bold text-gray-900 dark:text-white hover:text-dbb-accent transition-colors tracking-tight">
               <span className="font-display text-xl">DBB</span>
-              <span className="ml-1.5 text-sm font-medium text-gray-400 hidden sm:inline">Dan's Bizarre Bazaar</span>
+              <span className="ml-1.5 text-sm font-medium text-gray-500 dark:text-gray-400 hidden sm:inline">Dan's Bizarre Bazaar</span>
             </Link>
             <nav className="hidden sm:flex items-center gap-1 text-sm">
               {NAV_LINKS.map(({ href, label }) => (
@@ -81,8 +81,8 @@ export default function DBBNav({ userEmail, extra }) {
                   href={href}
                   className={`px-3 py-1.5 rounded-lg transition-colors ${
                     isActive(href)
-                      ? 'text-white bg-dbb-accent/15 font-medium'
-                      : 'text-gray-400 hover:text-white hover:bg-white/5'
+                      ? 'text-gray-900 dark:text-white bg-dbb-accent/15 font-medium'
+                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5'
                   }`}
                 >
                   {label}
@@ -93,8 +93,8 @@ export default function DBBNav({ userEmail, extra }) {
                   href="/cart"
                   className={`flex items-center px-3 py-1.5 rounded-lg transition-colors ${
                     isActive('/cart')
-                      ? 'text-white bg-dbb-accent/15 font-medium'
-                      : 'text-gray-400 hover:text-white hover:bg-white/5'
+                      ? 'text-gray-900 dark:text-white bg-dbb-accent/15 font-medium'
+                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5'
                   }`}
                 >
                   Cart
@@ -125,7 +125,7 @@ export default function DBBNav({ userEmail, extra }) {
             <button
               type="button"
               onClick={() => setDrawerOpen(true)}
-              className="sm:hidden flex items-center justify-center w-11 h-11 -mr-2 text-gray-400 hover:text-white transition-colors"
+              className="sm:hidden flex items-center justify-center w-11 h-11 -mr-2 text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
               aria-label="Open navigation menu"
               aria-expanded={drawerOpen}
             >
@@ -142,13 +142,13 @@ export default function DBBNav({ userEmail, extra }) {
             className="absolute inset-0 bg-black/60"
             onClick={() => setDrawerOpen(false)}
           />
-          <div className="absolute right-0 top-0 h-full w-72 max-w-[80vw] bg-dbb-primary border-l border-dbb-tertiary/50 shadow-2xl flex flex-col">
-            <div className="flex items-center justify-between px-4 py-4 border-b border-dbb-tertiary/50">
+          <div className="absolute right-0 top-0 h-full w-72 max-w-[80vw] bg-white dark:bg-dbb-primary border-l border-gray-200 dark:border-dbb-tertiary/50 shadow-2xl flex flex-col">
+            <div className="flex items-center justify-between px-4 py-4 border-b border-gray-200 dark:border-dbb-tertiary/50">
               <span className="text-lg font-bold text-dbb-accent">Menu</span>
               <button
                 type="button"
                 onClick={() => setDrawerOpen(false)}
-                className="flex items-center justify-center w-11 h-11 -mr-2 text-gray-400 hover:text-white transition-colors"
+                className="flex items-center justify-center w-11 h-11 -mr-2 text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
                 aria-label="Close navigation menu"
               >
                 <X size={24} />
@@ -161,8 +161,8 @@ export default function DBBNav({ userEmail, extra }) {
                   href={href}
                   className={`flex items-center min-h-[44px] px-4 py-3 text-base transition-colors ${
                     isActive(href)
-                      ? 'text-white font-medium bg-dbb-accent/10 border-l-2 border-dbb-accent'
-                      : 'text-gray-400 hover:text-white hover:bg-white/5'
+                      ? 'text-gray-900 dark:text-white font-medium bg-dbb-accent/10 border-l-2 border-dbb-accent'
+                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5'
                   }`}
                 >
                   {label}
@@ -173,8 +173,8 @@ export default function DBBNav({ userEmail, extra }) {
                   href="/cart"
                   className={`flex items-center min-h-[44px] px-4 py-3 text-base transition-colors ${
                     isActive('/cart')
-                      ? 'text-white font-medium bg-dbb-accent/10 border-l-2 border-dbb-accent'
-                      : 'text-gray-400 hover:text-white hover:bg-white/5'
+                      ? 'text-gray-900 dark:text-white font-medium bg-dbb-accent/10 border-l-2 border-dbb-accent'
+                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5'
                   }`}
                 >
                   Cart
@@ -183,7 +183,7 @@ export default function DBBNav({ userEmail, extra }) {
               )}
             </nav>
             {userEmail && (
-              <div className="border-t border-dbb-tertiary/50 px-4 py-4 space-y-3">
+              <div className="border-t border-gray-200 dark:border-dbb-tertiary/50 px-4 py-4 space-y-3">
                 <span className="block text-xs text-gray-500 truncate">{userEmail}</span>
                 <form action="/api/auth/signout" method="POST">
                   <button
