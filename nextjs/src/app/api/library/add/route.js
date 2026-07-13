@@ -75,17 +75,22 @@ export async function POST(request) {
   }
 
   // Use import_library_cards RPC (handles upsert/merge exactly like CSV import)
+  // CRITICAL: p_rows must be an actual JSON array, NOT a stringified JSON string.
+  // The RPC parameter is typed jsonb; JSON.stringify() produces a scalar text value
+  // that PostgreSQL's jsonb_array_elements() rejects with "cannot extract elements from a scalar".
+  // The Supabase JS client serialises JS objects/values to JSON automatically, so we
+  // pass the raw array and let the client encode it as a JSON array.
   const { data: result, error: rpcErr } = await db.rpc('import_library_cards', {
     p_user_id: user.id,
     p_binder_id: binder_id,
-    p_rows: JSON.stringify([{
+    p_rows: [{
       scryfall_id,
       quantity: qty,
       foil,
       condition,
       language: 'en',
       date_added: new Date().toISOString(),
-    }]),
+    }],
   })
 
   if (rpcErr) {
