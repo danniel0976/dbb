@@ -115,8 +115,9 @@ export default function BazaarCard({ listing, onClick }) {
 
         <div className="flex items-center gap-1 text-[10px] text-gray-500">
           <span className="border border-gray-200 dark:border-dbb-tertiary/50 rounded px-1 py-0.5">{lc?.condition || 'NM'}</span>
-          <span className="text-gray-500 dark:text-gray-600">by</span>
-          <span className="text-gray-500 dark:text-gray-400 truncate max-w-[80px]">{listing.seller_name || 'Seller'}</span>
+          <span className="text-gray-500 dark:text-gray-400">
+            {listing.seller_count || 1} {(listing.seller_count || 1) === 1 ? 'seller' : 'sellers'}
+          </span>
         </div>
 
         {/* Price */}

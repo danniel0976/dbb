@@ -113,19 +113,32 @@ export async function GET(request) {
     const { data, error, count } = result
     if (error) throw error
 
-    const userIds = [...new Set((data || []).map(l => l.user_id))]
-    let sellerMap = {}
-    if (userIds.length > 0) {
-      const { data: profiles } = await sc
-        .from('profiles')
-        .select('id, display_name')
-        .in('id', userIds)
-      for (const p of profiles || []) sellerMap[p.id] = p.display_name
+    // Bazaar tiles deliberately do not expose a seller identity. Count the
+    // distinct sellers offering each exact printing; identities remain in the
+    // card-detail seller selector.
+    const scryfallIds = [...new Set((data || [])
+      .map(l => l.library_cards?.scryfall_id)
+      .filter(Boolean))]
+    const sellersByCard = new Map()
+    if (scryfallIds.length > 0) {
+      const { data: sellerRows } = await sc
+        .from('listings')
+        .select('user_id, library_cards!inner(scryfall_id)')
+        .eq('status', 'active')
+        .gt('expires_at', new Date().toISOString())
+        .in('library_cards.scryfall_id', scryfallIds)
+
+      for (const row of sellerRows || []) {
+        const cardId = row.library_cards?.scryfall_id
+        if (!cardId) continue
+        if (!sellersByCard.has(cardId)) sellersByCard.set(cardId, new Set())
+        sellersByCard.get(cardId).add(row.user_id)
+      }
     }
 
     const listings = (data || []).map(l => ({
       ...l,
-      seller_name: sellerMap[l.user_id] || null,
+      seller_count: sellersByCard.get(l.library_cards?.scryfall_id)?.size || 1,
     }))
 
     const total = count || 0
