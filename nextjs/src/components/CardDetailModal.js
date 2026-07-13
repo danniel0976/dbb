@@ -311,9 +311,11 @@ function ListingSection({ libraryRow, hasPhoto }) {
       .catch(() => setListing(null))
   }, [libraryRow.id])
 
-  // Fetch price preview when picker is open
+  // Fetch price preview when either the new-listing or relist picker is open.
+  // Relisting uses isRelist without setting showPicker, so checking only
+  // showPicker left every multiplier button without a price.
   useEffect(() => {
-    if (!showPicker || !libraryRow.scryfall_id) return
+    if ((!showPicker && !isRelist) || !libraryRow.scryfall_id) return
     const foil = libraryRow.foil || 'normal'
     fetch('/api/pricing/batch', {
       method: 'POST',
@@ -326,7 +328,7 @@ function ListingSection({ libraryRow, hasPhoto }) {
         setPricePreview(data?.prices?.[key]?.ckd_usd ?? null)
       })
       .catch(() => {})
-  }, [showPicker, libraryRow.scryfall_id, libraryRow.foil])
+  }, [showPicker, isRelist, libraryRow.scryfall_id, libraryRow.foil])
 
   const computeMyr = (ckdUsd, mult) => {
     if (ckdUsd == null) return null
