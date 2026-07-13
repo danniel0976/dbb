@@ -8,7 +8,7 @@ import BinderPicker from '@/components/BinderPicker'
 import AdvancedSearchPanel, { buildFilterChips } from '@/components/AdvancedSearchPanel'
 import AddCardModal from '@/components/AddCardModal'
 import { useToast } from '@/components/Toast'
-import { Search, SortAsc, CheckSquare, X, Star, StarOff, Trash2, FolderOpen, Filter, Tag, PlusCircle } from 'lucide-react'
+import { Search, SortAsc, CheckSquare, X, Star, StarOff, Trash2, FolderOpen, Filter, Tag, PlusCircle, Package } from 'lucide-react'
 import Link from 'next/link'
 
 const SORTS = [
@@ -109,9 +109,15 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
   const [selectedIds, setSelectedIds] = useState(new Set())
   const [showBinderPicker, setShowBinderPicker] = useState(false)
   const [showListPicker, setShowListPicker] = useState(false)
+  const [listMode, setListMode] = useState(null) // null = prompt, 'singles' = singles, 'claim' = claim sale
   const [listMultiplier, setListMultiplier] = useState(2.5)
   const [listDuration, setListDuration] = useState(24)
   const [listing, setListing] = useState(false)
+  // Claim sale fields
+  const [csTitle, setCsTitle] = useState('')
+  const [csDescription, setCsDescription] = useState('')
+  const [csSetCode, setCsSetCode] = useState('')
+  const [csDelivery, setCsDelivery] = useState('both')
   const [showAddCard, setShowAddCard] = useState(false)
 
   const sentinelRef = useRef(null)
@@ -425,21 +431,54 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
     setShowListPicker(false)
     setListing(true)
     try {
-      const items = ids.map(id => ({
-        library_card_id: id,
-        multiplier: listMultiplier,
-        duration_hours: listDuration,
-      }))
-      const res = await fetch('/api/listings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items }),
-      })
-      if (!res.ok) throw new Error()
-      toast(`${ids.length} card${ids.length !== 1 ? 's' : ''} listed on Bazaar`, 'success')
+      if (listMode === 'claim') {
+        // Claim sale
+        if (!csTitle.trim()) {
+          toast('Title is required for claim sale', 'error')
+          setListing(false)
+          setShowListPicker(true)
+          return
+        }
+        const res = await fetch('/api/claim-sales', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: csTitle.trim(),
+            description: csDescription.trim() || undefined,
+            set_code: csSetCode.trim() || undefined,
+            duration_hours: listDuration,
+            delivery_option: csDelivery,
+            card_ids: ids,
+          }),
+        })
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}))
+          throw new Error(err.error || 'Failed')
+        }
+        toast(`Claim sale created with ${ids.length} card${ids.length !== 1 ? 's' : ''}`, 'success')
+      } else {
+        // Singles
+        const items = ids.map(id => ({
+          library_card_id: id,
+          multiplier: listMultiplier,
+          duration_hours: listDuration,
+        }))
+        const res = await fetch('/api/listings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ items }),
+        })
+        if (!res.ok) throw new Error('Failed')
+        toast(`${ids.length} card${ids.length !== 1 ? 's' : ''} listed on Bazaar`, 'success')
+      }
       clearSelection()
-    } catch {
-      toast('Failed to list cards on Bazaar', 'error')
+      setListMode(null)
+      setCsTitle('')
+      setCsDescription('')
+      setCsSetCode('')
+      setCsDelivery('both')
+    } catch (e) {
+      toast(e.message || 'Failed to list cards on Bazaar', 'error')
     } finally {
       setListing(false)
     }
@@ -773,60 +812,185 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
           onClick={(e) => { if (e.target === e.currentTarget) setShowListPicker(false) }}
         >
           <div className="bg-white dark:bg-dbb-primary border border-dbb-accent/30 rounded-dbb max-w-sm w-full p-6 shadow-2xl">
-            <h3 className="text-lg font-bold mb-1">List on Bazaar</h3>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-              {selectedCount} card{selectedCount !== 1 ? 's' : ''} · Price = CKD USD × multiplier
-            </p>
-
-            <p className="text-xs text-gray-600 dark:text-gray-500 mb-1.5 font-medium">Multiplier</p>
-            <div className="flex gap-3 mb-4">
-              {[2.5, 2.8, 3.0].map(m => (
+            {listMode === null && (
+              <>
+                <h3 className="text-lg font-bold mb-1">List on Bazaar</h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                  {selectedCount} card{selectedCount !== 1 ? 's' : ''} selected
+                </p>
+                <p className="text-xs text-gray-600 dark:text-gray-400 mb-3 font-medium">Sell as singles or put up for claim sale?</p>
+                <div className="flex gap-3 mb-4">
+                  <button
+                    onClick={() => setListMode('singles')}
+                    className="flex-1 py-3 border border-gray-200 dark:border-dbb-tertiary/50 hover:border-dbb-accent text-gray-600 dark:text-gray-300 hover:text-dbb-accent rounded-dbb text-sm font-medium transition-colors flex items-center justify-center gap-1.5"
+                  >
+                    <Tag className="w-4 h-4" /> Singles
+                  </button>
+                  <button
+                    onClick={() => setListMode('claim')}
+                    className="flex-1 py-3 border border-gray-200 dark:border-dbb-tertiary/50 hover:border-dbb-accent text-gray-600 dark:text-gray-300 hover:text-dbb-accent rounded-dbb text-sm font-medium transition-colors flex items-center justify-center gap-1.5"
+                  >
+                    <Package className="w-4 h-4" /> Claim Sale
+                  </button>
+                </div>
                 <button
-                  key={m}
-                  onClick={() => setListMultiplier(m)}
-                  className={`flex-1 py-3 rounded-dbb border text-sm font-semibold transition-colors ${
-                    listMultiplier === m
-                      ? 'border-dbb-accent bg-dbb-accent/10 text-dbb-accent'
-                      : 'border-gray-200 dark:border-dbb-tertiary/50 text-gray-500 dark:text-gray-400 hover:border-dbb-accent/50'
-                  }`}
+                  onClick={() => { setShowListPicker(false); setListMode(null) }}
+                  className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
                 >
-                  ×{m}
+                  Cancel
                 </button>
-              ))}
-            </div>
+              </>
+            )}
 
-            <p className="text-xs text-gray-600 dark:text-gray-500 mb-1.5 font-medium">Duration (max 24h)</p>
-            <div className="flex gap-2 mb-6">
-              {[1, 3, 6, 12, 24].map(h => (
-                <button
-                  key={h}
-                  onClick={() => setListDuration(h)}
-                  className={`flex-1 py-2 rounded-dbb border text-xs font-medium transition-colors ${
-                    listDuration === h
-                      ? 'border-dbb-accent bg-dbb-accent/10 text-dbb-accent'
-                      : 'border-gray-200 dark:border-dbb-tertiary/50 text-gray-600 dark:text-gray-500 hover:border-gray-400 dark:hover:border-gray-500'
-                  }`}
-                >
-                  {h}h
-                </button>
-              ))}
-            </div>
+            {listMode === 'singles' && (
+              <>
+                <h3 className="text-lg font-bold mb-1">List as Singles</h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                  {selectedCount} card{selectedCount !== 1 ? 's' : ''} · Price = CKD USD × multiplier
+                </p>
 
-            <div className="flex gap-3">
-              <button
-                onClick={handleBulkList}
-                disabled={listing}
-                className="flex-1 btn btn-primary btn-md"
-              >
-                {listing ? 'Listing...' : 'Confirm'}
-              </button>
-              <button
-                onClick={() => setShowListPicker(false)}
-                className="btn btn-secondary btn-md"
-              >
-                Cancel
-              </button>
-            </div>
+                <p className="text-xs text-gray-600 dark:text-gray-500 mb-1.5 font-medium">Multiplier</p>
+                <div className="flex gap-3 mb-4">
+                  {[2.5, 2.8, 3.0].map(m => (
+                    <button
+                      key={m}
+                      onClick={() => setListMultiplier(m)}
+                      className={`flex-1 py-3 rounded-dbb border text-sm font-semibold transition-colors ${
+                        listMultiplier === m
+                          ? 'border-dbb-accent bg-dbb-accent/10 text-dbb-accent'
+                          : 'border-gray-200 dark:border-dbb-tertiary/50 text-gray-500 dark:text-gray-400 hover:border-dbb-accent/50'
+                      }`}
+                    >
+                      ×{m}
+                    </button>
+                  ))}
+                </div>
+
+                <p className="text-xs text-gray-600 dark:text-gray-500 mb-1.5 font-medium">Duration (max 24h)</p>
+                <div className="flex gap-2 mb-6">
+                  {[1, 3, 6, 12, 24].map(h => (
+                    <button
+                      key={h}
+                      onClick={() => setListDuration(h)}
+                      className={`flex-1 py-2 rounded-dbb border text-xs font-medium transition-colors ${
+                        listDuration === h
+                          ? 'border-dbb-accent bg-dbb-accent/10 text-dbb-accent'
+                          : 'border-gray-200 dark:border-dbb-tertiary/50 text-gray-600 dark:text-gray-500 hover:border-gray-400 dark:hover:border-gray-500'
+                      }`}
+                    >
+                      {h}h
+                    </button>
+                  ))}
+                </div>
+
+                <div className="flex gap-3">
+                  <button
+                    onClick={handleBulkList}
+                    disabled={listing}
+                    className="flex-1 btn btn-primary btn-md"
+                  >
+                    {listing ? 'Listing...' : 'Confirm'}
+                  </button>
+                  <button
+                    onClick={() => setListMode(null)}
+                    className="btn btn-secondary btn-md"
+                  >
+                    Back
+                  </button>
+                </div>
+              </>
+            )}
+
+            {listMode === 'claim' && (
+              <>
+                <h3 className="text-lg font-bold mb-1">Claim Sale</h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                  {selectedCount} card{selectedCount !== 1 ? 's' : ''} in one claim sale
+                </p>
+
+                <div className="space-y-3 mb-4">
+                  <input
+                    type="text"
+                    placeholder="Claim sale title"
+                    value={csTitle}
+                    onChange={(e) => setCsTitle(e.target.value)}
+                    className="w-full bg-white dark:bg-dbb-secondary border border-gray-200 dark:border-dbb-tertiary/50 rounded-dbb px-3 py-2 text-sm focus:border-dbb-accent focus:outline-none placeholder-gray-400 dark:placeholder-gray-600"
+                  />
+                  <textarea
+                    placeholder="Description (optional)"
+                    value={csDescription}
+                    onChange={(e) => setCsDescription(e.target.value)}
+                    rows={2}
+                    className="w-full bg-white dark:bg-dbb-secondary border border-gray-200 dark:border-dbb-tertiary/50 rounded-dbb px-3 py-2 text-sm focus:border-dbb-accent focus:outline-none placeholder-gray-400 dark:placeholder-gray-600 resize-none"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Set code (optional)"
+                    value={csSetCode}
+                    onChange={(e) => setCsSetCode(e.target.value)}
+                    className="w-full bg-white dark:bg-dbb-secondary border border-gray-200 dark:border-dbb-tertiary/50 rounded-dbb px-3 py-2 text-sm focus:border-dbb-accent focus:outline-none placeholder-gray-400 dark:placeholder-gray-600"
+                  />
+
+                  <div>
+                    <p className="text-xs text-gray-600 dark:text-gray-500 mb-1.5 font-medium">Duration (max 24h)</p>
+                    <div className="flex gap-1.5">
+                      {[1, 3, 6, 12, 24].map(h => (
+                        <button
+                          key={h}
+                          onClick={() => setListDuration(h)}
+                          className={`flex-1 py-1.5 rounded border text-xs font-medium transition-colors ${
+                            listDuration === h
+                              ? 'border-dbb-accent bg-dbb-accent/10 text-dbb-accent'
+                              : 'border-gray-200 dark:border-dbb-tertiary/50 text-gray-600 dark:text-gray-500 hover:border-gray-400 dark:hover:border-gray-500'
+                          }`}
+                        >
+                          {h}h
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <p className="text-xs text-gray-600 dark:text-gray-500 mb-1.5 font-medium">Delivery</p>
+                    <div className="flex gap-2">
+                      {[
+                        { value: 'pickup', label: 'Pickup' },
+                        { value: 'shipping', label: 'Shipping' },
+                        { value: 'both', label: 'Both' },
+                      ].map(opt => (
+                        <button
+                          key={opt.value}
+                          onClick={() => setCsDelivery(opt.value)}
+                          className={`flex-1 py-1.5 rounded border text-xs font-medium transition-colors ${
+                            csDelivery === opt.value
+                              ? 'border-dbb-accent bg-dbb-accent/10 text-dbb-accent'
+                              : 'border-gray-200 dark:border-dbb-tertiary/50 text-gray-600 dark:text-gray-500 hover:border-gray-400 dark:hover:border-gray-500'
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex gap-3">
+                  <button
+                    onClick={handleBulkList}
+                    disabled={listing}
+                    className="flex-1 btn btn-primary btn-md"
+                  >
+                    {listing ? 'Creating...' : 'Create Claim Sale'}
+                  </button>
+                  <button
+                    onClick={() => setListMode(null)}
+                    className="btn btn-secondary btn-md"
+                  >
+                    Back
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

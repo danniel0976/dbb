@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { getCardById, getImageUrl } from '@/lib/scryfall'
 import { useToast } from '@/components/Toast'
 import CameraCapture from '@/components/CameraCapture'
-import { X, Star, Minus, Plus, Trash2, Tag, Loader2, Camera, RotateCcw, Maximize2 } from 'lucide-react'
+import { X, Star, Minus, Plus, Trash2, Tag, Loader2, Camera, RotateCcw, Maximize2, Package } from 'lucide-react'
 
 const MULTIPLIERS = [2.5, 2.8, 3.0]
 const DURATION_OPTIONS = [
@@ -152,10 +152,150 @@ function PhotoSection({ libraryRow, listing, onPhotoChange }) {
   )
 }
 
+function ClaimSaleForm({ libraryRow, onCancel }) {
+  const { toast } = useToast()
+  const [title, setTitle] = useState('')
+  const [description, setDescription] = useState('')
+  const [setCode, setSetCode] = useState(libraryRow?.card_index?.set_code || '')
+  const [durationHours, setDurationHours] = useState(24)
+  const [deliveryOption, setDeliveryOption] = useState('both')
+  const [submitting, setSubmitting] = useState(false)
+
+  const handleCreate = async () => {
+    if (!title.trim()) {
+      toast('Title is required', 'error')
+      return
+    }
+    setSubmitting(true)
+    try {
+      const res = await fetch('/api/claim-sales', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: title.trim(),
+          description: description.trim() || undefined,
+          set_code: setCode.trim() || undefined,
+          duration_hours: durationHours,
+          delivery_option: deliveryOption,
+          card_ids: [libraryRow.id],
+        }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || 'Failed')
+      }
+      toast('Claim sale created on Bazaar', 'success')
+      onCancel()
+    } catch (e) {
+      toast(e.message || 'Failed to create claim sale', 'error')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="pt-2 border-t border-gray-200 dark:border-gray-700 space-y-3">
+      <p className="text-xs text-gray-600 dark:text-gray-400 font-medium flex items-center gap-1">
+        <Package className="w-3 h-3" /> Claim Sale
+      </p>
+
+      <div>
+        <input
+          type="text"
+          placeholder="Claim sale title (e.g. Modern staples sale)"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          className="w-full bg-white dark:bg-dbb-secondary border border-gray-200 dark:border-gray-700 rounded px-3 py-1.5 text-sm focus:border-dbb-accent focus:outline-none placeholder-gray-400 dark:placeholder-gray-600"
+        />
+      </div>
+
+      <div>
+        <textarea
+          placeholder="Description (optional)"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          rows={2}
+          className="w-full bg-white dark:bg-dbb-secondary border border-gray-200 dark:border-gray-700 rounded px-3 py-1.5 text-sm focus:border-dbb-accent focus:outline-none placeholder-gray-400 dark:placeholder-gray-600 resize-none"
+        />
+      </div>
+
+      <div>
+        <input
+          type="text"
+          placeholder="Set code (optional, e.g. MKM)"
+          value={setCode}
+          onChange={(e) => setSetCode(e.target.value)}
+          className="w-full bg-white dark:bg-dbb-secondary border border-gray-200 dark:border-gray-700 rounded px-3 py-1.5 text-sm focus:border-dbb-accent focus:outline-none placeholder-gray-400 dark:placeholder-gray-600"
+        />
+      </div>
+
+      <div>
+        <p className="text-xs text-gray-600 mb-1.5">Duration (max 24h)</p>
+        <div className="flex gap-1.5">
+          {DURATION_OPTIONS.map(({ hours, label }) => (
+            <button
+              key={hours}
+              onClick={() => setDurationHours(hours)}
+              className={`flex-1 py-1.5 rounded border text-xs font-medium transition-colors ${
+                durationHours === hours
+                  ? 'border-dbb-accent bg-dbb-accent/10 text-dbb-accent'
+                  : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-500 hover:border-gray-400 dark:hover:border-gray-500'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <p className="text-xs text-gray-600 mb-1.5">Delivery option</p>
+        <div className="flex gap-2">
+          {[
+            { value: 'pickup', label: 'Pickup' },
+            { value: 'shipping', label: 'Shipping' },
+            { value: 'both', label: 'Both' },
+          ].map(opt => (
+            <button
+              key={opt.value}
+              onClick={() => setDeliveryOption(opt.value)}
+              className={`flex-1 py-1.5 rounded border text-xs font-medium transition-colors ${
+                deliveryOption === opt.value
+                  ? 'border-dbb-accent bg-dbb-accent/10 text-dbb-accent'
+                  : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-500 hover:border-gray-400 dark:hover:border-gray-500'
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <button
+          onClick={handleCreate}
+          disabled={submitting}
+          className="flex-1 py-1.5 text-sm bg-dbb-accent hover:bg-red-600 text-white rounded-lg transition-colors disabled:opacity-50"
+        >
+          {submitting ? 'Creating...' : 'Create Claim Sale'}
+        </button>
+        <button
+          onClick={onCancel}
+          className="px-3 py-1.5 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  )
+}
+
 function ListingSection({ libraryRow, hasPhoto }) {
   const { toast } = useToast()
   const [listing, setListing] = useState(undefined) // undefined = loading, null = not listed
   const [showPicker, setShowPicker] = useState(false)
+  const [showListPrompt, setShowListPrompt] = useState(false) // singles vs claim sale
+  const [showClaimSale, setShowClaimSale] = useState(false)
   const [isRelist, setIsRelist] = useState(false)
   const [multiplier, setMultiplier] = useState(2.5)
   const [durationHours, setDurationHours] = useState(24)
@@ -267,12 +407,12 @@ function ListingSection({ libraryRow, hasPhoto }) {
   )
 
   // Not listed yet — show a "List on Bazaar" button (not the picker right away)
-  if (!listing && !showPicker) {
+  if (!listing && !showPicker && !showClaimSale && !showListPrompt) {
     return (
       <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
         <button
           onClick={() => {
-            if (!hasPhoto) { setPhotoRequired(true) } else { setShowPicker(true) }
+            if (!hasPhoto) { setPhotoRequired(true) } else { setShowListPrompt(true) }
           }}
           className="flex items-center justify-center gap-2 w-full py-1.5 border border-gray-200 dark:border-gray-700 hover:border-dbb-accent text-gray-500 dark:text-gray-400 hover:text-dbb-accent rounded-lg text-xs font-medium transition-colors"
         >
@@ -285,6 +425,45 @@ function ListingSection({ libraryRow, hasPhoto }) {
           </p>
         )}
       </div>
+    )
+  }
+
+  // Show listing type prompt: singles or claim sale
+  if (showListPrompt && !showPicker && !showClaimSale) {
+    return (
+      <div className="pt-2 border-t border-gray-200 dark:border-gray-700 space-y-3">
+        <p className="text-xs text-gray-600 dark:text-gray-400 font-medium">Sell as singles or put up for claim sale?</p>
+        <div className="flex gap-2">
+          <button
+            onClick={() => { setShowListPrompt(false); setShowPicker(true) }}
+            className="flex-1 py-2 border border-gray-200 dark:border-gray-700 hover:border-dbb-accent text-gray-600 dark:text-gray-300 hover:text-dbb-accent rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-1.5"
+          >
+            <Tag className="w-3 h-3" /> Singles
+          </button>
+          <button
+            onClick={() => { setShowListPrompt(false); setShowClaimSale(true) }}
+            className="flex-1 py-2 border border-gray-200 dark:border-gray-700 hover:border-dbb-accent text-gray-600 dark:text-gray-300 hover:text-dbb-accent rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-1.5"
+          >
+            <Package className="w-3 h-3" /> Claim Sale
+          </button>
+        </div>
+        <button
+          onClick={() => setShowListPrompt(false)}
+          className="text-xs text-gray-500 hover:text-gray-900 dark:hover:text-white transition-colors"
+        >
+          Cancel
+        </button>
+      </div>
+    )
+  }
+
+  // Show claim sale form
+  if (showClaimSale) {
+    return (
+      <ClaimSaleForm
+        libraryRow={libraryRow}
+        onCancel={() => setShowClaimSale(false)}
+      />
     )
   }
 
