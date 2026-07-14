@@ -80,7 +80,34 @@ if [[ "$EXPIRE_HTTP" -ge 200 && "$EXPIRE_HTTP" -lt 300 ]]; then
     echo "[$(date -u +%H:%M:%S)] expire-claim-sales: listing expiry failed (HTTP ${LISTING_HTTP})"
     echo "$LISTING_RESPONSE" | head -n-1
   fi
+fi
+
+# 4. Catch-up purge: remove follows referencing ANY non-active claim sale
+# Handles follows created after expiry (edge case) or on cancelled claim sales.
+# PostgREST can't do subqueries in DELETE, so we fetch non-active claim sale IDs first.
+NONACTIVE_RESPONSE="$(curl -s -w "\n%{http_code}" \
+  "${AUTH_HEADERS[@]}" \
+  "${SUPABASE_URL}/rest/v1/claim_sales?select=id&status=neq.active")"
+
+NONACTIVE_HTTP="$(echo "$NONACTIVE_RESPONSE" | tail -n1)"
+NONACTIVE_BODY="$(echo "$NONACTIVE_RESPONSE" | head -n-1)"
+
+if [[ "$NONACTIVE_HTTP" -ge 200 && "$NONACTIVE_HTTP" -lt 300 ]]; then
+  NONACTIVE_IDS="$(echo "$NONACTIVE_BODY" | { grep -o '"id":"[^"]*"' || true; } | sed 's/"id":"//;s/"//' | tr '\n' ',' | sed 's/,$//')"
+  if [[ -n "$NONACTIVE_IDS" ]]; then
+    CATCHUP_RESPONSE="$(curl -s -w "\n%{http_code}" \
+      -X DELETE \
+      "${AUTH_HEADERS[@]}" \
+      -H "Prefer: return=minimal" \
+      "${SUPABASE_URL}/rest/v1/follows?claim_sale_id=in.(${NONACTIVE_IDS})")"
+    CATCHUP_HTTP="$(echo "$CATCHUP_RESPONSE" | tail -n1)"
+    if [[ "$CATCHUP_HTTP" -ge 200 && "$CATCHUP_HTTP" -lt 300 ]]; then
+      echo "[$(date -u +%H:%M:%S)] expire-claim-sales: catch-up purged follows for non-active claim sales (HTTP ${CATCHUP_HTTP})"
+    else
+      echo "[$(date -u +%H:%M:%S)] expire-claim-sales: catch-up purge failed (HTTP ${CATCHUP_HTTP})"
+      echo "$CATCHUP_RESPONSE" | head -n-1
+    fi
+  fi
 else
-  echo "[$(date -u +%H:%M:%S)] expire-claim-sales: PATCH failed (HTTP ${EXPIRE_HTTP})"
-  echo "$EXPIRE_BODY"
+  echo "[$(date -u +%H:%M:%S)] expire-claim-sales: non-active claim sale lookup failed (HTTP ${NONACTIVE_HTTP})"
 fi

@@ -86,7 +86,13 @@ export async function GET(request) {
       data = data.map(cs => ({
         ...cs,
         _follower_count: followerCountMap[cs.id] || 0,
-      })).sort((a, b) => b._follower_count - a._follower_count)
+      })).sort((a, b) => {
+        // Stable sort: primary by follower count desc, secondary by created_at desc
+        // This prevents dup/skip across Load More when follow counts shift
+        const fcDiff = b._follower_count - a._follower_count
+        if (fcDiff !== 0) return fcDiff
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      })
 
       const from = (page - 1) * PAGE_SIZE
       const paginatedData = data.slice(from, from + PAGE_SIZE)
@@ -104,15 +110,22 @@ export async function GET(request) {
       }
 
       let cardCountMap = {}
+      let firstCardMap = {}  // claim_sale_id → first scryfall_id for thumbnail
       if (pageIds.length > 0) {
         try {
-          const { data: listingCounts } = await sc
+          const { data: listingData } = await sc
             .from('listings')
-            .select('claim_sale_id')
+            .select(`
+              claim_sale_id,
+              library_cards!inner(scryfall_id)
+            `)
             .in('claim_sale_id', pageIds)
             .eq('status', 'active')
-          for (const row of listingCounts || []) {
+          for (const row of listingData || []) {
             cardCountMap[row.claim_sale_id] = (cardCountMap[row.claim_sale_id] || 0) + 1
+            if (!firstCardMap[row.claim_sale_id] && row.library_cards?.scryfall_id) {
+              firstCardMap[row.claim_sale_id] = row.library_cards.scryfall_id
+            }
           }
         } catch {}
       }
@@ -122,6 +135,7 @@ export async function GET(request) {
         seller_name: sellerMap[cs.user_id] || null,
         card_count: cardCountMap[cs.id] || 0,
         follower_count: cs._follower_count,
+        first_card_scryfall_id: firstCardMap[cs.id] || null,
       }))
       // Strip internal sort field
       results = results.map(({ _follower_count, ...cs }) => cs)
@@ -166,19 +180,26 @@ export async function GET(request) {
       for (const p of profiles || []) sellerMap[p.id] = p.display_name
     }
 
-    // Get card counts + follower counts per claim sale
+    // Get card counts + follower counts + first card thumbnail per claim sale
     const claimSaleIds = (data || []).map(cs => cs.id)
     let cardCountMap = {}
     let followerCountMap = {}
+    let firstCardMap = {}
     if (claimSaleIds.length > 0) {
       try {
-        const { data: listingCounts } = await sc
+        const { data: listingData } = await sc
           .from('listings')
-          .select('claim_sale_id')
+          .select(`
+            claim_sale_id,
+            library_cards!inner(scryfall_id)
+          `)
           .in('claim_sale_id', claimSaleIds)
           .eq('status', 'active')
-        for (const row of listingCounts || []) {
+        for (const row of listingData || []) {
           cardCountMap[row.claim_sale_id] = (cardCountMap[row.claim_sale_id] || 0) + 1
+          if (!firstCardMap[row.claim_sale_id] && row.library_cards?.scryfall_id) {
+            firstCardMap[row.claim_sale_id] = row.library_cards.scryfall_id
+          }
         }
       } catch {}
 
@@ -198,6 +219,7 @@ export async function GET(request) {
       seller_name: sellerMap[cs.user_id] || null,
       card_count: cardCountMap[cs.id] || 0,
       follower_count: followerCountMap[cs.id] || 0,
+      first_card_scryfall_id: firstCardMap[cs.id] || null,
     }))
 
     const total = count || 0
@@ -310,6 +332,47 @@ export async function POST(request) {
     )
   }
 
+  // Conflict check — reject cards already linked to an active claim sale or actively listed as singles
+  try {
+    const nowIso = new Date().toISOString()
+    const { data: conflictListings, error: conflictErr } = await sc
+      .from('listings')
+      .select('id, library_card_id, status, claim_sale_id, expires_at')
+      .in('library_card_id', cardIds)
+      .eq('status', 'active')
+      .gt('expires_at', nowIso)
+
+    if (conflictErr && conflictErr.code !== UNDEF_TABLE && conflictErr.code !== UNDEF_COLUMN) {
+      throw conflictErr
+    }
+
+    if (conflictListings && conflictListings.length > 0) {
+      // Build conflict details: cards in other active claim sales vs active singles listings
+      const conflicts = conflictListings
+        .filter(l => l.claim_sale_id)  // linked to a claim sale
+        .map(l => ({ library_card_id: l.library_card_id, existing_claim_sale_id: l.claim_sale_id }))
+      const singlesConflicts = conflictListings
+        .filter(l => !l.claim_sale_id)  // active singles listing
+        .map(l => ({ library_card_id: l.library_card_id, existing_listing_id: l.id }))
+
+      const allConflictingCardIds = [...new Set([...conflicts.map(c => c.library_card_id), ...singlesConflicts.map(c => c.library_card_id)])]
+      if (allConflictingCardIds.length > 0) {
+        return NextResponse.json({
+          error: 'One or more cards are already actively listed',
+          conflicting_cards: allConflictingCardIds,
+          in_claim_sales: conflicts,
+          as_singles: singlesConflicts,
+        }, { status: 409 })
+      }
+    }
+  } catch (err) {
+    // If listings table doesn't exist, skip conflict check (graceful degradation)
+    if (err?.code !== UNDEF_TABLE && err?.code !== UNDEF_COLUMN) {
+      console.error('[POST /api/claim-sales] conflict check', err?.message || err)
+      return NextResponse.json({ error: 'Failed to check listing conflicts' }, { status: 500 })
+    }
+  }
+
   // Create the claim sale
   const expiresAt = new Date(Date.now() + durationHours * 3600 * 1000).toISOString()
 
@@ -355,10 +418,12 @@ export async function POST(request) {
   }))
 
   try {
-    // Try with claim_sale_id column
+    // Use INSERT (not upsert) to avoid silently overwriting existing active listings.
+    // The pre-conflict check above guards against double-listing; if a race occurs,
+    // the DB unique constraint on library_card_id will reject the insert → 409.
     let result = await sc
       .from('listings')
-      .upsert(listingRows, { onConflict: 'library_card_id' })
+      .insert(listingRows)
       .select()
 
     if (result.error?.code === UNDEF_COLUMN) {
@@ -367,7 +432,7 @@ export async function POST(request) {
       const rowsNoQuantity = listingRows.map(({ quantity: _q, ...r }) => r)
       result = await sc
         .from('listings')
-        .upsert(rowsNoQuantity, { onConflict: 'library_card_id' })
+        .insert(rowsNoQuantity)
         .select()
 
       if (result.error?.code === UNDEF_COLUMN) {
@@ -375,12 +440,22 @@ export async function POST(request) {
         const rowsLegacy = rowsNoQuantity.map(({ claim_sale_id: _cs, ...r }) => r)
         result = await sc
           .from('listings')
-          .upsert(rowsLegacy, { onConflict: 'library_card_id' })
+          .insert(rowsLegacy)
           .select()
       }
     }
 
-    if (result.error) throw result.error
+    if (result.error) {
+      // Unique constraint violation = race condition: another listing beat us
+      if (result.error.code === '23505') {
+        // Clean up the claim sale we just created since listings failed
+        try { await sc.from('claim_sales').delete().eq('id', claimSale.id) } catch {}
+        return NextResponse.json({
+          error: 'One or more cards are already actively listed (race condition detected)',
+        }, { status: 409 })
+      }
+      throw result.error
+    }
 
     return NextResponse.json({
       claim_sale: claimSale,

@@ -15,6 +15,8 @@ function makeServiceClient() {
 
 // GET /api/follows — current user's follows
 // Query: check=<claim_sale_id> → returns { following: true/false } for a single claim sale
+//         check_user=<user_id> → returns { following: true/false } for a single user
+//         ids=id1,id2,... → returns { followed_ids: [ids that the user follows] } (batch check)
 // No check param → returns all follows (claim_sales + users)
 // Returns: followed claim sales (with details) + followed users (with display_name)
 export async function GET(request) {
@@ -65,6 +67,31 @@ export async function GET(request) {
     } catch (err) {
       console.error('[GET /api/follows check_user]', err?.message || err)
       return NextResponse.json({ following: false })
+    }
+  }
+
+  // Batch follow-check mode: ids=id1,id2,... → returns followed_ids array
+  const batchIds = searchParams.get('ids')
+  if (batchIds) {
+    const idList = batchIds.split(',').map(s => s.trim()).filter(Boolean)
+    if (idList.length === 0) {
+      return NextResponse.json({ followed_ids: [] })
+    }
+    try {
+      const { data, error } = await authClient
+        .from('follows')
+        .select('claim_sale_id')
+        .eq('follower_id', user.id)
+        .in('claim_sale_id', idList)
+      if (error && error.code === UNDEF_TABLE) {
+        return NextResponse.json({ followed_ids: [] })
+      }
+      if (error) throw error
+      const followedIds = (data || []).map(r => r.claim_sale_id).filter(Boolean)
+      return NextResponse.json({ followed_ids: followedIds })
+    } catch (err) {
+      console.error('[GET /api/follows batch]', err?.message || err)
+      return NextResponse.json({ followed_ids: [] })
     }
   }
 
@@ -187,6 +214,36 @@ export async function POST(request) {
   }
   if (claim_sale_id) insertRow.claim_sale_id = claim_sale_id
   if (followee_id) insertRow.followee_id = followee_id
+
+  // Validate claim sale is active and unexpired before following
+  if (claim_sale_id) {
+    const sc = makeServiceClient()
+    try {
+      const { data: cs, error: csErr } = await sc
+        .from('claim_sales')
+        .select('status, expires_at')
+        .eq('id', claim_sale_id)
+        .maybeSingle()
+      if (csErr && csErr.code !== UNDEF_TABLE) {
+        throw csErr
+      }
+      if (!cs) {
+        return NextResponse.json({ error: 'Claim sale not found' }, { status: 404 })
+      }
+      if (cs.status !== 'active') {
+        return NextResponse.json({ error: `Cannot follow a ${cs.status} claim sale` }, { status: 400 })
+      }
+      if (cs.expires_at && new Date(cs.expires_at).getTime() <= Date.now()) {
+        return NextResponse.json({ error: 'Cannot follow an expired claim sale' }, { status: 400 })
+      }
+    } catch (err) {
+      // If claim_sales table doesn't exist, allow the follow (graceful degradation)
+      if (err?.code !== UNDEF_TABLE) {
+        console.error('[POST /api/follows] claim sale validation', err?.message || err)
+        return NextResponse.json({ error: 'Failed to validate claim sale' }, { status: 500 })
+      }
+    }
+  }
 
   try {
     const { data, error } = await authClient

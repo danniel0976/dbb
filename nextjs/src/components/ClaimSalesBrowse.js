@@ -17,19 +17,51 @@ function formatExpiry(expiresAt) {
   return `${m}m left`
 }
 
-function ClaimSaleTile({ cs, onToggleFollow, userId }) {
-  const [following, setFollowing] = useState(false)
+function useExpiryCountdown(expiresAt) {
+  const [text, setText] = useState(() => formatExpiry(expiresAt))
+  useEffect(() => {
+    if (!expiresAt) return
+    const timer = setInterval(() => {
+      setText(formatExpiry(expiresAt))
+    }, 60000) // tick every minute
+    return () => clearInterval(timer)
+  }, [expiresAt])
+  return text
+}
+
+function ClaimSaleTile({ cs, userId, isFollowed, onToggleFollow }) {
+  const [following, setFollowing] = useState(isFollowed)
   const [followCount, setFollowCount] = useState(cs.follower_count || 0)
   const [followLoading, setFollowLoading] = useState(false)
+  const expiryText = useExpiryCountdown(cs.expires_at)
+  const [thumbUrl, setThumbUrl] = useState(null)
 
-  // Check initial follow state
+  // Sync follow state when parent batch data updates
   useEffect(() => {
-    if (!userId) return
-    fetch(`/api/follows?check=${cs.id}`)
+    setFollowing(isFollowed)
+  }, [isFollowed])
+
+  // Fetch first card's thumbnail from Scryfall (one request per tile, cached in sessionStorage)
+  useEffect(() => {
+    if (!cs.first_card_scryfall_id) return
+    const cacheKey = `sf_img_${cs.first_card_scryfall_id}`
+    const cached = sessionStorage.getItem(cacheKey)
+    if (cached) { setThumbUrl(cached); return }
+
+    let cancelled = false
+    fetch(`https://api.scryfall.com/cards/${cs.first_card_scryfall_id}`)
       .then(r => r.ok ? r.json() : null)
-      .then(data => { if (data?.following) setFollowing(true) })
+      .then(data => {
+        if (!data || cancelled) return
+        const url = data.image_uris?.small || data.image_uris?.normal || data.card_faces?.[0]?.image_uris?.small
+        if (url) {
+          sessionStorage.setItem(cacheKey, url)
+          setThumbUrl(url)
+        }
+      })
       .catch(() => {})
-  }, [userId, cs.id])
+    return () => { cancelled = true }
+  }, [cs.first_card_scryfall_id])
 
   const handleFollow = async (e) => {
     e.preventDefault()
@@ -42,6 +74,7 @@ function ClaimSaleTile({ cs, onToggleFollow, userId }) {
         if (res.ok) {
           setFollowing(false)
           setFollowCount(c => Math.max(0, c - 1))
+          onToggleFollow?.(cs.id, false)
         }
       } else {
         const res = await fetch('/api/follows', {
@@ -52,6 +85,7 @@ function ClaimSaleTile({ cs, onToggleFollow, userId }) {
         if (res.ok) {
           setFollowing(true)
           setFollowCount(c => c + 1)
+          onToggleFollow?.(cs.id, true)
         }
       }
     } catch {
@@ -61,11 +95,26 @@ function ClaimSaleTile({ cs, onToggleFollow, userId }) {
     }
   }
 
+  const isEnding = expiryText === 'Ended'
+
   return (
     <Link
       href={`/claim-sales/${cs.id}`}
       className="group relative bg-white dark:bg-dbb-secondary border border-gray-200 dark:border-dbb-tertiary/40 rounded-dbb overflow-hidden card-hover"
     >
+      {/* Card thumbnail (if available) */}
+      {thumbUrl && (
+        <div className="relative h-32 overflow-hidden bg-gray-100 dark:bg-dbb-primary">
+          <img
+            src={thumbUrl}
+            alt=""
+            className="w-full h-full object-cover opacity-60 group-hover:opacity-80 transition-opacity"
+            loading="lazy"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-white dark:from-dbb-secondary to-transparent" />
+        </div>
+      )}
+
       {/* Header */}
       <div className="p-3 border-b border-gray-200 dark:border-dbb-tertiary/30">
         <div className="flex items-start justify-between gap-2">
@@ -100,9 +149,9 @@ function ClaimSaleTile({ cs, onToggleFollow, userId }) {
             <Grid className="w-3.5 h-3.5" />
             {cs.card_count || 0} card{(cs.card_count || 0) !== 1 ? 's' : ''}
           </span>
-          <span className={`flex items-center gap-1 ${formatExpiry(cs.expires_at) === 'Ended' ? 'text-red-500' : ''}`}>
+          <span className={`flex items-center gap-1 ${isEnding ? 'text-red-500' : ''}`}>
             <Clock className="w-3.5 h-3.5" />
-            {formatExpiry(cs.expires_at)}
+            {expiryText}
           </span>
         </div>
 
@@ -131,17 +180,23 @@ export default function ClaimSalesBrowse({ userId }) {
   const [total, setTotal] = useState(0)
   const [hasMore, setHasMore] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
+  const [followedIds, setFollowedIds] = useState(new Set())
   const reqGenRef = useRef(0)
+  const abortRef = useRef(null)
 
   const loadSales = useCallback(async (sortKey, p = 1) => {
     const gen = ++reqGenRef.current
+    // Abort any in-flight request
+    if (abortRef.current) abortRef.current.abort()
+    const controller = new AbortController()
+    abortRef.current = controller
+
     if (p === 1) {
       setLoading(true)
       setError(null)
     } else {
       setLoadingMore(true)
     }
-    const controller = new AbortController()
     try {
       const res = await fetch(`/api/claim-sales?sort=${sortKey}&page=${p}`, { signal: controller.signal })
       if (gen !== reqGenRef.current) return // stale response
@@ -168,14 +223,42 @@ export default function ClaimSalesBrowse({ userId }) {
     }
   }, [])
 
+  // Batch fetch follow state once per page load (not per tile)
+  useEffect(() => {
+    if (!userId || sales.length === 0) return
+    const ids = sales.map(cs => cs.id).join(',')
+    let cancelled = false
+    fetch(`/api/follows?ids=${ids}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (cancelled || !data?.followed_ids) return
+        setFollowedIds(new Set(data.followed_ids))
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [userId, sales])
+
   useEffect(() => {
     loadSales(section === 'hot' ? 'most_followed' : 'ending_soon', 1)
+    return () => {
+      // Abort in-flight request on unmount/section change
+      if (abortRef.current) abortRef.current.abort()
+    }
   }, [section, loadSales])
 
   const loadMore = useCallback(() => {
     if (loadingMore || !hasMore) return
     loadSales(section === 'hot' ? 'most_followed' : 'ending_soon', page + 1)
   }, [loadingMore, hasMore, page, section, loadSales])
+
+  const handleToggleFollow = useCallback((csId, isFollowing) => {
+    setFollowedIds(prev => {
+      const next = new Set(prev)
+      if (isFollowing) next.add(csId)
+      else next.delete(csId)
+      return next
+    })
+  }, [])
 
   return (
     <div className="flex-1 lg:ml-72 p-4 lg:p-6">
@@ -241,7 +324,13 @@ export default function ClaimSalesBrowse({ userId }) {
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {sales.map(cs => (
-              <ClaimSaleTile key={cs.id} cs={cs} userId={userId} />
+              <ClaimSaleTile
+                key={cs.id}
+                cs={cs}
+                userId={userId}
+                isFollowed={followedIds.has(cs.id)}
+                onToggleFollow={handleToggleFollow}
+              />
             ))}
           </div>
           {hasMore && (

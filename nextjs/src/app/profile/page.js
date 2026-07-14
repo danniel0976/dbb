@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { User, Mail, Calendar, BookOpen, Layers, Star, Pencil, Check, X, Loader2, AlertTriangle, Sun, Moon, Monitor } from 'lucide-react'
 import DBBNav from '@/components/DBBNav'
 import { useTheme } from '@/components/ThemeProvider'
+import FollowingSection from '@/components/FollowingSection'
 
 const THEME_OPTIONS = [
   { value: 'light', label: 'Light', icon: Sun },
@@ -231,6 +232,9 @@ export default function ProfilePage() {
             />
           </div>
         </div>
+
+        {/* Following */}
+        <FollowingSection />
 
         {/* Appearance */}
         <div className="bg-white dark:bg-dbb-secondary border border-gray-200 dark:border-gray-700 rounded-xl p-6 mb-6">

@@ -62,6 +62,16 @@ export async function POST(request, { params }) {
       // claim_sale_id column might not exist — non-fatal
     }
 
+    // Purge follows on this cancelled claim sale
+    try {
+      await sc
+        .from('follows')
+        .delete()
+        .eq('claim_sale_id', id)
+    } catch {
+      // follows table might not exist — non-fatal
+    }
+
     return NextResponse.json({ success: true })
   } catch (err) {
     console.error('[POST /api/claim-sales/[id]/cancel]', err?.message || err)
