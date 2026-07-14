@@ -1,11 +1,12 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Grid, Filter, X, Search, Loader2 } from 'lucide-react'
+import { Grid, Filter, X, Search, Loader2, Layers } from 'lucide-react'
 import Sidebar from '@/components/Sidebar'
 import BazaarCard from '@/components/BazaarCard'
 import BazaarDetailModal from '@/components/BazaarDetailModal'
 import LoadingSkeleton from '@/components/LoadingSkeleton'
+import ClaimSalesBrowse from '@/components/ClaimSalesBrowse'
 import { useToast } from '@/components/Toast'
 
 const INITIAL_FILTERS = {
@@ -33,6 +34,7 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
   const [filterOptions] = useState(initialFilterOptions || { sets: [], rarities: [], cardTypes: [] })
   const [selectedListing, setSelectedListing] = useState(null)
   const [prices, setPrices] = useState({})
+  const [bazaarSection, setBazaarSection] = useState('singles') // 'singles' | 'claim_sales'
   const { toast } = useToast()
 
   const PAGE_SIZE = 24
@@ -186,18 +188,43 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
           <div className="flex items-center gap-3">
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="lg:hidden p-2 hover:bg-gray-100 dark:hover:bg-dbb-secondary rounded-dbb transition-colors"
+              className={`lg:hidden p-2 hover:bg-gray-100 dark:hover:bg-dbb-secondary rounded-dbb transition-colors ${bazaarSection === 'claim_sales' ? 'hidden' : ''}`}
             >
               <Filter className="w-5 h-5" />
             </button>
             <h1 className="text-lg font-semibold text-gray-900 dark:text-white">Bazaar</h1>
-            {!loading && (
+            {/* Section toggle */}
+            <div className="flex items-center gap-1 ml-1">
+              <button
+                onClick={() => setBazaarSection('singles')}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-dbb text-xs font-medium transition-colors ${
+                  bazaarSection === 'singles'
+                    ? 'bg-dbb-accent text-white'
+                    : 'text-gray-500 dark:text-gray-400 hover:text-dbb-accent'
+                }`}
+              >
+                <Grid className="w-3.5 h-3.5" />
+                Singles
+              </button>
+              <button
+                onClick={() => setBazaarSection('claim_sales')}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-dbb text-xs font-medium transition-colors ${
+                  bazaarSection === 'claim_sales'
+                    ? 'bg-dbb-accent text-white'
+                    : 'text-gray-500 dark:text-gray-400 hover:text-dbb-accent'
+                }`}
+              >
+                <Layers className="w-3.5 h-3.5" />
+                Claim Sales
+              </button>
+            </div>
+            {bazaarSection === 'singles' && !loading && (
               <span className="text-sm text-gray-600 dark:text-gray-500">
                 {total} listing{total !== 1 ? 's' : ''}
               </span>
             )}
           </div>
-          <div className="flex items-center gap-2">
+          <div className={`flex items-center gap-2 ${bazaarSection === 'claim_sales' ? 'hidden' : ''}`}>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <input
@@ -228,119 +255,123 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
         </div>
       </div>
 
-      <div className="flex">
-        {/* Sidebar — Desktop */}
-        <aside className="hidden lg:block w-72 fixed left-0 top-[105px] bottom-0 overflow-y-auto border-r border-dbb-tertiary/30 bg-gray-50 dark:bg-dbb-primary/50">
-          <Sidebar
-            filters={filters}
-            updateFilter={updateFilter}
-            clearFilters={clearFilters}
-            filterOptions={filterOptions}
-          />
-        </aside>
-
-        {/* Sidebar — Mobile */}
-        {sidebarOpen && (
-          <>
-            <div
-              className="fixed inset-0 bg-black/50 z-40 lg:hidden"
-              onClick={() => setSidebarOpen(false)}
+      {bazaarSection === 'claim_sales' ? (
+        <ClaimSalesBrowse userId={userId} />
+      ) : (
+        <div className="flex">
+          {/* Sidebar — Desktop */}
+          <aside className="hidden lg:block w-72 fixed left-0 top-[105px] bottom-0 overflow-y-auto border-r border-dbb-tertiary/30 bg-gray-50 dark:bg-dbb-primary/50">
+            <Sidebar
+              filters={filters}
+              updateFilter={updateFilter}
+              clearFilters={clearFilters}
+              filterOptions={filterOptions}
             />
-            <aside className="fixed left-0 top-0 bottom-0 w-80 z-50 lg:hidden">
-              <div className="h-full bg-white dark:bg-dbb-primary overflow-y-auto">
-                <div className="p-4 border-b border-gray-200 dark:border-dbb-tertiary/30 flex items-center justify-between">
-                  <h2 className="text-lg font-semibold">Filters</h2>
-                  <button onClick={() => setSidebarOpen(false)} className="p-2 hover:bg-gray-100 dark:hover:bg-dbb-secondary rounded-dbb">
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-                <Sidebar
-                  filters={filters}
-                  updateFilter={updateFilter}
-                  clearFilters={clearFilters}
-                  filterOptions={filterOptions}
-                />
-              </div>
-            </aside>
-          </>
-        )}
+          </aside>
 
-        {/* Main Content */}
-        <main className="flex-1 lg:ml-72 p-4 lg:p-6">
-          {/* Sort control */}
-          <div className="mb-4 flex items-center justify-between">
-            <select
-              value={filters.sortBy}
-              onChange={(e) => updateFilter('sortBy', e.target.value)}
-              className="bg-white dark:bg-dbb-secondary border border-gray-200 dark:border-dbb-tertiary/50 rounded-dbb px-3 py-1.5 text-sm focus:border-dbb-accent focus:outline-none"
-            >
-              <option value="newest">Newest</option>
-              <option value="price_high">Price: High → Low</option>
-              <option value="price_low">Price: Low → High</option>
-              <option value="name_az">Name: A–Z</option>
-              <option value="rarity">Rarity</option>
-            </select>
-            {hasMore && !loading && (
-              <p className="text-xs text-gray-500">Scroll for more</p>
-            )}
-          </div>
-
-          {loading ? (
-            <LoadingSkeleton count={12} />
-          ) : error ? (
-            <div className="text-center py-12">
-              <p className="text-red-600 dark:text-red-400 mb-4">{error}</p>
-              <button onClick={() => loadListings()} className="btn btn-primary btn-md">
-                Try Again
-              </button>
-            </div>
-          ) : listings.length === 0 ? (
-            <div className="text-center py-16">
-              <Grid className="w-16 h-16 mx-auto mb-4 text-gray-600" />
-              <h2 className="text-xl font-semibold mb-2">
-                {hasActiveFilters ? 'No listings match your filters' : 'No cards on the bazaar yet'}
-              </h2>
-              <p className="text-gray-500 dark:text-gray-400 mb-4">
-                {hasActiveFilters
-                  ? 'Try adjusting your filters or clearing them.'
-                  : 'List yours from your library to get started.'}
-              </p>
-              {hasActiveFilters ? (
-                <button onClick={clearFilters} className="btn btn-primary btn-md">
-                  Clear All Filters
-                </button>
-              ) : (
-                <a href="/library" className="btn btn-primary btn-md inline-block">
-                  Go to your library →
-                </a>
-              )}
-            </div>
-          ) : (
+          {/* Sidebar — Mobile */}
+          {sidebarOpen && (
             <>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-                {listings.map(listing => (
-                  <BazaarCard
-                    key={listing.id}
-                    listing={listing}
-                    priceData={prices[`${listing.library_cards?.scryfall_id}:${listing.library_cards?.foil || 'normal'}`]}
-                    onClick={() => setSelectedListing(listing)}
-                  />
-                ))}
-              </div>
-              <div id="bazaar-sentinel" className="h-20 flex items-center justify-center py-4">
-                {loadingMore && (
-                  <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400 text-sm">
-                    <Loader2 className="w-4 h-4 animate-spin" /> Loading more...
+              <div
+                className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+                onClick={() => setSidebarOpen(false)}
+              />
+              <aside className="fixed left-0 top-0 bottom-0 w-80 z-50 lg:hidden">
+                <div className="h-full bg-white dark:bg-dbb-primary overflow-y-auto">
+                  <div className="p-4 border-b border-gray-200 dark:border-dbb-tertiary/30 flex items-center justify-between">
+                    <h2 className="text-lg font-semibold">Filters</h2>
+                    <button onClick={() => setSidebarOpen(false)} className="p-2 hover:bg-gray-100 dark:hover:bg-dbb-secondary rounded-dbb">
+                      <X className="w-5 h-5" />
+                    </button>
                   </div>
-                )}
-                {!hasMore && listings.length > 0 && (
-                  <div className="text-gray-600 dark:text-gray-500 text-sm">All {total} listings shown</div>
-                )}
-              </div>
+                  <Sidebar
+                    filters={filters}
+                    updateFilter={updateFilter}
+                    clearFilters={clearFilters}
+                    filterOptions={filterOptions}
+                  />
+                </div>
+              </aside>
             </>
           )}
-        </main>
-      </div>
+
+          {/* Main Content */}
+          <main className="flex-1 lg:ml-72 p-4 lg:p-6">
+            {/* Sort control */}
+            <div className="mb-4 flex items-center justify-between">
+              <select
+                value={filters.sortBy}
+                onChange={(e) => updateFilter('sortBy', e.target.value)}
+                className="bg-white dark:bg-dbb-secondary border border-gray-200 dark:border-dbb-tertiary/50 rounded-dbb px-3 py-1.5 text-sm focus:border-dbb-accent focus:outline-none"
+              >
+                <option value="newest">Newest</option>
+                <option value="price_high">Price: High → Low</option>
+                <option value="price_low">Price: Low → High</option>
+                <option value="name_az">Name: A–Z</option>
+                <option value="rarity">Rarity</option>
+              </select>
+              {hasMore && !loading && (
+                <p className="text-xs text-gray-500">Scroll for more</p>
+              )}
+            </div>
+
+            {loading ? (
+              <LoadingSkeleton count={12} />
+            ) : error ? (
+              <div className="text-center py-12">
+                <p className="text-red-600 dark:text-red-400 mb-4">{error}</p>
+                <button onClick={() => loadListings()} className="btn btn-primary btn-md">
+                  Try Again
+                </button>
+              </div>
+            ) : listings.length === 0 ? (
+              <div className="text-center py-16">
+                <Grid className="w-16 h-16 mx-auto mb-4 text-gray-600" />
+                <h2 className="text-xl font-semibold mb-2">
+                  {hasActiveFilters ? 'No listings match your filters' : 'No cards on the bazaar yet'}
+                </h2>
+                <p className="text-gray-500 dark:text-gray-400 mb-4">
+                  {hasActiveFilters
+                    ? 'Try adjusting your filters or clearing them.'
+                    : 'List yours from your library to get started.'}
+                </p>
+                {hasActiveFilters ? (
+                  <button onClick={clearFilters} className="btn btn-primary btn-md">
+                    Clear All Filters
+                  </button>
+                ) : (
+                  <a href="/library" className="btn btn-primary btn-md inline-block">
+                    Go to your library →
+                  </a>
+                )}
+              </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+                  {listings.map(listing => (
+                    <BazaarCard
+                      key={listing.id}
+                      listing={listing}
+                      priceData={prices[`${listing.library_cards?.scryfall_id}:${listing.library_cards?.foil || 'normal'}`]}
+                      onClick={() => setSelectedListing(listing)}
+                    />
+                  ))}
+                </div>
+                <div id="bazaar-sentinel" className="h-20 flex items-center justify-center py-4">
+                  {loadingMore && (
+                    <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400 text-sm">
+                      <Loader2 className="w-4 h-4 animate-spin" /> Loading more...
+                    </div>
+                  )}
+                  {!hasMore && listings.length > 0 && (
+                    <div className="text-gray-600 dark:text-gray-500 text-sm">All {total} listings shown</div>
+                  )}
+                </div>
+              </>
+            )}
+          </main>
+        </div>
+      )}
 
       {selectedListing && (
         <BazaarDetailModal

@@ -14,12 +14,37 @@ function makeServiceClient() {
 }
 
 // GET /api/follows — current user's follows
+// Query: check=<claim_sale_id> → returns { following: true/false } for a single claim sale
+// No check param → returns all follows (claim_sales + users)
 // Returns: followed claim sales (with details) + followed users (with display_name)
 export async function GET(request) {
+  const { searchParams } = new URL(request.url)
+  const checkId = searchParams.get('check')
+
   const authClient = await createAuthClient()
   const { data: { user }, error: authError } = await authClient.auth.getUser()
   if (authError || !user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  // Single follow-check mode
+  if (checkId) {
+    try {
+      const { data, error } = await authClient
+        .from('follows')
+        .select('id')
+        .eq('follower_id', user.id)
+        .eq('claim_sale_id', checkId)
+        .limit(1)
+      if (error && error.code === UNDEF_TABLE) {
+        return NextResponse.json({ following: false })
+      }
+      if (error) throw error
+      return NextResponse.json({ following: (data || []).length > 0 })
+    } catch (err) {
+ console.error('[GET /api/follows check]', err?.message || err)
+      return NextResponse.json({ following: false })
+    }
   }
 
   const sc = makeServiceClient()

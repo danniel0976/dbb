@@ -35,7 +35,9 @@ HTTP_CODE="$(echo "$RESPONSE" | tail -n1)"
 BODY="$(echo "$RESPONSE" | head -n-1)"
 
 if [[ "$HTTP_CODE" -ge 200 && "$HTTP_CODE" -lt 300 ]]; then
-  COUNT="$(echo "$BODY" | grep -o '"library_card_id":"[^"]*"' | wc -l | tr -d ' ')"
+  # `|| true`: grep exits 1 on zero matches (no expired rows — the normal case);
+  # without it, pipefail + set -e abort the whole sweep with a bogus failure.
+  COUNT="$(echo "$BODY" | { grep -o '"library_card_id":"[^"]*"' || true; } | wc -l | tr -d ' ')"
   echo "[$(date -u +%H:%M:%S)] expire-listings: ${COUNT} listing(s) expired (HTTP ${HTTP_CODE})"
 
   # ---- Phase 18: Photo self-destruct REMOVED ----
