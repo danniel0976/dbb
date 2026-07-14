@@ -47,3 +47,6 @@ Thumbs.db
 # Import artifacts
 failed-imports.json
 *.csv
+
+# Test run artifacts (JSON only, keep README)
+test-runs/*.json
