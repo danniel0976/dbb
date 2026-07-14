@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "perf": "node scripts/perf-baseline.mjs",
+    "regression": "node scripts/regression-suite.mjs",
     "import-collection": "node scripts/import-collection.js"
   },
   "dependencies": {
