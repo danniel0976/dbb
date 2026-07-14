@@ -45,7 +45,8 @@ if [[ "$EXPIRE_HTTP" -ge 200 && "$EXPIRE_HTTP" -lt 300 ]]; then
 
   if [[ -z "$EXPIRED_IDS" ]]; then
     echo "[$(date -u +%H:%M:%S)] expire-claim-sales: no expired sales to clean up follows/listings for"
-    exit 0
+    # Don't exit — fall through to step 4 (catch-up purge) which handles follows on
+    # already-expired/cancelled sales even when no new sales transitioned this sweep.
   fi
 
   # 2. Purge follows for expired claim sales (using in. filter with comma-separated IDs)
