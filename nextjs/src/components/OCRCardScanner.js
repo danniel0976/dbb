@@ -7,13 +7,25 @@ import { Camera, X, RefreshCw, Loader2, Search, ScanLine, Check, Plus } from 'lu
 let tesseractWorker = null
 
 async function getTesseractWorker() {
-  if (!tesseractWorker) {
+  if (tesseractWorker) return tesseractWorker
+  try {
     const Tesseract = await import('tesseract.js')
     tesseractWorker = await Tesseract.createWorker('eng', 1, {
-      logger: () => {}, // silence default logger
+      logger: () => {},
     })
+    return tesseractWorker
+  } catch (err) {
+    // Reset so next attempt can retry instead of caching a failure
+    tesseractWorker = null
+    throw err
   }
-  return tesseractWorker
+}
+
+async function terminateTesseractWorker() {
+  if (tesseractWorker) {
+    try { await tesseractWorker.terminate() } catch {}
+    tesseractWorker = null
+  }
 }
 
 // Capture a frame from the video element at the given crop region
@@ -166,17 +178,19 @@ export default function OCRCardScanner({ binders = [], onAdded, onCancel }) {
       streamRef.current = stream
       if (videoRef.current) {
         videoRef.current.srcObject = stream
+        // Mobile browsers require explicit play() after setting srcObject
+        try { await videoRef.current.play() } catch {}
       }
     } catch (err) {
       // Fallback without aspect ratio
       if (err.name === 'OverconstrainedError' || err.name === 'ConstraintNotSatisfiedError') {
         try {
-          const stream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: { ideal: 'environment' }, width: { ideal: 720 }, height: { ideal: 1280 } },
-            audio: false,
-          })
+          const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false })
           streamRef.current = stream
-          if (videoRef.current) videoRef.current.srcObject = stream
+          if (videoRef.current) {
+            videoRef.current.srcObject = stream
+            try { await videoRef.current.play() } catch {}
+          }
           return
         } catch (fallbackErr) {
           setErrorMsg('Could not start camera. Please check permissions.')
@@ -190,7 +204,10 @@ export default function OCRCardScanner({ binders = [], onAdded, onCancel }) {
   }, [stopStream])
 
   useEffect(() => {
-    return () => stopStream()
+    return () => {
+      stopStream()
+      terminateTesseractWorker()
+    }
   }, [stopStream])
 
   // Run OCR on the top third of the video frame
@@ -201,15 +218,23 @@ export default function OCRCardScanner({ binders = [], onAdded, onCancel }) {
     setErrorMsg(null)
 
     try {
+      // Verify video is actually playing (has dimensions)
+      if (!videoRef.current.videoWidth || !videoRef.current.videoHeight) {
+        setErrorMsg('Camera not ready. Please wait for the viewfinder to load.')
+        setPhase('camera')
+        return
+      }
+
       const canvas = captureRegion(videoRef.current, 'top')
       const worker = await getTesseractWorker()
 
-      // Set progress callback
-      worker.setLogger(({ status, progress }) => {
-        if (status === 'recognizing text') {
-          setOcrProgress(Math.round(progress * 100))
-        }
-      })
+      if (worker.setLogger) {
+        worker.setLogger(({ status, progress }) => {
+          if (status === 'recognizing text') {
+            setOcrProgress(Math.round(progress * 100))
+          }
+        })
+      }
 
       const { data } = await worker.recognize(canvas)
       const rawText = data?.text || ''
@@ -218,7 +243,8 @@ export default function OCRCardScanner({ binders = [], onAdded, onCancel }) {
       const cardName = extractCardName(rawText)
 
       if (!cardName || cardName.length < 2) {
-        setErrorMsg('Could not read a card name. Try recentering the card and scan again.')
+        const hint = rawText.trim() ? ` OCR saw: "${rawText.trim().slice(0, 60)}".` : ''
+        setErrorMsg(`Could not read a card name.${hint} Try recentering or type manually.`)
         setPhase('camera')
         return
       }
