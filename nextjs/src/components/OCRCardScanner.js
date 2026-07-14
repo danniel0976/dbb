@@ -1,24 +1,30 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Camera, X, RefreshCw, Loader2, Search, ScanLine, Check, Plus } from 'lucide-react'
+import { Camera, X, RefreshCw, Loader2, ScanLine, Check, Plus, AlertCircle } from 'lucide-react'
 
 // Dynamic import of Tesseract.js (WASM-based, ~2-4MB, client-side only)
 let tesseractWorker = null
+let workerCreating = null
 
 async function getTesseractWorker() {
   if (tesseractWorker) return tesseractWorker
-  try {
-    const Tesseract = await import('tesseract.js')
-    tesseractWorker = await Tesseract.createWorker('eng', 1, {
-      logger: () => {},
-    })
-    return tesseractWorker
-  } catch (err) {
-    // Reset so next attempt can retry instead of caching a failure
-    tesseractWorker = null
-    throw err
-  }
+  if (workerCreating) return workerCreating
+  workerCreating = (async () => {
+    try {
+      const Tesseract = await import('tesseract.js')
+      tesseractWorker = await Tesseract.createWorker('eng', 1, {
+        logger: () => {},
+      })
+      workerCreating = null
+      return tesseractWorker
+    } catch (err) {
+      tesseractWorker = null
+      workerCreating = null
+      throw err
+    }
+  })()
+  return workerCreating
 }
 
 async function terminateTesseractWorker() {
@@ -26,74 +32,108 @@ async function terminateTesseractWorker() {
     try { await tesseractWorker.terminate() } catch {}
     tesseractWorker = null
   }
+  workerCreating = null
 }
 
-// Capture a frame from the video element at the given crop region
-function captureRegion(video, region) {
+// Capture top portion of video frame and preprocess for OCR:
+// 1. Crop top ~35% where card name sits
+// 2. Upscale 2x for better text recognition
+// 3. Convert to grayscale
+// 4. Apply Otsu's adaptive threshold (binarize)
+// Returns a canvas ready for Tesseract
+function captureAndPreprocess(video) {
   const { videoWidth: vw, videoHeight: vh } = video
-  const canvas = document.createElement('canvas')
+  if (!vw || !vh) return null
 
-  if (region === 'top') {
-    // Top third of the frame - where the card name is on MTG cards
-    const cropH = Math.round(vh / 3)
-    canvas.width = vw
-    canvas.height = cropH
-    const ctx = canvas.getContext('2d')
-    // Boost contrast for better OCR
-    ctx.drawImage(video, 0, 0, vw, cropH, 0, 0, vw, cropH)
-    // Apply simple contrast enhancement
-    const imageData = ctx.getImageData(0, 0, vw, cropH)
-    const data = imageData.data
-    const contrast = 1.5
-    const intercept = 128 * (1 - contrast)
-    for (let i = 0; i < data.length; i += 4) {
-      data[i] = Math.max(0, Math.min(255, data[i] * contrast + intercept))
-      data[i + 1] = Math.max(0, Math.min(255, data[i + 1] * contrast + intercept))
-      data[i + 2] = Math.max(0, Math.min(255, data[i + 2] * contrast + intercept))
-    }
-    ctx.putImageData(imageData, 0, 0)
-  } else {
-    // Full frame
-    canvas.width = vw
-    canvas.height = vh
-    canvas.getContext('2d').drawImage(video, 0, 0, vw, vh)
+  // Crop top 35% - card name region on MTG cards
+  const cropH = Math.round(vh * 0.35)
+  const scale = 2 // upscale for better OCR on small text
+
+  const canvas = document.createElement('canvas')
+  canvas.width = vw * scale
+  canvas.height = cropH * scale
+  const ctx = canvas.getContext('2d')
+  ctx.imageSmoothingEnabled = true
+  ctx.imageSmoothingQuality = 'high'
+
+  // Draw the cropped region upscaled
+  ctx.drawImage(video, 0, 0, vw, cropH, 0, 0, vw * scale, cropH * scale)
+
+  // Get pixel data for preprocessing
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+  const pixels = imageData.data
+
+  // Step 1: Convert to grayscale
+  const gray = new Uint8ClampedArray(canvas.width * canvas.height)
+  for (let i = 0, j = 0; i < pixels.length; i += 4, j++) {
+    gray[j] = Math.round(0.299 * pixels[i] + 0.587 * pixels[i + 1] + 0.114 * pixels[i + 2])
   }
+
+  // Step 2: Compute histogram for Otsu's threshold
+  const histogram = new Array(256).fill(0)
+  for (let i = 0; i < gray.length; i++) histogram[gray[i]]++
+  const total = gray.length
+
+  // Otsu's method: find threshold that maximizes between-class variance
+  let sum = 0
+  for (let i = 0; i < 256; i++) sum += i * histogram[i]
+  let sumB = 0, wB = 0, maxVar = 0, threshold = 127
+  for (let i = 0; i < 256; i++) {
+    wB += histogram[i]
+    if (wB === 0) continue
+    const wF = total - wB
+    if (wF === 0) break
+    sumB += i * histogram[i]
+    const mB = sumB / wB
+    const mF = (sum - sumB) / wF
+    const betweenVar = wB * wF * (mB - mF) * (mB - mF)
+    if (betweenVar > maxVar) {
+      maxVar = betweenVar
+      threshold = i
+    }
+  }
+
+  // Step 3: Binarize using the computed threshold
+  for (let i = 0, j = 0; i < pixels.length; i += 4, j++) {
+    const val = gray[j] > threshold ? 255 : 0
+    pixels[i] = val
+    pixels[i + 1] = val
+    pixels[i + 2] = val
+    pixels[i + 3] = 255
+  }
+
+  ctx.putImageData(imageData, 0, 0)
   return canvas
 }
 
 // Extract likely card name from OCR text
-// MTG card names are typically on the first line(s) of the top third
 function extractCardName(rawText) {
   if (!rawText) return ''
   const lines = rawText
     .split('\n')
     .map(l => l.trim())
-    .filter(l => l.length > 2) // skip very short lines
+    .filter(l => l.length > 1)
 
-  // Take the first few meaningful lines and join
-  // Card names can be 1-3 words typically on the first 1-2 lines
-  const candidateLines = lines.slice(0, 4)
-
-  // Try each line as a potential card name, longest meaningful one first
-  for (const line of candidateLines) {
-    // Remove common OCR artifacts
+  // Try each of the first few lines as a card name candidate
+  for (const line of lines.slice(0, 5)) {
     let cleaned = line
-      .replace(/[|\\\/]/g, '')
+      .replace(/[|\\\/_~]/g, '')
       .replace(/\s+/g, ' ')
       .trim()
-    // Skip lines that look like mana cost or type line
+    // Skip lines that look like mana cost, numbers, or type lines
     if (/^\d+$/.test(cleaned)) continue
     if (/^\{.*\}$/.test(cleaned)) continue
-    if (cleaned.length >= 3 && cleaned.length <= 40) {
+    if (/^(Legendary|Creature|Instant|Sorcery|Artifact|Enchantment|Land|Planeswalker|Battle)/i.test(cleaned)) continue
+    // Card names are typically 2-30 chars, mostly letters
+    if (cleaned.length >= 2 && cleaned.length <= 40 && /[a-zA-Z]{2,}/.test(cleaned)) {
       return cleaned
     }
   }
 
   // Fallback: join first 2-3 short lines
-  return candidateLines.slice(0, 3).join(' ').replace(/\s+/g, ' ').trim()
+  return lines.slice(0, 3).join(' ').replace(/\s+/g, ' ').trim()
 }
 
-// Conditions for add-card form
 const CONDITIONS = [
   { value: 'NM', label: 'NM - Near Mint' },
   { value: 'LP', label: 'LP - Lightly Played' },
@@ -103,25 +143,14 @@ const CONDITIONS = [
   { value: 'M', label: 'M - Mint' },
 ]
 
-const MTG_CARD_RATIO = 0.716
-
-/**
- * OCRCardScanner - Camera capture + Tesseract.js OCR for card name recognition.
- *
- * Flow: open camera -> capture frame -> OCR top third -> extract card name
- *       -> auto-fill search -> show matches -> user confirms printing -> add to library
- *
- * All OCR runs client-side via Tesseract.js WASM. No server processing.
- */
 export default function OCRCardScanner({ binders = [], onAdded, onCancel }) {
   const videoRef = useRef(null)
   const streamRef = useRef(null)
+  const cameraReadyRef = useRef(false)
 
-  // States: idle -> camera -> scanning -> results -> adding
-  const [phase, setPhase] = useState('idle')
+  const [phase, setPhase] = useState('idle') // idle -> camera -> scanning -> results
   const [errorMsg, setErrorMsg] = useState(null)
   const [ocrProgress, setOcrProgress] = useState(0)
-  const [ocrText, setOcrText] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState([])
   const [searching, setSearching] = useState(false)
@@ -133,6 +162,7 @@ export default function OCRCardScanner({ binders = [], onAdded, onCancel }) {
   const [quantity, setQuantity] = useState(1)
   const [adding, setAdding] = useState(false)
   const [addError, setAddError] = useState(null)
+  const [cameraReady, setCameraReady] = useState(false)
 
   // Fetch binders if not provided
   useEffect(() => {
@@ -150,13 +180,23 @@ export default function OCRCardScanner({ binders = [], onAdded, onCancel }) {
   }, [binders])
 
   const stopStream = useCallback(() => {
-    streamRef.current?.getTracks().forEach(t => t.stop())
-    streamRef.current = null
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(t => t.stop())
+      streamRef.current = null
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null
+    }
+    cameraReadyRef.current = false
+    setCameraReady(false)
   }, [])
 
   const startCamera = useCallback(async () => {
+    // Full stop before restart - this is the key fix for the grey/blank issue
     stopStream()
     setErrorMsg(null)
+    setCameraReady(false)
+    cameraReadyRef.current = false
     setPhase('camera')
 
     if (!navigator.mediaDevices?.getUserMedia) {
@@ -166,42 +206,73 @@ export default function OCRCardScanner({ binders = [], onAdded, onCancel }) {
     }
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: { ideal: 'environment' },
-          aspectRatio: { ideal: MTG_CARD_RATIO },
-          width: { ideal: 720 },
-          height: { ideal: 1008 },
-        },
-        audio: false,
-      })
+      // Request camera with progressive fallback
+      let stream
+      try {
+        // First try: environment camera with decent resolution
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: { ideal: 'environment' },
+            width: { ideal: 1080 },
+            height: { ideal: 1920 },
+          },
+          audio: false,
+        })
+      } catch (firstErr) {
+        // Second try: just environment camera, any resolution
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: 'environment' } },
+          audio: false,
+        })
+      }
+
       streamRef.current = stream
+
+      // Small delay to let the old stream fully release
+      await new Promise(r => requestAnimationFrame(r))
+
       if (videoRef.current) {
         videoRef.current.srcObject = stream
-        // Mobile browsers require explicit play() after setting srcObject
-        try { await videoRef.current.play() } catch {}
+        // Critical for mobile: explicit play() after setting srcObject
+        try {
+          await videoRef.current.play()
+        } catch {
+          // Some browsers need a user gesture - try again on next interaction
+          try { await videoRef.current.play() } catch {}
+        }
+
+        // Wait for video to actually have dimensions (loadeddata event)
+        if (!videoRef.current.videoWidth) {
+          await new Promise((resolve) => {
+            const onReady = () => {
+              videoRef.current?.removeEventListener('loadeddata', onReady)
+              resolve()
+            }
+            videoRef.current?.addEventListener('loadeddata', onReady)
+            // Timeout fallback - don't hang forever
+            setTimeout(resolve, 3000)
+          })
+        }
+
+        cameraReadyRef.current = true
+        setCameraReady(true)
       }
     } catch (err) {
-      // Fallback without aspect ratio
-      if (err.name === 'OverconstrainedError' || err.name === 'ConstraintNotSatisfiedError') {
-        try {
-          const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false })
-          streamRef.current = stream
-          if (videoRef.current) {
-            videoRef.current.srcObject = stream
-            try { await videoRef.current.play() } catch {}
-          }
-          return
-        } catch (fallbackErr) {
-          setErrorMsg('Could not start camera. Please check permissions.')
-          setPhase('idle')
-          return
-        }
+      if (err.name === 'NotAllowedError') {
+        setErrorMsg('Camera permission denied. Enable camera access in your browser settings.')
+      } else if (err.name === 'NotFoundError') {
+        setErrorMsg('No camera found. This feature requires a camera.')
+      } else {
+        setErrorMsg(`Could not start camera: ${err.message || err.name}`)
       }
-      setErrorMsg(err.name === 'NotAllowedError' ? 'Camera permission denied.' : 'Could not start camera.')
       setPhase('idle')
     }
   }, [stopStream])
+
+  // Restart camera - dedicated function for retry/rescan
+  const restartCamera = useCallback(async () => {
+    await startCamera()
+  }, [startCamera])
 
   useEffect(() => {
     return () => {
@@ -210,22 +281,28 @@ export default function OCRCardScanner({ binders = [], onAdded, onCancel }) {
     }
   }, [stopStream])
 
-  // Run OCR on the top third of the video frame
+  // Run OCR on the top portion of the video frame
   const handleScan = useCallback(async () => {
     if (!videoRef.current) return
+
+    // Check camera is actually ready with a live frame
+    if (!cameraReadyRef.current || !videoRef.current.videoWidth || !videoRef.current.videoHeight) {
+      setErrorMsg('Camera not ready. Tap "Restart Camera" and try again.')
+      return
+    }
+
     setPhase('scanning')
     setOcrProgress(0)
     setErrorMsg(null)
 
     try {
-      // Verify video is actually playing (has dimensions)
-      if (!videoRef.current.videoWidth || !videoRef.current.videoHeight) {
-        setErrorMsg('Camera not ready. Please wait for the viewfinder to load.')
+      const canvas = captureAndPreprocess(videoRef.current)
+      if (!canvas) {
+        setErrorMsg('Could not capture camera frame. Try again.')
         setPhase('camera')
         return
       }
 
-      const canvas = captureRegion(videoRef.current, 'top')
       const worker = await getTesseractWorker()
 
       if (worker.setLogger) {
@@ -238,26 +315,39 @@ export default function OCRCardScanner({ binders = [], onAdded, onCancel }) {
 
       const { data } = await worker.recognize(canvas)
       const rawText = data?.text || ''
-      setOcrText(rawText)
-
       const cardName = extractCardName(rawText)
 
       if (!cardName || cardName.length < 2) {
-        const hint = rawText.trim() ? ` OCR saw: "${rawText.trim().slice(0, 60)}".` : ''
-        setErrorMsg(`Could not read a card name.${hint} Try recentering or type manually.`)
+        setErrorMsg('Could not read the card name. Make sure the card name is in the highlighted area and try again.')
+        // Return to camera but keep the stream alive - just go back to viewfinder
         setPhase('camera')
+        // Ensure video is still playing (may have been paused)
+        if (videoRef.current && videoRef.current.paused && streamRef.current) {
+          try { await videoRef.current.play() } catch {}
+        }
         return
       }
 
       setSearchQuery(cardName)
       setPhase('results')
-
-      // Auto-search the catalog
       await searchCatalog(cardName)
     } catch (err) {
-      console.error('OCR error:', err)
-      setErrorMsg('OCR failed. Please try again or type the card name manually.')
-      setPhase('camera')
+      // Reset worker on failure so next scan creates a fresh one
+      await terminateTesseractWorker()
+      setErrorMsg('Scan failed. Tap "Restart Camera" and try again.')
+      // Camera stream might still be alive - try to resume it
+      if (streamRef.current && videoRef.current) {
+        try {
+          if (videoRef.current.paused) await videoRef.current.play()
+          setPhase('camera')
+        } catch {
+          // Stream is dead - go back to idle with restart option
+          stopStream()
+          setPhase('idle')
+        }
+      } else {
+        setPhase('idle')
+      }
     }
   }, [])
 
@@ -282,19 +372,25 @@ export default function OCRCardScanner({ binders = [], onAdded, onCancel }) {
       }
       const data = await res.json()
       setSearchResults(data.groups || [])
+
+      // If no results, try a fuzzier search (first word only)
+      if (data.groups?.length === 0) {
+        const firstWord = query.split(/\s+/)[0]
+        if (firstWord.length >= 3 && firstWord !== query) {
+          const params2 = new URLSearchParams({ q: firstWord, limit: '10', page: '1', group: '1' })
+          const res2 = await fetch(`/api/catalog/search?${params2.toString()}`)
+          if (res2.ok) {
+            const data2 = await res2.json()
+            setSearchResults(data2.groups || [])
+          }
+        }
+      }
     } catch (err) {
-      setErrorMsg(err.message || 'Search failed. Try typing the name manually.')
+      setErrorMsg(err.message || 'Search failed.')
     } finally {
       setSearching(false)
     }
   }, [])
-
-  // Manual search from the search field
-  const handleManualSearch = (e) => {
-    e?.preventDefault?.()
-    const term = searchQuery.trim()
-    if (term) searchCatalog(term)
-  }
 
   // Select an edition and prepare to add
   const handleSelectEdition = (edition, cardName) => {
@@ -327,9 +423,13 @@ export default function OCRCardScanner({ binders = [], onAdded, onCancel }) {
       setSelectedEdition(null)
       setSearchResults([])
       setSearchQuery('')
-      setOcrText('')
       setPhase('camera')
-      startCamera()
+      // Camera should still be running - just resume if paused
+      if (videoRef.current && videoRef.current.paused && streamRef.current) {
+        try { await videoRef.current.play() } catch {}
+      } else if (!streamRef.current) {
+        await startCamera()
+      }
     } catch (err) {
       setAddError(err.message)
     } finally {
@@ -337,16 +437,24 @@ export default function OCRCardScanner({ binders = [], onAdded, onCancel }) {
     }
   }
 
-  // Retake / rescan
-  const handleRescan = () => {
+  // Rescan - go back to camera viewfinder
+  const handleRescan = useCallback(() => {
     setSelectedEdition(null)
     setSearchResults([])
     setSearchQuery('')
-    setOcrText('')
     setErrorMsg(null)
-    setPhase('camera')
-    startCamera()
-  }
+
+    if (streamRef.current && videoRef.current) {
+      // Stream is still alive - just go back to camera phase and resume
+      setPhase('camera')
+      if (videoRef.current.paused) {
+        videoRef.current.play().catch(() => {})
+      }
+    } else {
+      // Stream died - restart it
+      startCamera()
+    }
+  }, [startCamera])
 
   return (
     <div className="space-y-4">
@@ -356,19 +464,24 @@ export default function OCRCardScanner({ binders = [], onAdded, onCancel }) {
           <ScanLine className="w-5 h-5 text-dbb-accent" />
           <h3 className="text-sm font-semibold text-gray-900 dark:text-white">OCR Card Scanner</h3>
         </div>
-        <button onClick={onCancel} className="text-gray-400 hover:text-gray-900 dark:hover:text-white">
+        <button onClick={() => { stopStream(); onCancel?.() }} className="text-gray-400 hover:text-gray-900 dark:hover:text-white">
           <X className="w-5 h-5" />
         </button>
       </div>
 
-      {/* Phase: idle - initial prompt */}
+      {/* Phase: idle - initial prompt or error with restart */}
       {phase === 'idle' && (
         <div className="text-center py-8 space-y-4">
           <Camera className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto" />
           <p className="text-sm text-gray-500 dark:text-gray-400">
-            Point your camera at a card and scan the name to search the catalog.
+            Point your camera at a card. The scanner reads the card name and finds it in the catalog.
           </p>
-          {errorMsg && <p className="text-xs text-red-400">{errorMsg}</p>}
+          {errorMsg && (
+            <p className="text-xs text-red-400 flex items-center justify-center gap-1">
+              <AlertCircle className="w-3.5 h-3.5" />
+              {errorMsg}
+            </p>
+          )}
           <button
             onClick={startCamera}
             className="inline-flex items-center gap-2 px-4 py-2 bg-dbb-accent hover:bg-red-600 text-white rounded-lg text-sm font-medium transition-colors"
@@ -393,43 +506,64 @@ export default function OCRCardScanner({ binders = [], onAdded, onCancel }) {
               muted
               className="w-full h-full object-cover"
             />
-            {phase === 'camera' && (
-              <div className="absolute inset-0 pointer-events-none z-10">
-                {/* Top-third highlight for OCR region */}
-                <div
-                  className="absolute left-0 right-0 top-0"
-                  style={{
-                    height: '33%',
-                    borderBottom: '2px dashed rgba(219, 38, 38, 0.6)',
-                    background: 'rgba(219, 38, 38, 0.05)',
-                  }}
-                />
-                <div className="absolute left-1/2 -translate-x-1/2 text-white/70 text-[10px] font-medium" style={{ top: '2%' }}>
-                  Card name here
-                </div>
-                {/* Full card frame guide */}
-                <div
-                  className="absolute left-1/2 top-1/2"
-                  style={{
-                    width: '78%',
-                    aspectRatio: '63 / 88',
-                    transform: 'translate(-50%, -50%)',
-                    borderRadius: '12px',
-                    boxShadow: '0 0 0 9999px rgba(0,0,0,0.35)',
-                    border: '2px dashed rgba(255,255,255,0.7)',
-                  }}
-                />
+            {/* Overlay guides */}
+            <div className="absolute inset-0 pointer-events-none z-10">
+              {/* Top region highlight for OCR */}
+              <div
+                className="absolute left-0 right-0 top-0"
+                style={{
+                  height: '35%',
+                  borderBottom: '2px dashed rgba(219, 38, 38, 0.6)',
+                  background: 'rgba(219, 38, 38, 0.05)',
+                }}
+              />
+              <div className="absolute left-1/2 -translate-x-1/2 text-white/70 text-[10px] font-medium" style={{ top: '2%' }}>
+                Align card name here
+              </div>
+              {/* Card frame guide */}
+              <div
+                className="absolute left-1/2 top-1/2"
+                style={{
+                  width: '78%',
+                  aspectRatio: '63 / 88',
+                  transform: 'translate(-50%, -50%)',
+                  borderRadius: '12px',
+                  boxShadow: '0 0 0 9999px rgba(0,0,0,0.35)',
+                  border: '2px dashed rgba(255,255,255,0.7)',
+                }}
+              />
+            </div>
+            {/* Camera not ready indicator */}
+            {!cameraReady && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/50 z-20">
+                <Loader2 className="w-6 h-6 text-white animate-spin" />
               </div>
             )}
           </div>
-          {errorMsg && <p className="text-xs text-red-400 text-center">{errorMsg}</p>}
+
+          {errorMsg && (
+            <p className="text-xs text-red-400 text-center flex items-center justify-center gap-1">
+              <AlertCircle className="w-3.5 h-3.5" />
+              {errorMsg}
+            </p>
+          )}
+
           <div className="flex items-center gap-2">
             <button
               onClick={handleScan}
-              className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-dbb-accent hover:bg-red-600 text-white rounded-lg text-sm font-medium transition-colors"
+              disabled={!cameraReady}
+              className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-dbb-accent hover:bg-red-600 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-lg text-sm font-medium transition-colors"
             >
               <ScanLine className="w-4 h-4" />
-              Scan Card Name
+              Scan
+            </button>
+            <button
+              onClick={restartCamera}
+              className="flex items-center gap-1.5 px-3 py-2.5 text-sm text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 rounded-lg transition-colors hover:text-gray-900 dark:hover:text-white"
+              title="Restart camera"
+            >
+              <RefreshCw className="w-4 h-4" />
+              Restart
             </button>
             <button
               onClick={() => { stopStream(); setPhase('idle') }}
@@ -456,38 +590,25 @@ export default function OCRCardScanner({ binders = [], onAdded, onCancel }) {
         </div>
       )}
 
-      {/* Phase: results - search and selection */}
+      {/* Phase: results - search matches */}
       {phase === 'results' && (
         <div className="space-y-4">
-          {/* Search bar */}
-          <form onSubmit={handleManualSearch} className="flex gap-2">
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Card name from OCR..."
-              className="flex-1 px-3 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-dbb-secondary text-gray-900 dark:text-white focus:ring-1 focus:ring-dbb-accent"
-              autoFocus
-            />
+          {/* Detected name + rescan */}
+          <div className="flex items-center gap-2 p-2 bg-gray-50 dark:bg-dbb-secondary/50 rounded-lg">
+            <Search className="w-4 h-4 text-gray-400 flex-shrink-0" />
+            <span className="text-sm text-gray-900 dark:text-white truncate flex-1">{searchQuery}</span>
             <button
-              type="submit"
-              disabled={searching}
-              className="px-3 py-2 bg-dbb-accent hover:bg-red-600 disabled:opacity-40 text-white rounded-lg text-sm font-medium transition-colors"
-            >
-              {searching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
-            </button>
-            <button
-              type="button"
               onClick={handleRescan}
-              className="px-3 py-2 text-sm text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 rounded-lg transition-colors"
+              className="flex items-center gap-1 px-2 py-1 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
             >
-              <RefreshCw className="w-4 h-4" />
+              <RefreshCw className="w-3.5 h-3.5" />
+              Rescan
             </button>
-          </form>
+          </div>
 
           {errorMsg && <p className="text-xs text-red-400">{errorMsg}</p>}
 
-          {/* Search results - grouped by name */}
+          {/* Search results */}
           {!selectedEdition && (
             <div className="space-y-2 max-h-[400px] overflow-y-auto">
               {searching && (
@@ -496,9 +617,16 @@ export default function OCRCardScanner({ binders = [], onAdded, onCancel }) {
                 </div>
               )}
               {!searching && searchResults.length === 0 && (
-                <p className="text-xs text-gray-400 text-center py-4">
-                  No matches found. Try editing the name and searching again.
-                </p>
+                <div className="text-center py-6 space-y-2">
+                  <p className="text-xs text-gray-400">No matches found.</p>
+                  <button
+                    onClick={handleRescan}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs text-dbb-accent border border-dbb-accent/30 rounded-lg hover:bg-dbb-accent/5 transition-colors"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    Scan again
+                  </button>
+                </div>
               )}
               {searchResults.map((group) => (
                 <div key={group.name} className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
