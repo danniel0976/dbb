@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 //
-// DBB Phase 38 — Regression Suite
+// DBB Phase 38 - Regression Suite
 // Cross-phase user journeys via HTTP against the deployed (or local) app.
-// Zero provider tokens — pure fetch calls.
+// Zero provider tokens - pure fetch calls.
 //
 // Usage:
 //   node scripts/regression-suite.mjs                              # test production
@@ -44,7 +44,7 @@ async function fetchJson(path, opts = {}) {
   try {
     const res = await fetch(url, {
       headers: { 'Accept': 'application/json', ...opts.headers },
-      redirect: 'manual', // don't follow — we want to see 3xx if any
+      redirect: 'manual', // don't follow - we want to see 3xx if any
       signal: AbortSignal.timeout(20000),
       ...opts,
     });
@@ -87,7 +87,7 @@ const journeys = [
     async run() {
       const r = await fetchJson('/');
       if (!r.ok) return { passed: false, details: `fetch failed: ${r.bodyError}`, timing_ms: r.elapsed };
-      // Home may redirect to /library or render directly — 200 or 3xx both acceptable
+      // Home may redirect to /library or render directly - 200 or 3xx both acceptable
       if (r.status >= 200 && r.status < 400) return { passed: true, details: `status=${r.status}`, timing_ms: r.elapsed };
       return { passed: false, details: `expected 200-3xx got ${r.status}`, timing_ms: r.elapsed };
     },
@@ -99,7 +99,7 @@ const journeys = [
     async run() {
       const r = await fetchJson('/library');
       if (!r.ok) return { passed: false, details: `fetch failed: ${r.bodyError}`, timing_ms: r.elapsed };
-      // /library requires auth — expect redirect (302) to /login or 200 if already authed
+      // /library requires auth - expect redirect (302) to /login or 200 if already authed
       if (r.status === 200 || r.status === 302 || r.status === 307) return { passed: true, details: `status=${r.status}`, timing_ms: r.elapsed };
       return { passed: false, details: `expected 200/302/307 got ${r.status}`, timing_ms: r.elapsed };
     },
@@ -188,9 +188,9 @@ const journeys = [
     async run() {
       const r = await fetchJson('/api/catalog/search?q=forest');
       if (!r.ok) return { passed: false, details: `fetch failed: ${r.bodyError}`, timing_ms: r.elapsed };
-      // Without auth, should get 401 — this validates the auth gate is working
+      // Without auth, should get 401 - this validates the auth gate is working
       if (r.status === 401) return { passed: true, details: 'auth gate active (401)', timing_ms: r.elapsed };
-      // If it returns 200, auth might be bypassed (or endpoint is public) — note but pass
+      // If it returns 200, auth might be bypassed (or endpoint is public) - note but pass
       if (r.status === 200) return { passed: true, details: 'no auth required (200)', timing_ms: r.elapsed };
       return { passed: false, details: `expected 401 or 200 got ${r.status}`, timing_ms: r.elapsed };
     },
@@ -344,7 +344,7 @@ const journeys = [
     async run() {
       const r = await fetchJson('/api/photos');
       if (!r.ok) return { passed: false, details: `fetch failed: ${r.bodyError}`, timing_ms: r.elapsed };
-      // /api/photos only has POST handler — GET should return 405 Method Not Allowed
+      // /api/photos only has POST handler - GET should return 405 Method Not Allowed
       // This proves the route exists and is properly method-gated
       if (r.status === 405) return { passed: true, details: 'method gate active (405)', timing_ms: r.elapsed };
       if (r.status === 401) return { passed: true, details: 'auth gate active (401)', timing_ms: r.elapsed };
