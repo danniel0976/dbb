@@ -662,27 +662,52 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
 
       {/* Multi-select header bar */}
       {multiSelect && (
-        <div className="flex items-center gap-3 mb-4 px-4 py-2 bg-gray-100 dark:bg-dbb-secondary/80 border border-gray-200 dark:border-dbb-tertiary/50 rounded-dbb">
-          <button
-            onClick={selectAll}
-            disabled={selectingAll}
-            className="text-xs text-dbb-accent hover:underline disabled:opacity-50"
-          >
-            {selectingAll
-              ? 'Selecting all...'
-              : `Select all (${total})`}
-          </button>
+        <div className="flex items-center gap-3 mb-4 px-4 py-2.5 bg-gray-100 dark:bg-dbb-secondary/80 border border-gray-200 dark:border-dbb-tertiary/50 rounded-dbb">
+          {/* Select-all / status label */}
+          {selectingAll ? (
+            <span className="text-sm text-dbb-accent animate-pulse">
+              Selecting all…
+            </span>
+          ) : selectedCount > 0 && selectedCount === total ? (
+            <span className="text-sm font-medium text-green-600 dark:text-green-400">
+              ✓ All {total} selected
+            </span>
+          ) : selectedCount > 0 ? (
+            <button
+              onClick={selectAll}
+              className="text-sm text-dbb-accent hover:underline"
+            >
+              Select all ({total - selectedCount} remaining)
+            </button>
+          ) : (
+            <button
+              onClick={selectAll}
+              disabled={selectingAll}
+              className="text-sm text-dbb-accent hover:underline disabled:opacity-50"
+            >
+              Select all ({total})
+            </button>
+          )}
+
+          {/* Counter - always prominent when in multi-select */}
+          {selectedCount > 0 && (
+            <span className="text-sm font-medium text-gray-900 dark:text-white">
+              {selectedCount === total
+                ? `${selectedCount} selected`
+                : `${selectedCount} of ${total} selected`}
+            </span>
+          )}
+
+          {/* Clear button - always visible when there's a selection */}
           {selectedCount > 0 && (
             <button
               onClick={clearSelection}
-              className="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+              className="ml-auto flex items-center gap-1.5 px-3 py-1 text-sm border border-gray-300 dark:border-dbb-tertiary/50 text-gray-600 dark:text-gray-300 rounded-dbb hover:border-red-400 hover:text-red-500 dark:hover:border-red-500 dark:hover:text-red-400 transition-colors"
             >
-              Clear
+              <X className="w-3.5 h-3.5" />
+              Clear all
             </button>
           )}
-          <span className="text-xs text-gray-500 ml-auto">
-            {selectedCount} selected
-          </span>
         </div>
       )}
 
