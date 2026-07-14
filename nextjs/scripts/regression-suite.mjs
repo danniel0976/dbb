@@ -35,12 +35,46 @@ const argv = process.argv.slice(2);
 const ptOnly = argv.includes('--pt-only');
 const runsIdx = argv.indexOf('--runs');
 let RUNS = 1;
-if (runsIdx !== -1 && argv[runsIdx + 1]) {
-  RUNS = parseInt(argv[runsIdx + 1], 10);
+const STRICT_INT = /^\d+$/;
+if (runsIdx !== -1) {
+  const raw = argv[runsIdx + 1];
+  if (raw === undefined || raw.startsWith('--')) {
+    console.error('Error: --runs requires a value (got none)');
+    console.error('Usage: node scripts/regression-suite.mjs [--pt-only] [--runs N]  (1 <= N <= 100)');
+    process.exit(2);
+  }
+  if (!STRICT_INT.test(raw)) {
+    console.error('Error: --runs must be a positive integer (got ' + raw + ')');
+    console.error('Usage: node scripts/regression-suite.mjs [--pt-only] [--runs N]  (1 <= N <= 100)');
+    process.exit(2);
+  }
+  RUNS = parseInt(raw, 10);
 } else if (process.env.RUNS) {
-  RUNS = parseInt(process.env.RUNS, 10);
+  const raw = process.env.RUNS;
+  if (!STRICT_INT.test(raw)) {
+    console.error('Error: RUNS env var must be a positive integer (got ' + raw + ')');
+    process.exit(2);
+  }
+  RUNS = parseInt(raw, 10);
 }
-if (isNaN(RUNS) || RUNS < 1) RUNS = 1;
+
+// Blocker 4: reject malformed --runs, cap >100
+if (isNaN(RUNS) || RUNS < 1) {
+  console.error('Error: --runs must be a positive integer (got ' + (argv[runsIdx + 1] ?? process.env.RUNS ?? 'undefined') + ')');
+  console.error('Usage: node scripts/regression-suite.mjs [--pt-only] [--runs N]  (1 <= N <= 100)');
+  process.exit(2);
+}
+if (RUNS > 100) {
+  console.error('Error: --runs capped at 100 (got ' + RUNS + ')');
+  process.exit(2);
+}
+
+// Blocker 2: reject --pt-only when RUNS < 2 (no measured runs possible)
+if (ptOnly && RUNS < 2) {
+  console.error('Error: --pt-only requires --runs >= 2 (got RUNS=' + RUNS + ')');
+  console.error('Usage: node scripts/regression-suite.mjs --pt-only --runs N  (N >= 2)');
+  process.exit(2);
+}
 
 const PT_THRESHOLD_MS = 500;
 
@@ -430,10 +464,12 @@ async function main() {
     let ptData = null;
     if (RUNS > 1) {
       const measuredTimings = [];
+      const expectedMeasured = RUNS - 1;
       for (let i = 1; i < RUNS; i++) {
         try {
           const r = await journey.run();
-          if (r && typeof r.timing_ms === 'number') {
+          // Blocker 1: only accept timing when the run actually passed
+          if (r && r.passed === true && typeof r.timing_ms === 'number') {
             measuredTimings.push(r.timing_ms);
           }
         } catch {
@@ -443,34 +479,40 @@ async function main() {
 
       if (measuredTimings.length > 0) {
         const { p50_ms, p95_ms } = computePercentiles(measuredTimings);
-        const pt_regression = p95_ms > PT_THRESHOLD_MS;
+        // Blocker 1: PT regression if p95 exceeds threshold OR if too few successes
+        const tooFewSuccesses = measuredTimings.length < expectedMeasured;
+        const pt_regression = p95_ms > PT_THRESHOLD_MS || tooFewSuccesses;
         if (pt_regression) ptRegressionCount++;
         ptData = {
           p50_ms,
           p95_ms,
           pt_regression,
           measured_runs: measuredTimings.length,
+          expected_measured_runs: expectedMeasured,
           all_timings_ms: measuredTimings,
         };
       } else {
-        // No timings collected — record as PT regression (all measured runs failed)
+        // Blocker 1: zero successes — PT regression
         ptRegressionCount++;
         ptData = {
           p50_ms: 0,
           p95_ms: 0,
           pt_regression: true,
           measured_runs: 0,
+          expected_measured_runs: expectedMeasured,
           all_timings_ms: [],
         };
       }
     }
 
     // --- Build result entry ---
+    // Blocker 3: PT-only entries must not claim functional passed:true
     const entry = {
       name: journey.name,
       description: journey.description,
-      passed: ptOnly ? true : functionalPassed,
-      details: ptOnly ? 'pt-only mode' : functionalDetails,
+      passed: ptOnly ? null : functionalPassed,
+      functional_skipped: ptOnly ? true : false,
+      details: ptOnly ? 'functional checks skipped (pt-only mode)' : functionalDetails,
       timing_ms: ptOnly ? (ptData?.p50_ms ?? 0) : functionalTiming,
     };
     if (ptData) {
@@ -478,6 +520,7 @@ async function main() {
       entry.p95_ms = ptData.p95_ms;
       entry.pt_regression = ptData.pt_regression;
       entry.measured_runs = ptData.measured_runs;
+      entry.expected_measured_runs = ptData.expected_measured_runs;
       entry.all_timings_ms = ptData.all_timings_ms;
     }
     results.push(entry);
@@ -495,10 +538,20 @@ async function main() {
   }
 
   const total = passCount + failCount;
-  const overall = (failCount === 0 && ptRegressionCount === 0) ? 'PASS' : 'FAIL';
+  // Blocker 3: in pt-only mode, overall reflects PT outcome, not functional pass/fail
+  let overall;
+  if (ptOnly) {
+    overall = ptRegressionCount === 0 ? 'PT_PASS' : 'PT_FAIL';
+  } else {
+    overall = (failCount === 0 && ptRegressionCount === 0) ? 'PASS' : 'FAIL';
+  }
 
   console.log('');
-  console.log(`Result: ${passCount}/${total} passed, ${failCount} failed${ptRegressionCount > 0 ? `, ${ptRegressionCount} PT regressions` : ''} → ${overall}`);
+  if (ptOnly) {
+    console.log(`Result: PT ${ptRegressionCount === 0 ? 'PASS' : 'FAIL'} — ${ptRegressionCount} PT regressions (functional checks skipped)`);
+  } else {
+    console.log(`Result: ${passCount}/${total} passed, ${failCount} failed${ptRegressionCount > 0 ? `, ${ptRegressionCount} PT regressions` : ''} → ${overall}`);
+  }
 
   // --- PT Summary Table ---
   if (RUNS > 1) {
@@ -521,11 +574,17 @@ async function main() {
     base_url: BASE_URL,
     suite: 'phase38-regression',
     overall,
-    pass_count: passCount,
-    fail_count: failCount,
-    total,
     results,
   };
+  if (ptOnly) {
+    // Blocker 3: expose functional checks skipped at top level
+    artifact.functional_checks = 'skipped';
+    artifact.functional_skipped = true;
+  } else {
+    artifact.pass_count = passCount;
+    artifact.fail_count = failCount;
+    artifact.total = total;
+  }
   if (RUNS > 1) {
     artifact.pt = {
       runs: RUNS,
@@ -541,7 +600,9 @@ async function main() {
   writeFileSync(artifactPath, JSON.stringify(artifact, null, 2));
   console.log(`Artifact: ${artifactPath}`);
 
-  const exitCode = (failCount > 0 || ptRegressionCount > 0) ? 1 : 0;
+  const exitCode = ptOnly
+    ? (ptRegressionCount > 0 ? 1 : 0)
+    : (failCount > 0 || ptRegressionCount > 0 ? 1 : 0);
   process.exit(exitCode);
 }
 
