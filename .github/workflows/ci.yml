@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: nextjs/package-lock.json
+
+      - name: Install dependencies
+        working-directory: nextjs
+        run: npm ci
+
+      - name: Build
+        working-directory: nextjs
+        run: npm run build
+
+      - name: Run targeted tests
+        working-directory: nextjs
+        run: |
+          for f in scripts/phase*-test-*.mjs; do
+            [ -f "$f" ] || continue
+            echo "Running $f..."
+            node "$f" || exit 1
+          done
+          echo "All targeted tests passed."
+
+      - name: Run perf baseline (read-only)
+        working-directory: nextjs
+        run: |
+          if [ -f scripts/perf-baseline.mjs ]; then
+            node scripts/perf-baseline.mjs --readonly 2>&1 || true
+          else
+            echo "perf-baseline.mjs not found, skipping"
+          fi
