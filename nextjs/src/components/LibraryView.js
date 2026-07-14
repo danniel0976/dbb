@@ -363,7 +363,26 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
     })
   }, [])
 
-  const selectAll = () => setSelectedIds(new Set(cards.map(c => c.id)))
+  const [selectingAll, setSelectingAll] = useState(false)
+
+  const selectAll = useCallback(async () => {
+    setSelectingAll(true)
+    try {
+      const params = buildApiParams(1)
+      params.set('ids_only', 'true')
+      const res = await fetch(`/api/library?${params}`)
+      if (!res.ok) {
+        toast('Failed to select all cards', 'error')
+        return
+      }
+      const data = await res.json()
+      setSelectedIds(new Set(data.ids))
+    } catch {
+      toast('Failed to select all cards', 'error')
+    } finally {
+      setSelectingAll(false)
+    }
+  }, [buildApiParams, toast])
   const clearSelection = () => setSelectedIds(new Set())
 
   const exitMultiSelect = () => {
@@ -646,9 +665,12 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
         <div className="flex items-center gap-3 mb-4 px-4 py-2 bg-gray-100 dark:bg-dbb-secondary/80 border border-gray-200 dark:border-dbb-tertiary/50 rounded-dbb">
           <button
             onClick={selectAll}
-            className="text-xs text-dbb-accent hover:underline"
+            disabled={selectingAll}
+            className="text-xs text-dbb-accent hover:underline disabled:opacity-50"
           >
-            Select all ({cards.length})
+            {selectingAll
+              ? 'Selecting all...'
+              : `Select all (${total})`}
           </button>
           {selectedCount > 0 && (
             <button

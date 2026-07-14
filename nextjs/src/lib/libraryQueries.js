@@ -127,6 +127,93 @@ export async function getLibrary(userId, filters = {}, page = 1, pageSize = DEFA
   }
 }
 
+/**
+ * Lightweight ID-only query: returns just the `id` column for every row matching
+ * the given filters, with no pagination. Used by select-all so it can operate on
+ * the full binder regardless of how many cards infinite scroll has loaded.
+ */
+export async function getLibraryIds(userId, filters = {}) {
+  const supabase = await createClient()
+  const {
+    q = '',
+    binder_id,
+    colors,
+    color_mode,
+    type_line,
+    cmc_min,
+    cmc_max,
+    rarity,
+    foil,
+    starred,
+    set_code,
+  } = filters
+
+  let query = supabase
+    .from('library_cards')
+    .select('id')
+    .eq('user_id', userId)
+
+  if (binder_id) {
+    query = query.eq('binder_id', binder_id)
+  }
+
+  if (q) {
+    query = query.ilike('card_index!inner.name', `%${q}%`)
+  }
+
+  if (colors && colors.length > 0) {
+    const hasColorless = colors.includes('C')
+    const chromatic = colors.filter(c => c !== 'C')
+
+    if (hasColorless && chromatic.length === 0) {
+      query = query.eq('card_index.colors', '{}')
+    } else if (hasColorless && chromatic.length > 0) {
+      const overlapsVal = `{${chromatic.join(',')}}`
+      query = query.or(`colors.eq.{},colors.ov.${overlapsVal}`, { referencedTable: 'card_index' })
+    } else {
+      if (color_mode === 'and') {
+        query = query.contains('card_index.colors', chromatic)
+      } else {
+        query = query.overlaps('card_index.colors', chromatic)
+      }
+    }
+  }
+
+  if (type_line) {
+    query = query.ilike('card_index!inner.type_line', `%${type_line}%`)
+  }
+
+  if (cmc_min != null && cmc_min !== '') {
+    query = query.gte('card_index!inner.cmc', Number(cmc_min))
+  }
+
+  if (cmc_max != null && cmc_max !== '') {
+    query = query.lte('card_index!inner.cmc', Number(cmc_max))
+  }
+
+  if (rarity && rarity.length > 0) {
+    query = query.in('card_index!inner.rarity', rarity)
+  }
+
+  if (foil && foil !== 'all') {
+    query = query.eq('foil', foil)
+  }
+
+  if (starred === true || starred === 'true') {
+    query = query.eq('starred', true)
+  }
+
+  if (set_code) {
+    query = query.eq('card_index!inner.set_code', set_code)
+  }
+
+  // No pagination — fetch all matching IDs (only the id column, so payload is small)
+  const { data, error } = await query
+  if (error) throw error
+
+  return (data || []).map(row => row.id)
+}
+
 export async function getLibrarySets(userId) {
   const supabase = await createClient()
   const { data, error } = await supabase

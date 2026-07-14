@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
-import { getLibrary } from '@/lib/libraryQueries'
+import { getLibrary, getLibraryIds } from '@/lib/libraryQueries'
 
 export async function GET(request) {
   const supabase = await createClient()
@@ -26,6 +26,21 @@ export async function GET(request) {
   const starredParam = searchParams.get('starred')
   const starred = starredParam === '1' ? true : undefined
   const set_code = searchParams.get('set') || undefined
+
+  // ids_only mode: return just the matching IDs with no pagination or card data.
+  // Used by select-all to cover the full binder beyond what infinite scroll loaded.
+  if (searchParams.get('ids_only') === 'true') {
+    try {
+      const ids = await getLibraryIds(user.id, {
+        q, binder_id, colors, color_mode, type_line, cmc_min, cmc_max,
+        rarity, foil, starred, set_code,
+      })
+      return NextResponse.json({ ids, total: ids.length })
+    } catch (err) {
+      console.error('getLibraryIds error:', err)
+      return NextResponse.json({ error: 'Failed to load IDs' }, { status: 500 })
+    }
+  }
 
   try {
     const result = await getLibrary(
