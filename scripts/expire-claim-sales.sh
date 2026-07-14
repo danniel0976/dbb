@@ -25,10 +25,12 @@ NOW_ISO="$(date -u +%Y-%m-%dT%H:%M:%S.000Z)"
 AUTH_HEADERS=(-H "apikey: $SERVICE_KEY" -H "Authorization: Bearer $SERVICE_KEY")
 
 # 1. Expire claim sales past their expires_at
+# Use Prefer: return=representation so PostgREST returns the expired rows' IDs
 EXPIRE_RESPONSE="$(curl -s -w "\n%{http_code}" \
   -X PATCH \
   "${AUTH_HEADERS[@]}" \
   -H "Content-Type: application/json" \
+  -H "Prefer: return=representation" \
   -d '{"status":"expired"}' \
   "${SUPABASE_URL}/rest/v1/claim_sales?status=eq.active&expires_at=lt.${NOW_ISO}&select=id")"
 

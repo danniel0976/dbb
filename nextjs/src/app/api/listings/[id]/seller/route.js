@@ -68,6 +68,7 @@ async function buildSellerResponse(sc, listing) {
 
   return NextResponse.json({
     seller: {
+      id: user_id,
       display_name: profile?.display_name || 'Seller',
       member_since: profile?.created_at || null,
     },
