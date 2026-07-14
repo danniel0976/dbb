@@ -45,22 +45,31 @@ function captureAndPreprocess(video) {
   const { videoWidth: vw, videoHeight: vh } = video
   if (!vw || !vh) return null
 
-  // Crop top 35% - card name region on MTG cards
-  const cropH = Math.round(vh * 0.35)
-  const scale = 2 // upscale for better OCR on small text
+  // MTG card name sits in the top-left corner of the card frame:
+  //   - vertically: top ~12% of the card (the name bar, above the type line)
+  //   - horizontally: left ~75% (exclude mana cost symbols in top-right)
+  // The card fills roughly 78% of the viewfinder (per the overlay guide),
+  // so the name bar is approximately the top 10% of the video frame.
+  // We crop generously then let OCR + extraction filter the rest.
+  const cropTop = 0
+  const cropH = Math.round(vh * 0.16) // top 16% of frame = name bar region
+  const cropLeft = Math.round(vw * 0.08) // skip left margin
+  const cropW = Math.round(vw * 0.72) // left 72% = name area, exclude mana symbols
+  const scale = 3 // upscale 3x for better OCR on small text
 
   const canvas = document.createElement('canvas')
-  canvas.width = vw * scale
+  canvas.width = cropW * scale
   canvas.height = cropH * scale
   const ctx = canvas.getContext('2d')
   ctx.imageSmoothingEnabled = true
   ctx.imageSmoothingQuality = 'high'
 
-  // Draw the cropped region upscaled
-  ctx.drawImage(video, 0, 0, vw, cropH, 0, 0, vw * scale, cropH * scale)
+  // Draw the cropped+upscaled region
+  ctx.drawImage(video, cropLeft, cropTop, cropW, cropH, 0, 0, cropW * scale, cropH * scale)
 
   // Get pixel data for preprocessing
   const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+
   const pixels = imageData.data
 
   // Step 1: Convert to grayscale
@@ -360,30 +369,54 @@ export default function OCRCardScanner({ binders = [], onAdded, onCancel }) {
 
     try {
       const params = new URLSearchParams()
-      params.set('q', query)
+      params.set('q', cardName)
       params.set('limit', '20')
       params.set('page', '1')
       params.set('group', '1')
 
       const res = await fetch(`/api/catalog/search?${params.toString()}`)
       if (!res.ok) {
+        // Try Scryfall fuzzy name search as fallback
+        try {
+          const sfRes = await fetch(`https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(cardName)}`)
+          if (sfRes.ok) {
+            const sfData = await sfRes.json()
+            if (sfData.name) {
+              const params2 = new URLSearchParams({ q: sfData.name, limit: '20', page: '1', group: '1' })
+              const res2 = await fetch(`/api/catalog/search?${params2.toString()}`)
+              if (res2.ok) {
+                const data2 = await res2.json()
+                setSearchResults(data2.groups || [])
+                if (data2.groups?.length > 0) setSearchQuery(sfData.name)
+                return
+              }
+            }
+          }
+        } catch {}
         const data = await res.json().catch(() => ({}))
         throw new Error(data.error || 'Search failed')
       }
       const data = await res.json()
       setSearchResults(data.groups || [])
 
-      // If no results, try a fuzzier search (first word only)
+      // If no results, try Scryfall fuzzy search to resolve the name
       if (data.groups?.length === 0) {
-        const firstWord = query.split(/\s+/)[0]
-        if (firstWord.length >= 3 && firstWord !== query) {
-          const params2 = new URLSearchParams({ q: firstWord, limit: '10', page: '1', group: '1' })
-          const res2 = await fetch(`/api/catalog/search?${params2.toString()}`)
-          if (res2.ok) {
-            const data2 = await res2.json()
-            setSearchResults(data2.groups || [])
+        try {
+          const sfRes = await fetch(`https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(cardName)}`)
+          if (sfRes.ok) {
+            const sfData = await sfRes.json()
+            if (sfData.name) {
+              const params2 = new URLSearchParams({ q: sfData.name, limit: '20', page: '1', group: '1' })
+              const res2 = await fetch(`/api/catalog/search?${params2.toString()}`)
+              if (res2.ok) {
+                const data2 = await res2.json()
+                setSearchResults(data2.groups || [])
+                if (data2.groups?.length > 0) setSearchQuery(sfData.name)
+                return
+              }
+            }
           }
-        }
+        } catch {}
       }
     } catch (err) {
       setErrorMsg(err.message || 'Search failed.')
@@ -508,17 +541,21 @@ export default function OCRCardScanner({ binders = [], onAdded, onCancel }) {
             />
             {/* Overlay guides */}
             <div className="absolute inset-0 pointer-events-none z-10">
-              {/* Top region highlight for OCR */}
+              {/* Name bar highlight (top-left region) - matches OCR crop */}
               <div
-                className="absolute left-0 right-0 top-0"
+                className="absolute"
                 style={{
-                  height: '35%',
-                  borderBottom: '2px dashed rgba(219, 38, 38, 0.6)',
-                  background: 'rgba(219, 38, 38, 0.05)',
+                  top: '4%',
+                  left: '8%',
+                  width: '72%',
+                  height: '12%',
+                  border: '2px dashed rgba(219, 38, 38, 0.7)',
+                  background: 'rgba(219, 38, 38, 0.08)',
+                  borderRadius: '4px',
                 }}
               />
-              <div className="absolute left-1/2 -translate-x-1/2 text-white/70 text-[10px] font-medium" style={{ top: '2%' }}>
-                Align card name here
+              <div className="absolute text-white/70 text-[10px] font-medium" style={{ top: '6%', left: '10%' }}>
+                Card name here
               </div>
               {/* Card frame guide */}
               <div
@@ -529,7 +566,7 @@ export default function OCRCardScanner({ binders = [], onAdded, onCancel }) {
                   transform: 'translate(-50%, -50%)',
                   borderRadius: '12px',
                   boxShadow: '0 0 0 9999px rgba(0,0,0,0.35)',
-                  border: '2px dashed rgba(255,255,255,0.7)',
+                  border: '2px dashed rgba(255,255,255,0.5)',
                 }}
               />
             </div>
