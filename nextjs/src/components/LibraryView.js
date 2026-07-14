@@ -195,7 +195,9 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
     abortControllerRef.current = controller
 
     resetPending.current = true
-    setSelectedIds(new Set())
+    // Preserve selection across reloads — selectedIds is a Set of card IDs
+    // independent of what's currently rendered or filtered. Only clearSelection()
+    // and exitMultiSelect() should empty the Set.
     setInitialLoading(true)
     try {
       const params = buildApiParams(1, overrides)
