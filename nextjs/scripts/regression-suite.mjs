@@ -1,16 +1,19 @@
 #!/usr/bin/env node
 //
-// DBB Phase 38 - Regression Suite
+// DBB Phase 38 - Regression Suite (with Phase 38A Performance Testing)
 // Cross-phase user journeys via HTTP against the deployed (or local) app.
 // Zero provider tokens - pure fetch calls.
 //
 // Usage:
-//   node scripts/regression-suite.mjs                              # test production
+//   node scripts/regression-suite.mjs                              # test production (runs=1)
+//   node scripts/regression-suite.mjs --runs 10                    # functional + PT (10 runs)
+//   node scripts/regression-suite.mjs --pt-only --runs 10          # PT only, skip functional checks
 //   BASE_URL=http://localhost:3000 node scripts/regression-suite.mjs # test local
+//   RUNS=10 node scripts/regression-suite.mjs                      # PT via env var
 //
 // Output: structured JSON to test-runs/<timestamp>.regression.json
 //         summary to stdout
-//         exit 0 all pass, non-zero on any failure
+//         exit 0 all pass, non-zero on any failure (functional or PT regression)
 //
 
 import { writeFileSync, mkdirSync } from 'fs';
@@ -26,6 +29,20 @@ mkdirSync(RUN_DIR, { recursive: true });
 const BASE_URL = process.env.BASE_URL || 'https://dbb.lovelikenotomorrow.com';
 const TIMESTAMP = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d+Z$/, 'Z');
 const COMMIT = getCommit();
+
+// ─── CLI args ─────────────────────────────────────────────
+const argv = process.argv.slice(2);
+const ptOnly = argv.includes('--pt-only');
+const runsIdx = argv.indexOf('--runs');
+let RUNS = 1;
+if (runsIdx !== -1 && argv[runsIdx + 1]) {
+  RUNS = parseInt(argv[runsIdx + 1], 10);
+} else if (process.env.RUNS) {
+  RUNS = parseInt(process.env.RUNS, 10);
+}
+if (isNaN(RUNS) || RUNS < 1) RUNS = 1;
+
+const PT_THRESHOLD_MS = 500;
 
 function getCommit() {
   try {
@@ -356,54 +373,146 @@ const journeys = [
 
 // ─── Main ──────────────────────────────────────────────────
 
+// Compute p50/p95 from sorted timings array
+function computePercentiles(timings) {
+  const sorted = [...timings].sort((a, b) => a - b);
+  const n = sorted.length;
+  if (n === 0) return { p50_ms: 0, p95_ms: 0 };
+  const p50Idx = Math.min(Math.floor(n * 0.5), n - 1);
+  const p95Idx = Math.min(Math.floor(n * 0.95), n - 1);
+  return { p50_ms: sorted[p50Idx], p95_ms: sorted[p95Idx] };
+}
+
 async function main() {
   console.log('=== DBB Phase 38 Regression Suite ===');
   console.log(`BASE_URL: ${BASE_URL}`);
   console.log(`COMMIT:   ${COMMIT}`);
   console.log(`TIME:     ${TIMESTAMP}`);
   console.log(`JOURNEYS: ${journeys.length}`);
+  if (RUNS > 1) {
+    console.log(`RUNS:     ${RUNS} (1 warmup + ${RUNS - 1} measured)`);
+    console.log(`PT_MODE:  ${ptOnly ? 'pt-only (functional checks skipped)' : 'functional + performance'}`);
+  }
   console.log('');
 
   const results = [];
   let passCount = 0;
   let failCount = 0;
+  let ptRegressionCount = 0;
 
   for (const journey of journeys) {
     process.stdout.write(`  ${journey.name.padEnd(42)} `);
+
+    // --- Run 1: warmup (also serves as functional check in normal mode) ---
+    let warmupResult = null;
     try {
-      const result = await journey.run();
-      results.push({
-        name: journey.name,
-        description: journey.description,
-        passed: result.passed,
-        details: result.details,
-        timing_ms: result.timing_ms,
-      });
-      if (result.passed) {
+      warmupResult = await journey.run();
+    } catch (err) {
+      warmupResult = { passed: false, details: `exception: ${err.message}`, timing_ms: 0 };
+    }
+
+    // In normal mode, the warmup run is the functional verdict
+    let functionalPassed = true;
+    let functionalDetails = 'pt-only mode';
+    let functionalTiming = 0;
+    if (!ptOnly) {
+      functionalPassed = warmupResult.passed;
+      functionalDetails = warmupResult.details ?? 'unknown';
+      functionalTiming = warmupResult.timing_ms ?? 0;
+      if (functionalPassed) {
         passCount++;
-        console.log(`✓ PASS  ${result.timing_ms}ms  ${result.details}`);
       } else {
         failCount++;
-        console.log(`✗ FAIL  ${result.timing_ms}ms  ${result.details}`);
       }
-    } catch (err) {
-      failCount++;
-      results.push({
-        name: journey.name,
-        description: journey.description,
-        passed: false,
-        details: `exception: ${err.message}`,
-        timing_ms: 0,
-      });
-      console.log(`✗ FAIL  exception: ${err.message}`);
+    }
+
+    // --- Measured runs (2..RUNS), only when RUNS > 1 ---
+    let ptData = null;
+    if (RUNS > 1) {
+      const measuredTimings = [];
+      for (let i = 1; i < RUNS; i++) {
+        try {
+          const r = await journey.run();
+          if (r && typeof r.timing_ms === 'number') {
+            measuredTimings.push(r.timing_ms);
+          }
+        } catch {
+          // skip failed run from timing data
+        }
+      }
+
+      if (measuredTimings.length > 0) {
+        const { p50_ms, p95_ms } = computePercentiles(measuredTimings);
+        const pt_regression = p95_ms > PT_THRESHOLD_MS;
+        if (pt_regression) ptRegressionCount++;
+        ptData = {
+          p50_ms,
+          p95_ms,
+          pt_regression,
+          measured_runs: measuredTimings.length,
+          all_timings_ms: measuredTimings,
+        };
+      } else {
+        // No timings collected — record as PT regression (all measured runs failed)
+        ptRegressionCount++;
+        ptData = {
+          p50_ms: 0,
+          p95_ms: 0,
+          pt_regression: true,
+          measured_runs: 0,
+          all_timings_ms: [],
+        };
+      }
+    }
+
+    // --- Build result entry ---
+    const entry = {
+      name: journey.name,
+      description: journey.description,
+      passed: ptOnly ? true : functionalPassed,
+      details: ptOnly ? 'pt-only mode' : functionalDetails,
+      timing_ms: ptOnly ? (ptData?.p50_ms ?? 0) : functionalTiming,
+    };
+    if (ptData) {
+      entry.p50_ms = ptData.p50_ms;
+      entry.p95_ms = ptData.p95_ms;
+      entry.pt_regression = ptData.pt_regression;
+      entry.measured_runs = ptData.measured_runs;
+      entry.all_timings_ms = ptData.all_timings_ms;
+    }
+    results.push(entry);
+
+    // --- Console output ---
+    if (ptOnly) {
+      const flag = ptData?.pt_regression ? ' ⚠ PT_REGRESSION' : '';
+      console.log(`◦ PT   p50=${ptData?.p50_ms ?? 0}ms p95=${ptData?.p95_ms ?? 0}ms${flag}`);
+    } else if (functionalPassed) {
+      const ptStr = ptData ? `  p95=${ptData.p95_ms}ms${ptData.pt_regression ? ' ⚠' : ''}` : '';
+      console.log(`✓ PASS  ${functionalTiming}ms  ${functionalDetails}${ptStr}`);
+    } else {
+      console.log(`✗ FAIL  ${functionalTiming}ms  ${functionalDetails}`);
     }
   }
 
   const total = passCount + failCount;
-  const overall = failCount === 0 ? 'PASS' : 'FAIL';
+  const overall = (failCount === 0 && ptRegressionCount === 0) ? 'PASS' : 'FAIL';
 
   console.log('');
-  console.log(`Result: ${passCount}/${total} passed, ${failCount} failed → ${overall}`);
+  console.log(`Result: ${passCount}/${total} passed, ${failCount} failed${ptRegressionCount > 0 ? `, ${ptRegressionCount} PT regressions` : ''} → ${overall}`);
+
+  // --- PT Summary Table ---
+  if (RUNS > 1) {
+    console.log('');
+    console.log('── Performance Testing Summary ──');
+    console.log(`  ${'Journey'.padEnd(42)} ${'p50'.padStart(7)} ${'p95'.padStart(7)}  flag`);
+    console.log(`  ${'─'.repeat(42)} ${'─'.repeat(7)} ${'─'.repeat(7)}  ${'─'.repeat(4)}`);
+    for (const r of results) {
+      const flag = r.pt_regression ? '⚠ YES' : '  no';
+      console.log(`  ${r.name.padEnd(42)} ${(r.p50_ms + 'ms').padStart(7)} ${(r.p95_ms + 'ms').padStart(7)}  ${flag}`);
+    }
+    console.log(`  Threshold: ${PT_THRESHOLD_MS}ms p95`);
+    console.log('');
+  }
 
   // Write JSON artifact
   const artifact = {
@@ -417,12 +526,23 @@ async function main() {
     total,
     results,
   };
+  if (RUNS > 1) {
+    artifact.pt = {
+      runs: RUNS,
+      warmup: 1,
+      measured_runs: RUNS - 1,
+      threshold_ms: PT_THRESHOLD_MS,
+      pt_regression_count: ptRegressionCount,
+      pt_only: ptOnly,
+    };
+  }
 
   const artifactPath = join(RUN_DIR, `${TIMESTAMP}.regression.json`);
   writeFileSync(artifactPath, JSON.stringify(artifact, null, 2));
   console.log(`Artifact: ${artifactPath}`);
 
-  process.exit(failCount > 0 ? 1 : 0);
+  const exitCode = (failCount > 0 || ptRegressionCount > 0) ? 1 : 0;
+  process.exit(exitCode);
 }
 
 main().catch((err) => {
