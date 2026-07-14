@@ -30,38 +30,129 @@ export async function GET(request) {
 
   // Check if claim_sales table exists
   try {
-    let q = sc
+    // For most_followed sort, we need ALL active claim sales to compute
+    // follower counts globally before paginating. For other sorts, we can
+    // paginate at the DB level.
+    const nowIso = new Date().toISOString()
+
+    let baseQuery = sc
       .from('claim_sales')
       .select(`
         id, title, description, set_code, user_id, expires_at,
         delivery_option, created_at, status
       `, { count: 'exact' })
       .eq('status', 'active')
-      .gt('expires_at', new Date().toISOString())
+      .gt('expires_at', nowIso)
 
-    if (setCode) q = q.eq('set_code', setCode)
-    if (userId) q = q.eq('user_id', userId)
+    if (setCode) baseQuery = baseQuery.eq('set_code', setCode)
+    if (userId) baseQuery = baseQuery.eq('user_id', userId)
 
-    // Sorting
+    let data, count
+
+    if (sort === 'most_followed') {
+      // Fetch ALL active claim sales (no DB pagination) so we can sort globally
+      // by follower count. At expected scale (<1000 active sales) this is fine.
+      const { data: allSales, error: allErr, count: allCount } = await baseQuery
+        .order('created_at', { ascending: false })
+
+      if (allErr) {
+        if (allErr.code === UNDEF_TABLE) {
+          return NextResponse.json({ claim_sales: [], total: 0, hasMore: false, page, note: 'Claim sales table not yet migrated' })
+        }
+        throw allErr
+      }
+
+      data = allSales || []
+      count = allCount || data.length
+
+      // Fetch follower counts for ALL active claim sales
+      const allIds = data.map(cs => cs.id)
+      let followerCountMap = {}
+      if (allIds.length > 0) {
+        try {
+          const { data: followCounts } = await sc
+            .from('follows')
+            .select('claim_sale_id')
+            .in('claim_sale_id', allIds)
+          for (const row of followCounts || []) {
+            followerCountMap[row.claim_sale_id] = (followerCountMap[row.claim_sale_id] || 0) + 1
+          }
+        } catch {
+          // follows table might not exist yet
+        }
+      }
+
+      // Attach follower counts, sort globally, then paginate in JS
+      data = data.map(cs => ({
+        ...cs,
+        _follower_count: followerCountMap[cs.id] || 0,
+      })).sort((a, b) => b._follower_count - a._follower_count)
+
+      const from = (page - 1) * PAGE_SIZE
+      const paginatedData = data.slice(from, from + PAGE_SIZE)
+
+      // Now fetch seller names + card counts only for the page we need
+      const pageIds = paginatedData.map(cs => cs.id)
+      const userIds = [...new Set(paginatedData.map(cs => cs.user_id))]
+      let sellerMap = {}
+      if (userIds.length > 0) {
+        const { data: profiles } = await sc
+          .from('profiles')
+          .select('id, display_name')
+          .in('id', userIds)
+        for (const p of profiles || []) sellerMap[p.id] = p.display_name
+      }
+
+      let cardCountMap = {}
+      if (pageIds.length > 0) {
+        try {
+          const { data: listingCounts } = await sc
+            .from('listings')
+            .select('claim_sale_id')
+            .in('claim_sale_id', pageIds)
+            .eq('status', 'active')
+          for (const row of listingCounts || []) {
+            cardCountMap[row.claim_sale_id] = (cardCountMap[row.claim_sale_id] || 0) + 1
+          }
+        } catch {}
+      }
+
+      let results = paginatedData.map(cs => ({
+        ...cs,
+        seller_name: sellerMap[cs.user_id] || null,
+        card_count: cardCountMap[cs.id] || 0,
+        follower_count: cs._follower_count,
+      }))
+      // Strip internal sort field
+      results = results.map(({ _follower_count, ...cs }) => cs)
+
+      return NextResponse.json({
+        claim_sales: results,
+        total: count,
+        hasMore: from + PAGE_SIZE < count,
+        page,
+      })
+    }
+
+    // For ending_soon and newest: paginate at DB level
     if (sort === 'ending_soon') {
-      q = q.order('expires_at', { ascending: true })
-    } else if (sort === 'most_followed') {
-      // We'll need to sort by follower count after fetching
-      q = q.order('created_at', { ascending: false })
+      baseQuery = baseQuery.order('expires_at', { ascending: true })
     } else {
-      q = q.order('created_at', { ascending: false })
+      baseQuery = baseQuery.order('created_at', { ascending: false })
     }
 
     const from = (page - 1) * PAGE_SIZE
-    q = q.range(from, from + PAGE_SIZE - 1)
+    baseQuery = baseQuery.range(from, from + PAGE_SIZE - 1)
 
-    const { data, error, count } = await q
+    const dbResult = await baseQuery
+    data = dbResult.data
+    count = dbResult.count
 
-    if (error) {
-      if (error.code === UNDEF_TABLE) {
+    if (dbResult.error) {
+      if (dbResult.error.code === UNDEF_TABLE) {
         return NextResponse.json({ claim_sales: [], total: 0, hasMore: false, page, note: 'Claim sales table not yet migrated' })
       }
-      throw error
+      throw dbResult.error
     }
 
     // Get seller display names
@@ -75,12 +166,11 @@ export async function GET(request) {
       for (const p of profiles || []) sellerMap[p.id] = p.display_name
     }
 
-    // Get card counts per claim sale
+    // Get card counts + follower counts per claim sale
     const claimSaleIds = (data || []).map(cs => cs.id)
     let cardCountMap = {}
     let followerCountMap = {}
     if (claimSaleIds.length > 0) {
-      // Card counts via listings joined to claim_sale_id
       try {
         const { data: listingCounts } = await sc
           .from('listings')
@@ -90,11 +180,8 @@ export async function GET(request) {
         for (const row of listingCounts || []) {
           cardCountMap[row.claim_sale_id] = (cardCountMap[row.claim_sale_id] || 0) + 1
         }
-      } catch {
-        // claim_sale_id column might not exist yet
-      }
+      } catch {}
 
-      // Follower counts via follows table
       try {
         const { data: followCounts } = await sc
           .from('follows')
@@ -103,9 +190,7 @@ export async function GET(request) {
         for (const row of followCounts || []) {
           followerCountMap[row.claim_sale_id] = (followerCountMap[row.claim_sale_id] || 0) + 1
         }
-      } catch {
-        // follows table might not exist yet
-      }
+      } catch {}
     }
 
     let results = (data || []).map(cs => ({
@@ -114,11 +199,6 @@ export async function GET(request) {
       card_count: cardCountMap[cs.id] || 0,
       follower_count: followerCountMap[cs.id] || 0,
     }))
-
-    // Sort by most_followed if requested
-    if (sort === 'most_followed') {
-      results.sort((a, b) => (b.follower_count || 0) - (a.follower_count || 0))
-    }
 
     const total = count || 0
     return NextResponse.json({

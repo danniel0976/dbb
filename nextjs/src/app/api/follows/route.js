@@ -27,7 +27,7 @@ export async function GET(request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  // Single follow-check mode
+  // Single follow-check mode (claim sale or user)
   if (checkId) {
     try {
       const { data, error } = await authClient
@@ -42,7 +42,28 @@ export async function GET(request) {
       if (error) throw error
       return NextResponse.json({ following: (data || []).length > 0 })
     } catch (err) {
- console.error('[GET /api/follows check]', err?.message || err)
+      console.error('[GET /api/follows check]', err?.message || err)
+      return NextResponse.json({ following: false })
+    }
+  }
+
+  // User follow-check mode
+  const checkUserId = searchParams.get('check_user')
+  if (checkUserId) {
+    try {
+      const { data, error } = await authClient
+        .from('follows')
+        .select('id')
+        .eq('follower_id', user.id)
+        .eq('followee_id', checkUserId)
+        .limit(1)
+      if (error && error.code === UNDEF_TABLE) {
+        return NextResponse.json({ following: false })
+      }
+      if (error) throw error
+      return NextResponse.json({ following: (data || []).length > 0 })
+    } catch (err) {
+      console.error('[GET /api/follows check_user]', err?.message || err)
       return NextResponse.json({ following: false })
     }
   }

@@ -1,10 +1,9 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Flame, Clock, Star, Grid, Loader2 } from 'lucide-react'
 import Link from 'next/link'
 import LoadingSkeleton from '@/components/LoadingSkeleton'
-import { useToast } from '@/components/Toast'
 
 const PAGE_SIZE = 20
 
@@ -132,19 +131,23 @@ export default function ClaimSalesBrowse({ userId }) {
   const [total, setTotal] = useState(0)
   const [hasMore, setHasMore] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
-  const { toast } = useToast()
+  const reqGenRef = useRef(0)
 
   const loadSales = useCallback(async (sortKey, p = 1) => {
+    const gen = ++reqGenRef.current
     if (p === 1) {
       setLoading(true)
       setError(null)
     } else {
       setLoadingMore(true)
     }
+    const controller = new AbortController()
     try {
-      const res = await fetch(`/api/claim-sales?sort=${sortKey}&page=${p}`)
+      const res = await fetch(`/api/claim-sales?sort=${sortKey}&page=${p}`, { signal: controller.signal })
+      if (gen !== reqGenRef.current) return // stale response
       if (!res.ok) throw new Error('Failed to load')
       const data = await res.json()
+      if (gen !== reqGenRef.current) return
       if (p === 1) {
         setSales(data.claim_sales || [])
       } else {
@@ -154,10 +157,14 @@ export default function ClaimSalesBrowse({ userId }) {
       setHasMore(data.hasMore || false)
       setPage(p)
     } catch (err) {
+      if (err?.name === 'AbortError') return
+      if (gen !== reqGenRef.current) return
       if (p === 1) setError('Failed to load claim sales')
     } finally {
-      setLoading(false)
-      setLoadingMore(false)
+      if (gen === reqGenRef.current) {
+        setLoading(false)
+        setLoadingMore(false)
+      }
     }
   }, [])
 

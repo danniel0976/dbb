@@ -378,6 +378,7 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
           listing={selectedListing}
           onClose={() => setSelectedListing(null)}
           onSelectListing={handleSelectListing}
+          userId={userId}
         />
       )}
     </div>

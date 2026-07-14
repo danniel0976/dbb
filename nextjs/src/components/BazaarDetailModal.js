@@ -115,9 +115,11 @@ function ConditionProof({ listingId, onClose }) {
   )
 }
 
-function SellerPopup({ listingId, onClose }) {
+function SellerPopup({ listingId, onClose, userId }) {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [isFollowing, setIsFollowing] = useState(false)
+  const [followLoading, setFollowLoading] = useState(false)
 
   useEffect(() => {
     fetch(`/api/listings/${listingId}/seller`)
@@ -126,6 +128,37 @@ function SellerPopup({ listingId, onClose }) {
       .catch(() => setData(null))
       .finally(() => setLoading(false))
   }, [listingId])
+
+  // Check if current user follows this seller
+  useEffect(() => {
+    if (!userId || !data?.id) return
+    fetch(`/api/follows?check_user=${data.id}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.following) setIsFollowing(true) })
+      .catch(() => {})
+  }, [userId, data?.id])
+
+  const handleFollowUser = async () => {
+    if (!userId || !data?.id || followLoading) return
+    setFollowLoading(true)
+    try {
+      if (isFollowing) {
+        const res = await fetch(`/api/follows?followee_id=${data.id}`, { method: 'DELETE' })
+        if (res.ok) setIsFollowing(false)
+      } else {
+        const res = await fetch('/api/follows', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ followee_id: data.id }),
+        })
+        if (res.ok) setIsFollowing(true)
+      }
+    } catch {
+      // silent
+    } finally {
+      setFollowLoading(false)
+    }
+  }
 
   const formatDate = (iso) => {
     if (!iso) return null
@@ -153,20 +186,41 @@ function SellerPopup({ listingId, onClose }) {
           ) : !data ? (
             <p className="text-sm text-gray-500 text-center py-4">Seller info unavailable.</p>
           ) : (
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-dbb-accent/20 flex items-center justify-center flex-shrink-0">
-                <User className="w-5 h-5 text-dbb-accent" />
+            <>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-dbb-accent/20 flex items-center justify-center flex-shrink-0">
+                  <User className="w-5 h-5 text-dbb-accent" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-gray-900 dark:text-white">{data.display_name}</p>
+                  {data.member_since && (
+                    <p className="text-xs text-gray-500 flex items-center gap-1">
+                      <Calendar className="w-3 h-3" />
+                      Member since {formatDate(data.member_since)}
+                    </p>
+                  )}
+                </div>
               </div>
-              <div>
-                <p className="text-sm font-semibold text-gray-900 dark:text-white">{data.display_name}</p>
-                {data.member_since && (
-                  <p className="text-xs text-gray-500 flex items-center gap-1">
-                    <Calendar className="w-3 h-3" />
-                    Member since {formatDate(data.member_since)}
-                  </p>
-                )}
-              </div>
-            </div>
+              {userId && data.id !== userId && (
+                <button
+                  onClick={handleFollowUser}
+                  disabled={followLoading}
+                  className={`w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-dbb text-sm font-medium transition-colors ${
+                    isFollowing
+                      ? 'bg-dbb-accent/10 text-dbb-accent border border-dbb-accent/30'
+                      : 'btn btn-primary btn-md'
+                  }`}
+                >
+                  {followLoading ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : isFollowing ? (
+                    <>Following</>
+                  ) : (
+                    <>Follow seller</>
+                  )}
+                </button>
+              )}
+            </>
           )}
         </div>
       </div>
@@ -174,7 +228,7 @@ function SellerPopup({ listingId, onClose }) {
   )
 }
 
-export default function BazaarDetailModal({ listing, onClose, onSelectListing }) {
+export default function BazaarDetailModal({ listing, onClose, onSelectListing, userId }) {
   const lc = listing.library_cards
   const ci = lc?.card_index
   const scryfallId = lc?.scryfall_id
@@ -450,6 +504,7 @@ export default function BazaarDetailModal({ listing, onClose, onSelectListing })
       <SellerPopup
         listingId={sellerPopupId}
         onClose={() => setSellerPopupId(null)}
+        userId={userId}
       />
     )}
     {proofListingId && (
