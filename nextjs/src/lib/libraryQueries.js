@@ -148,9 +148,11 @@ export async function getLibraryIds(userId, filters = {}) {
     set_code,
   } = filters
 
+  // Must declare the card_index relation in select() so PostgREST knows it's a
+  // joined table, not a column on library_cards. Mirrors getLibrary's approach.
   let query = supabase
     .from('library_cards')
-    .select('id')
+    .select('id, card_index!inner(*)')
     .eq('user_id', userId)
 
   if (binder_id) {
@@ -158,7 +160,7 @@ export async function getLibraryIds(userId, filters = {}) {
   }
 
   if (q) {
-    query = query.ilike('card_index!inner.name', `%${q}%`)
+    query = query.ilike('card_index.name', `%${q}%`)
   }
 
   if (colors && colors.length > 0) {
@@ -180,19 +182,19 @@ export async function getLibraryIds(userId, filters = {}) {
   }
 
   if (type_line) {
-    query = query.ilike('card_index!inner.type_line', `%${type_line}%`)
+    query = query.ilike('card_index.type_line', `%${type_line}%`)
   }
 
   if (cmc_min != null && cmc_min !== '') {
-    query = query.gte('card_index!inner.cmc', Number(cmc_min))
+    query = query.gte('card_index.cmc', Number(cmc_min))
   }
 
   if (cmc_max != null && cmc_max !== '') {
-    query = query.lte('card_index!inner.cmc', Number(cmc_max))
+    query = query.lte('card_index.cmc', Number(cmc_max))
   }
 
   if (rarity && rarity.length > 0) {
-    query = query.in('card_index!inner.rarity', rarity)
+    query = query.in('card_index.rarity', rarity)
   }
 
   if (foil && foil !== 'all') {
@@ -204,7 +206,7 @@ export async function getLibraryIds(userId, filters = {}) {
   }
 
   if (set_code) {
-    query = query.eq('card_index!inner.set_code', set_code)
+    query = query.eq('card_index.set_code', set_code)
   }
 
   // No pagination — fetch all matching IDs (only the id column, so payload is small)
