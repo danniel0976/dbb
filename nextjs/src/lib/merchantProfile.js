@@ -18,9 +18,9 @@ export async function getMerchantProfileState(client, userId) {
 
   if (error) {
     if (error.code === UNDEFINED_COLUMN) {
-      return { complete: false, unavailable: true, error: 'Merchant profiles are not configured yet' }
+      return { complete: false, unavailable: true, error: 'Seller payment information is not configured yet' }
     }
-    return { complete: false, error: 'Could not verify merchant profile' }
+    return { complete: false, error: 'Could not verify seller payment information' }
   }
 
   const complete = Boolean(
@@ -37,7 +37,7 @@ export async function requireCompleteMerchantProfile(client, userId) {
   const state = await getMerchantProfileState(client, userId)
   if (state.complete) return null
   return {
-    error: state.error || 'Complete your merchant payment profile before listing',
+    error: state.error || 'Complete your seller payment information before listing',
     status: state.unavailable ? 503 : 422,
     code: state.unavailable ? 'MERCHANT_PROFILE_UNAVAILABLE' : 'MERCHANT_PROFILE_REQUIRED',
   }

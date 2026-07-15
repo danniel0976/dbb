@@ -35,6 +35,8 @@ const merchantGate = source('nextjs/src/lib/merchantProfile.js')
 const listings = source('nextjs/src/app/api/listings/route.js')
 const listingEdit = source('nextjs/src/app/api/listings/[id]/route.js')
 const claimSales = source('nextjs/src/app/api/claim-sales/route.js')
+const claimSaleEdit = source('nextjs/src/app/api/claim-sales/[id]/edit/route.js')
+const claimSaleCancel = source('nextjs/src/app/api/claim-sales/[id]/cancel/route.js')
 const cart = source('nextjs/src/components/CartView.js')
 
 console.log('\n=== Phase 39 Checkout and Orders Tests ===\n')
@@ -89,7 +91,7 @@ test('multi-seller checkout uses one trusted RPC and exposes payment only in che
   assert(!orders.includes('merchant_account_number'), 'orders API leaks permanent payment details')
 })
 
-test('merchant profiling is self-declared, private, and enforced before every listing path', () => {
+test('seller payment information is private and gates active sale mutations but not exits', () => {
   assert(merchant.includes("const BUCKET = 'merchant-payment-qr'"), 'private QR route missing')
   assert(merchant.includes('createSignedUrl') && merchant.includes('createSignedUploadUrl'), 'signed QR access missing')
   assert(sql.includes('merchant_bank_qr_owned_path') && sql.includes("id::text || '/bank_qr.jpg'"), 'bank QR ownership constraint missing')
@@ -98,6 +100,9 @@ test('merchant profiling is self-declared, private, and enforced before every li
   assert(listings.includes('requireCompleteMerchantProfile'), 'single listing creation gate missing')
   assert(listingEdit.includes('requireCompleteMerchantProfile'), 'listing edit/relist gate missing')
   assert(claimSales.includes('requireCompleteMerchantProfile'), 'claim sale listing gate missing')
+  assert(claimSaleEdit.includes('requireCompleteMerchantProfile'), 'claim sale edit gate missing')
+  assert(!claimSaleCancel.includes('requireCompleteMerchantProfile'), 'claim sale cancellation must remain available')
+  assert(!listingEdit.split('export async function DELETE')[1].split('export async function PATCH')[0].includes('requireCompleteMerchantProfile'), 'single unlisting must remain available')
   assert(sql.includes('listings_require_merchant_profile'), 'database merchant gate missing')
 })
 

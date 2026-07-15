@@ -27,7 +27,7 @@ export default function MerchantProfileForm() {
     fetch('/api/profile/merchant')
       .then(async res => {
         const data = await res.json()
-        if (!res.ok) throw new Error(data.error || 'Failed to load merchant profile')
+        if (!res.ok) throw new Error(data.error || 'Failed to load seller payment information')
         setForm({ ...EMPTY, ...(data.profile || {}) })
         setComplete(Boolean(data.complete))
       })
@@ -73,7 +73,7 @@ export default function MerchantProfileForm() {
         [pathKey]: upload.storage_path,
         [urlKey]: URL.createObjectURL(file),
       }))
-      setMessage({ type: 'success', text: 'QR uploaded. Save the merchant profile to keep this change.' })
+      setMessage({ type: 'success', text: 'QR uploaded. Save your seller information to keep this change.' })
     } catch (error) {
       setMessage({ type: 'error', text: error.message })
     } finally {
@@ -116,9 +116,9 @@ export default function MerchantProfileForm() {
         }),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Failed to save merchant profile')
+      if (!res.ok) throw new Error(data.error || 'Failed to save seller payment information')
       setComplete(true)
-      setMessage({ type: 'success', text: 'Merchant payment profile saved. You can list cards for sale.' })
+      setMessage({ type: 'success', text: 'Seller payment information saved. You can list cards for sale.' })
     } catch (error) {
       setMessage({ type: 'error', text: error.message })
     } finally {
@@ -138,7 +138,7 @@ export default function MerchantProfileForm() {
     <form onSubmit={save} className="bg-white dark:bg-dbb-secondary border border-gray-200 dark:border-gray-700 rounded-xl p-6 mb-6">
       <div className="flex items-start justify-between gap-4 mb-5">
         <div>
-          <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Merchant payment profile</h3>
+          <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Seller payment information</h3>
           <p className="text-xs text-gray-500 mt-1">Required before listing. Buyers see these details only in their checkout result.</p>
         </div>
         <span className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full ${complete ? 'bg-green-500/10 text-green-600 dark:text-green-400' : 'bg-amber-500/10 text-amber-600 dark:text-amber-400'}`}>
@@ -177,7 +177,7 @@ export default function MerchantProfileForm() {
 
       <button type="submit" disabled={saving || Boolean(uploading)} className="btn btn-primary btn-md mt-5 inline-flex items-center gap-2">
         {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Store className="w-4 h-4" />}
-        Save merchant profile
+        Save seller information
       </button>
     </form>
   )

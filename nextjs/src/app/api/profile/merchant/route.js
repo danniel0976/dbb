@@ -89,7 +89,7 @@ export async function PATCH(request) {
     merchant_payment_instructions: clean(body.payment_instructions, 500),
   }
   if (Object.values(fields).some(value => value === undefined)) {
-    return NextResponse.json({ error: 'Merchant profile fields must be strings' }, { status: 400 })
+    return NextResponse.json({ error: 'Seller payment fields must be strings' }, { status: 400 })
   }
   if (!fields.merchant_bank_name || !fields.merchant_account_name ||
       (!fields.merchant_account_number && !fields.merchant_duitnow_id)) {
@@ -115,7 +115,7 @@ export async function PATCH(request) {
   const { error } = await authClient.from('profiles').update(fields).eq('id', user.id)
   if (error) {
     const status = error.code === '42703' ? 503 : 500
-    return NextResponse.json({ error: status === 503 ? 'Merchant profiles are not configured yet' : error.message }, { status })
+    return NextResponse.json({ error: status === 503 ? 'Seller payment information is not configured yet' : error.message }, { status })
   }
   return NextResponse.json({ success: true, complete: true })
 }
