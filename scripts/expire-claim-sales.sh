@@ -35,7 +35,7 @@ EXPIRE_RESPONSE="$(curl -s -w "\n%{http_code}" \
   "${SUPABASE_URL}/rest/v1/claim_sales?status=eq.active&expires_at=lt.${NOW_ISO}&select=id")"
 
 EXPIRE_HTTP="$(echo "$EXPIRE_RESPONSE" | tail -n1)"
-EXPIRE_BODY="$(echo "$EXPIRE_RESPONSE" | head -n-1)"
+EXPIRE_BODY="$(echo "$EXPIRE_RESPONSE" | sed '$d')"
 
 if [[ "$EXPIRE_HTTP" -ge 200 && "$EXPIRE_HTTP" -lt 300 ]]; then
   # Extract expired claim sale IDs from the response body
@@ -62,7 +62,7 @@ if [[ "$EXPIRE_HTTP" -ge 200 && "$EXPIRE_HTTP" -lt 300 ]]; then
     echo "[$(date -u +%H:%M:%S)] expire-claim-sales: follows purged for ${EXPIRED_COUNT} sale(s) (HTTP ${FOLLOW_HTTP})"
   else
     echo "[$(date -u +%H:%M:%S)] expire-claim-sales: follow purge failed (HTTP ${FOLLOW_HTTP})"
-    echo "$FOLLOW_RESPONSE" | head -n-1
+    echo "$FOLLOW_RESPONSE" | sed '$d'
   fi
 
   # 3. Expire listings linked to expired claim sales
@@ -79,7 +79,7 @@ if [[ "$EXPIRE_HTTP" -ge 200 && "$EXPIRE_HTTP" -lt 300 ]]; then
     echo "[$(date -u +%H:%M:%S)] expire-claim-sales: linked listings expired (HTTP ${LISTING_HTTP})"
   else
     echo "[$(date -u +%H:%M:%S)] expire-claim-sales: listing expiry failed (HTTP ${LISTING_HTTP})"
-    echo "$LISTING_RESPONSE" | head -n-1
+    echo "$LISTING_RESPONSE" | sed '$d'
   fi
 fi
 
@@ -91,7 +91,7 @@ NONACTIVE_RESPONSE="$(curl -s -w "\n%{http_code}" \
   "${SUPABASE_URL}/rest/v1/claim_sales?select=id&status=neq.active")"
 
 NONACTIVE_HTTP="$(echo "$NONACTIVE_RESPONSE" | tail -n1)"
-NONACTIVE_BODY="$(echo "$NONACTIVE_RESPONSE" | head -n-1)"
+NONACTIVE_BODY="$(echo "$NONACTIVE_RESPONSE" | sed '$d')"
 
 if [[ "$NONACTIVE_HTTP" -ge 200 && "$NONACTIVE_HTTP" -lt 300 ]]; then
   NONACTIVE_IDS="$(echo "$NONACTIVE_BODY" | { grep -o '"id":"[^"]*"' || true; } | sed 's/"id":"//;s/"//' | tr '\n' ',' | sed 's/,$//')"
@@ -106,7 +106,7 @@ if [[ "$NONACTIVE_HTTP" -ge 200 && "$NONACTIVE_HTTP" -lt 300 ]]; then
       echo "[$(date -u +%H:%M:%S)] expire-claim-sales: catch-up purged follows for non-active claim sales (HTTP ${CATCHUP_HTTP})"
     else
       echo "[$(date -u +%H:%M:%S)] expire-claim-sales: catch-up purge failed (HTTP ${CATCHUP_HTTP})"
-      echo "$CATCHUP_RESPONSE" | head -n-1
+      echo "$CATCHUP_RESPONSE" | sed '$d'
     fi
   fi
 else

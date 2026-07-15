@@ -32,7 +32,7 @@ RESPONSE="$(curl -sS -w "\n%{http_code}" -X PATCH \
   -d '{"status":"expired"}')"
 
 HTTP_CODE="$(echo "$RESPONSE" | tail -n1)"
-BODY="$(echo "$RESPONSE" | head -n-1)"
+BODY="$(echo "$RESPONSE" | sed '$d')"
 
 if [[ "$HTTP_CODE" -ge 200 && "$HTTP_CODE" -lt 300 ]]; then
   # `|| true`: grep exits 1 on zero matches (no expired rows — the normal case);
