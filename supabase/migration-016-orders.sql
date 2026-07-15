@@ -69,6 +69,17 @@ ON CONFLICT (slug) DO UPDATE SET
   is_default = EXCLUDED.is_default,
   updated_at = now();
 
+-- migration-014's listings_quantity_positive (quantity > 0) blocks checkout_orders
+-- below, which reserves the last unit down to zero (status flips to 'reserved')
+-- while the listing row must persist for order-item snapshots and cancellation
+-- restoration. Relax the floor to zero; a listing is still hidden from the bazaar
+-- once quantity reaches zero because "authenticated can view active listings" is
+-- scoped to status = 'active', and checkout_orders flips status to 'reserved' in
+-- the same statement that brings quantity to zero.
+ALTER TABLE public.listings
+  DROP CONSTRAINT IF EXISTS listings_quantity_positive,
+  ADD CONSTRAINT listings_quantity_non_negative CHECK (quantity >= 0);
+
 CREATE TABLE IF NOT EXISTS public.orders (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   buyer_id uuid NOT NULL REFERENCES public.profiles(id),
