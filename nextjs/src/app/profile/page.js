@@ -7,6 +7,7 @@ import { User, Mail, Calendar, BookOpen, Layers, Star, Pencil, Check, X, Loader2
 import DBBNav from '@/components/DBBNav'
 import { useTheme } from '@/components/ThemeProvider'
 import FollowingSection from '@/components/FollowingSection'
+import MerchantProfileForm from '@/components/MerchantProfileForm'
 
 const THEME_OPTIONS = [
   { value: 'light', label: 'Light', icon: Sun },
@@ -232,6 +233,8 @@ export default function ProfilePage() {
             />
           </div>
         </div>
+
+        <MerchantProfileForm />
 
         {/* Following */}
         <FollowingSection />

@@ -120,7 +120,7 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
   const [csTitle, setCsTitle] = useState('')
   const [csDescription, setCsDescription] = useState('')
   const [csSetCode, setCsSetCode] = useState('')
-  const [csDelivery, setCsDelivery] = useState('both')
+  const [csDelivery, setCsDelivery] = useState('pickup')
   const [showAddCard, setShowAddCard] = useState(false)
   const [missingPhotoIds, setMissingPhotoIds] = useState([])
   const [photoCaptureIndex, setPhotoCaptureIndex] = useState(0)
@@ -520,7 +520,7 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
       setCsTitle('')
       setCsDescription('')
       setCsSetCode('')
-      setCsDelivery('both')
+      setCsDelivery('pickup')
     } catch (e) {
       toast(e.message || 'Failed to list cards on Bazaar', 'error')
     } finally {
@@ -1051,9 +1051,7 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
                     <p className="text-xs text-gray-600 dark:text-gray-500 mb-1.5 font-medium">Delivery</p>
                     <div className="flex gap-2">
                       {[
-                        { value: 'pickup', label: 'Pickup' },
-                        { value: 'shipping', label: 'Shipping' },
-                        { value: 'both', label: 'Both' },
+                        { value: 'pickup', label: 'TCG store pickup' },
                       ].map(opt => (
                         <button
                           key={opt.value}

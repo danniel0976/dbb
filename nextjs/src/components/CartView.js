@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Trash2, Loader2, ShoppingCart, AlertTriangle, ExternalLink } from 'lucide-react'
+import { Trash2, Loader2, ShoppingCart, AlertTriangle, ExternalLink, Landmark, MapPin, CheckCircle2 } from 'lucide-react'
 import Link from 'next/link'
 import { useToast } from '@/components/Toast'
 
@@ -34,6 +34,11 @@ export default function CartView() {
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [removingId, setRemovingId] = useState(null)
+  const [locations, setLocations] = useState([])
+  const [pickupLocationId, setPickupLocationId] = useState('')
+  const [checkingOut, setCheckingOut] = useState(false)
+  const [checkoutKey, setCheckoutKey] = useState(() => crypto.randomUUID())
+  const [checkoutResult, setCheckoutResult] = useState(null)
   const { toast } = useToast()
 
   const fetchCart = useCallback(async () => {
@@ -54,6 +59,19 @@ export default function CartView() {
     fetchCart()
   }, [fetchCart])
 
+  useEffect(() => {
+    fetch('/api/checkout')
+      .then(async res => {
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error || 'Checkout is unavailable')
+        const available = data.locations || []
+        setLocations(available)
+        const preferred = available.find(location => location.is_default) || available[0]
+        setPickupLocationId(preferred?.id || '')
+      })
+      .catch(error => toast(error.message, 'error'))
+  }, [toast])
+
   const handleRemove = async (cartItemId) => {
     setRemovingId(cartItemId)
     try {
@@ -68,12 +86,43 @@ export default function CartView() {
     }
   }
 
+  const handleCheckout = async () => {
+    if (!pickupLocationId) return
+    setCheckingOut(true)
+    try {
+      const res = await fetch('/api/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          pickup_location_id: pickupLocationId,
+          idempotency_key: checkoutKey,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        const conflict = data.conflicts?.[0]?.reason
+        throw new Error(conflict ? `${data.error}: ${conflict}` : (data.error || 'Checkout failed'))
+      }
+      setCheckoutResult(data)
+      setItems([])
+      toast('Orders created. Bank in to each seller using the details shown.', 'success')
+    } catch (error) {
+      toast(error.message, 'error')
+    } finally {
+      setCheckingOut(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
         <Loader2 className="w-8 h-8 animate-spin text-dbb-accent" />
       </div>
     )
+  }
+
+  if (checkoutResult) {
+    return <CheckoutPaymentResult result={checkoutResult} />
   }
 
   if (items.length === 0) {
@@ -95,6 +144,7 @@ export default function CartView() {
   ) / 100
 
   const groups = groupBySeller(items)
+  const selectedLocation = locations.find(location => location.id === pickupLocationId)
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
@@ -188,6 +238,27 @@ export default function CartView() {
         </div>
       ))}
 
+      <div className="bg-white dark:bg-dbb-secondary rounded-xl border border-gray-200 dark:border-gray-700 p-5">
+        <div className="flex items-center gap-2 mb-3">
+          <MapPin className="w-4 h-4 text-dbb-accent" />
+          <h2 className="text-sm font-semibold text-gray-900 dark:text-white">TCG store pickup</h2>
+        </div>
+        <select
+          value={pickupLocationId}
+          onChange={event => setPickupLocationId(event.target.value)}
+          className="w-full bg-gray-50 dark:bg-dbb-primary border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-dbb-accent"
+        >
+          {locations.map(location => <option key={location.id} value={location.id}>{location.name}</option>)}
+        </select>
+        {selectedLocation && (
+          <div className="mt-3 rounded-lg bg-gray-50 dark:bg-dbb-primary/60 border border-gray-200 dark:border-gray-700 p-3">
+            <p className="text-sm font-medium">{selectedLocation.name}</p>
+            <p className="text-xs text-gray-500 mt-1">{selectedLocation.address}</p>
+            {selectedLocation.operating_notes && <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">{selectedLocation.operating_notes}</p>}
+          </div>
+        )}
+      </div>
+
       {/* Grand total */}
       <div className="bg-white dark:bg-dbb-primary border border-dbb-accent/30 rounded-xl px-5 py-4 flex items-center justify-between">
         <div>
@@ -206,8 +277,80 @@ export default function CartView() {
         <Link href="/bazaar" className="btn btn-outline btn-sm inline-flex items-center gap-1">
           <ExternalLink className="w-3.5 h-3.5" /> Continue shopping
         </Link>
-        <p className="text-gray-600 dark:text-gray-500 text-xs">Checkout coming soon</p>
+        <button
+          onClick={handleCheckout}
+          disabled={checkingOut || !pickupLocationId || availableItems.length !== items.length}
+          className="btn btn-primary btn-md inline-flex items-center gap-2 disabled:opacity-50"
+        >
+          {checkingOut ? <Loader2 className="w-4 h-4 animate-spin" /> : <Landmark className="w-4 h-4" />}
+          Checkout & view bank-in details
+        </button>
       </div>
+    </div>
+  )
+}
+
+function CheckoutPaymentResult({ result }) {
+  return (
+    <div className="max-w-3xl mx-auto space-y-5">
+      <div className="rounded-xl border border-green-500/30 bg-green-500/10 p-5 flex gap-3">
+        <CheckCircle2 className="w-6 h-6 text-green-500 flex-shrink-0" />
+        <div>
+          <h2 className="font-semibold text-gray-900 dark:text-white">Orders created</h2>
+          <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">Bank in separately to each seller. These private payment details are shown only in this checkout result; save your transfer receipts.</p>
+        </div>
+      </div>
+
+      {result.orders.map(order => (
+        <div key={order.id} className="bg-white dark:bg-dbb-secondary rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+          <div className="p-5 border-b border-gray-200 dark:border-gray-700">
+            <div className="flex justify-between gap-4">
+              <div>
+                <p className="text-xs text-gray-500">Pay seller</p>
+                <h3 className="font-semibold">{order.payment?.seller_name || 'Seller'}</h3>
+              </div>
+              <div className="text-right">
+                <p className="text-xs text-gray-500">Order total</p>
+                <p className="text-xl font-bold text-dbb-accent">RM {Number(order.total_myr).toFixed(2)}</p>
+              </div>
+            </div>
+            <div className="grid sm:grid-cols-2 gap-x-5 gap-y-2 mt-4 text-sm">
+              <PaymentLine label="Bank / provider" value={order.payment?.bank_name} />
+              <PaymentLine label="Account name" value={order.payment?.account_name} />
+              <PaymentLine label="Account number" value={order.payment?.account_number} />
+              <PaymentLine label="DuitNow ID" value={order.payment?.duitnow_id} />
+            </div>
+            {order.payment?.payment_instructions && <p className="text-sm mt-3 p-3 bg-gray-50 dark:bg-dbb-primary rounded-lg">{order.payment.payment_instructions}</p>}
+            <div className="flex flex-wrap gap-4 mt-4">
+              {order.payment?.bank_qr_url && <QrImage label="Bank / DuitNow QR" src={order.payment.bank_qr_url} />}
+              {order.payment?.tng_qr_url && <QrImage label="Touch 'n Go QR" src={order.payment.tng_qr_url} />}
+            </div>
+          </div>
+          <div className="p-4 bg-gray-50 dark:bg-dbb-primary/50">
+            <p className="text-xs font-medium">Pickup: {order.pickup_locations?.name}</p>
+            <p className="text-xs text-gray-500 mt-1">{order.pickup_locations?.address}</p>
+            <p className="text-[11px] text-gray-500 mt-2">Order {order.id}</p>
+          </div>
+        </div>
+      ))}
+
+      <div className="flex justify-end">
+        <Link href="/orders" className="btn btn-primary btn-md">Track orders →</Link>
+      </div>
+    </div>
+  )
+}
+
+function PaymentLine({ label, value }) {
+  if (!value) return null
+  return <p><span className="text-gray-500">{label}:</span> <span className="font-medium select-all">{value}</span></p>
+}
+
+function QrImage({ label, src }) {
+  return (
+    <div>
+      <p className="text-xs text-gray-500 mb-1">{label}</p>
+      <img src={src} alt={label} className="w-40 h-40 object-contain bg-white border rounded-lg" />
     </div>
   )
 }

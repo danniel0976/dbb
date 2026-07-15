@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server'
 import { createClient as createAuthClient } from '@/lib/supabaseServer'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
+import { requireCompleteMerchantProfile } from '@/lib/merchantProfile'
 
 export const runtime = 'nodejs'
 
-const VALID_DELIVERY_OPTIONS = ['pickup', 'shipping', 'both']
+const VALID_DELIVERY_OPTIONS = ['pickup']
 const DEFAULT_MULTIPLIER = 3.0
 const UNDEF_TABLE = '42P01'   // relation does not exist
 const UNDEF_COLUMN = '42703'  // column does not exist
@@ -244,6 +245,11 @@ export async function POST(request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
+  const merchantGate = await requireCompleteMerchantProfile(authClient, user.id)
+  if (merchantGate) {
+    return NextResponse.json({ error: merchantGate.error, code: merchantGate.code }, { status: merchantGate.status })
+  }
+
   let body
   try {
     body = await request.json()
@@ -260,7 +266,7 @@ export async function POST(request) {
     return NextResponse.json({ error: 'duration_hours must be an integer between 1 and 24' }, { status: 400 })
   }
   if (!VALID_DELIVERY_OPTIONS.includes(body.delivery_option)) {
-    return NextResponse.json({ error: 'delivery_option must be pickup, shipping, or both' }, { status: 400 })
+    return NextResponse.json({ error: 'delivery_option must be pickup' }, { status: 400 })
   }
   if (!Array.isArray(body.card_ids) || body.card_ids.length === 0) {
     return NextResponse.json({ error: 'card_ids must be a non-empty array' }, { status: 400 })

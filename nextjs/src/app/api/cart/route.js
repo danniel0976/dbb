@@ -23,7 +23,7 @@ export async function GET() {
       .select(`
         id, created_at,
         listings(
-          id, user_id, multiplier, status, expires_at,
+          id, user_id, multiplier, quantity, status, expires_at,
           library_cards(
             id, scryfall_id, foil, condition,
             card_index(name, set_code, set_name, collector_number, rarity, type_line)
@@ -59,7 +59,7 @@ export async function GET() {
       const listing = ci.listings
       const lc = listing?.library_cards
       const notExpired = !listing?.expires_at || new Date(listing.expires_at) > now
-      const isAvailable = listing?.status === 'active' && notExpired
+      const isAvailable = listing?.status === 'active' && notExpired && Number(listing?.quantity) > 0
       const ckdUsd = (lc?.scryfall_id && lc?.foil)
         ? lookupPrice(lc.scryfall_id, lc.foil)
         : null
@@ -73,6 +73,7 @@ export async function GET() {
         listing_status: listing?.status || null,
         is_available: isAvailable,
         multiplier: listing?.multiplier ?? null,
+        quantity: listing?.quantity ?? null,
         seller_id: listing?.user_id || null,
         seller_name: listing?.user_id ? (sellerMap[listing.user_id] || null) : null,
         library_card: lc ? {

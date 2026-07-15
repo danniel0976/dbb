@@ -169,7 +169,7 @@ function ClaimSaleForm({ libraryRow, onCancel, onRequirePhoto }) {
   const [description, setDescription] = useState('')
   const [setCode, setSetCode] = useState(libraryRow?.card_index?.set_code || '')
   const [durationHours, setDurationHours] = useState(24)
-  const [deliveryOption, setDeliveryOption] = useState('both')
+  const [deliveryOption, setDeliveryOption] = useState('pickup')
   const [csQuantity, setCsQuantity] = useState(1)
   const [submitting, setSubmitting] = useState(false)
 
@@ -270,11 +270,9 @@ function ClaimSaleForm({ libraryRow, onCancel, onRequirePhoto }) {
       <div>
         <p className="text-xs text-gray-600 mb-1.5">Delivery option</p>
         <div className="flex gap-2">
-          {[
-            { value: 'pickup', label: 'Pickup' },
-            { value: 'shipping', label: 'Shipping' },
-            { value: 'both', label: 'Both' },
-          ].map(opt => (
+            {[
+              { value: 'pickup', label: 'TCG store pickup' },
+            ].map(opt => (
             <button
               key={opt.value}
               onClick={() => setDeliveryOption(opt.value)}
