@@ -50,3 +50,6 @@ failed-imports.json
 
 # Test run artifacts (JSON only, keep README)
 test-runs/*.json
+
+# Graphify generated artifacts (regenerate with graphify extract)
+.graphify/
