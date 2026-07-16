@@ -23,10 +23,15 @@ SERVICE_KEY="${SUPABASE_SERVICE_ROLE_KEY:?SUPABASE_SERVICE_ROLE_KEY not set}"
 
 NOW_ISO="$(date -u +%Y-%m-%dT%H:%M:%S.000Z)"
 AUTH_HEADERS=(-H "apikey: $SERVICE_KEY" -H "Authorization: Bearer $SERVICE_KEY")
+CURL_OPTS=(
+  --silent --show-error
+  --connect-timeout 10 --max-time 60
+  --retry 3 --retry-delay 2 --retry-max-time 45 --retry-all-errors
+)
 
 # 1. Expire claim sales past their expires_at
 # Use Prefer: return=representation so PostgREST returns the expired rows' IDs
-EXPIRE_RESPONSE="$(curl -s -w "\n%{http_code}" \
+EXPIRE_RESPONSE="$(curl "${CURL_OPTS[@]}" -w "\n%{http_code}" \
   -X PATCH \
   "${AUTH_HEADERS[@]}" \
   -H "Content-Type: application/json" \
@@ -50,7 +55,7 @@ if [[ "$EXPIRE_HTTP" -ge 200 && "$EXPIRE_HTTP" -lt 300 ]]; then
   fi
 
   # 2. Purge follows for expired claim sales (using in. filter with comma-separated IDs)
-  FOLLOW_RESPONSE="$(curl -s -w "\n%{http_code}" \
+  FOLLOW_RESPONSE="$(curl "${CURL_OPTS[@]}" -w "\n%{http_code}" \
     -X DELETE \
     "${AUTH_HEADERS[@]}" \
     -H "Prefer: return=minimal" \
@@ -66,7 +71,7 @@ if [[ "$EXPIRE_HTTP" -ge 200 && "$EXPIRE_HTTP" -lt 300 ]]; then
   fi
 
   # 3. Expire listings linked to expired claim sales
-  LISTING_RESPONSE="$(curl -s -w "\n%{http_code}" \
+  LISTING_RESPONSE="$(curl "${CURL_OPTS[@]}" -w "\n%{http_code}" \
     -X PATCH \
     "${AUTH_HEADERS[@]}" \
     -H "Content-Type: application/json" \
@@ -86,7 +91,7 @@ fi
 # 4. Catch-up purge: remove follows referencing ANY non-active claim sale
 # Handles follows created after expiry (edge case) or on cancelled claim sales.
 # PostgREST can't do subqueries in DELETE, so we fetch non-active claim sale IDs first.
-NONACTIVE_RESPONSE="$(curl -s -w "\n%{http_code}" \
+NONACTIVE_RESPONSE="$(curl "${CURL_OPTS[@]}" -w "\n%{http_code}" \
   "${AUTH_HEADERS[@]}" \
   "${SUPABASE_URL}/rest/v1/claim_sales?select=id&status=neq.active")"
 
@@ -96,7 +101,7 @@ NONACTIVE_BODY="$(echo "$NONACTIVE_RESPONSE" | sed '$d')"
 if [[ "$NONACTIVE_HTTP" -ge 200 && "$NONACTIVE_HTTP" -lt 300 ]]; then
   NONACTIVE_IDS="$(echo "$NONACTIVE_BODY" | { grep -o '"id":"[^"]*"' || true; } | sed 's/"id":"//;s/"//' | tr '\n' ',' | sed 's/,$//')"
   if [[ -n "$NONACTIVE_IDS" ]]; then
-    CATCHUP_RESPONSE="$(curl -s -w "\n%{http_code}" \
+    CATCHUP_RESPONSE="$(curl "${CURL_OPTS[@]}" -w "\n%{http_code}" \
       -X DELETE \
       "${AUTH_HEADERS[@]}" \
       -H "Prefer: return=minimal" \

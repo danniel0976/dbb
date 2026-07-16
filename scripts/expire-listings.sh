@@ -21,9 +21,14 @@ if [[ -z "$SUPABASE_URL" || -z "$SERVICE_ROLE_KEY" ]]; then
 fi
 
 NOW="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+CURL_OPTS=(
+  --silent --show-error
+  --connect-timeout 10 --max-time 60
+  --retry 3 --retry-delay 2 --retry-max-time 45 --retry-all-errors
+)
 
 # PATCH listings WHERE status='active' AND expires_at < now() → status='expired'
-RESPONSE="$(curl -sS -w "\n%{http_code}" -X PATCH \
+RESPONSE="$(curl "${CURL_OPTS[@]}" -w "\n%{http_code}" -X PATCH \
   "${SUPABASE_URL}/rest/v1/listings?status=eq.active&expires_at=lt.${NOW}" \
   -H "apikey: ${SERVICE_ROLE_KEY}" \
   -H "Authorization: Bearer ${SERVICE_ROLE_KEY}" \
