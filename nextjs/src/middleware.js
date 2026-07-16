@@ -30,13 +30,17 @@ export async function middleware(request) {
   const isAuthPage = authPrefixes.some(p => pathname.startsWith(p))
 
   if (isProtected && !user) {
-    const url = request.nextUrl.clone()
+    const url = process.env.NEXT_PUBLIC_SITE_URL
+      ? new URL(request.nextUrl.pathname + request.nextUrl.search, process.env.NEXT_PUBLIC_SITE_URL)
+      : request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)
   }
 
   if (isAuthPage && user) {
-    const url = request.nextUrl.clone()
+    const url = process.env.NEXT_PUBLIC_SITE_URL
+      ? new URL(request.nextUrl.pathname + request.nextUrl.search, process.env.NEXT_PUBLIC_SITE_URL)
+      : request.nextUrl.clone()
     url.pathname = '/library'
     return NextResponse.redirect(url)
   }
@@ -49,7 +53,9 @@ export async function middleware(request) {
       .single()
     if (profile?.deactivated_at) {
       await supabase.auth.signOut()
-      const url = request.nextUrl.clone()
+      const url = process.env.NEXT_PUBLIC_SITE_URL
+        ? new URL(request.nextUrl.pathname + request.nextUrl.search, process.env.NEXT_PUBLIC_SITE_URL)
+        : request.nextUrl.clone()
       url.pathname = '/login'
       url.searchParams.set('deactivated', '1')
       return NextResponse.redirect(url)

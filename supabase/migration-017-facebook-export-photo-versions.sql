@@ -1,4 +1,8 @@
--- Phase 40: immutable condition-photo promotion and Facebook export snapshots
+-- Phase 40 expand migration: immutable condition-photo promotion and Facebook
+-- export snapshots. This migration intentionally leaves the Phase 15 direct
+-- mutation policies in place during the application deployment. Migration 018
+-- contracts those legacy permissions after the new service-RPC application is
+-- live and verified.
 
 -- Composite ownership/version keys let the snapshot prove that its card, owner,
 -- and photo path all refer to the same current canonical condition photo.
@@ -39,24 +43,39 @@ CREATE POLICY "owner facebook export snapshots select"
   TO authenticated
   USING (auth.uid() = user_id);
 
-CREATE POLICY "owner facebook export snapshots insert"
-  ON public.fb_export_snapshots
-  FOR INSERT
-  TO authenticated
-  WITH CHECK (auth.uid() = user_id);
+-- Snapshot rows are generated values, not user-authored records. Authenticated
+-- owners may read them, while the service-only RPCs below remain the only
+-- insert/update/delete authority (including invalidation).
+REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON TABLE public.fb_export_snapshots FROM anon, authenticated;
+GRANT SELECT ON TABLE public.fb_export_snapshots TO authenticated;
 
-CREATE POLICY "owner facebook export snapshots update"
-  ON public.fb_export_snapshots
-  FOR UPDATE
-  TO authenticated
-  USING (auth.uid() = user_id)
-  WITH CHECK (auth.uid() = user_id);
+CREATE OR REPLACE FUNCTION public.invalidate_fb_export_snapshot_on_card_details_change()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  DELETE FROM public.fb_export_snapshots
+  WHERE library_card_id = NEW.id
+    AND user_id = NEW.user_id;
 
-CREATE POLICY "owner facebook export snapshots delete"
-  ON public.fb_export_snapshots
-  FOR DELETE
-  TO authenticated
-  USING (auth.uid() = user_id);
+  RETURN NEW;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.invalidate_fb_export_snapshot_on_card_details_change() FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.invalidate_fb_export_snapshot_on_card_details_change() FROM anon;
+REVOKE ALL ON FUNCTION public.invalidate_fb_export_snapshot_on_card_details_change() FROM authenticated;
+
+CREATE TRIGGER invalidate_fb_export_snapshot_on_card_details_change
+  AFTER UPDATE OF condition, foil ON public.library_cards
+  FOR EACH ROW
+  WHEN (
+    OLD.condition IS DISTINCT FROM NEW.condition
+    OR OLD.foil IS DISTINCT FROM NEW.foil
+  )
+  EXECUTE FUNCTION public.invalidate_fb_export_snapshot_on_card_details_change();
 
 CREATE OR REPLACE FUNCTION public.promote_card_photo(
   p_user_id uuid,
@@ -150,10 +169,6 @@ BEGIN
   IF NOT FOUND THEN
     RAISE EXCEPTION 'library card not found';
   END IF;
-
-  DELETE FROM public.fb_export_snapshots
-  WHERE library_card_id = p_library_card_id
-    AND user_id = p_user_id;
 
   RETURN v_card;
 END;

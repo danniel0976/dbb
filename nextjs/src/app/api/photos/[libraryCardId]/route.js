@@ -14,20 +14,6 @@ function makeServiceClient() {
   )
 }
 
-async function removePhotoPrefix(sc, userId, libraryCardId) {
-  const folder = `${userId}/${libraryCardId}`
-  for (let page = 0; page < 100; page += 1) {
-    const { data: files, error } = await sc.storage.from(BUCKET).list(folder, { limit: 1000, offset: 0 })
-    if (error) return { error }
-    const paths = (files || []).filter(file => file.name).map(file => `${folder}/${file.name}`)
-    if (!paths.length) return { error: null }
-    const { error: removeErr } = await sc.storage.from(BUCKET).remove(paths)
-    if (removeErr) return { error: removeErr }
-    if (paths.length < 1000) return { error: null }
-  }
-  return { error: new Error('Photo prefix cleanup exceeded safety limit') }
-}
-
 // GET /api/photos/[libraryCardId]
 // Returns a short-TTL signed URL for the owner's card photo.
 // Query param ?size=small for thumbnail variant (640px), default full size.
@@ -98,14 +84,25 @@ export async function DELETE(request, { params }) {
   if (!card) return NextResponse.json({ success: true }) // idempotent for a missing card
 
   // Remove canonical metadata and its snapshot atomically before deleting bytes.
-  const { error: dbError } = await sc.rpc('delete_card_photo_and_invalidate_export', {
+  const { data: deletedStoragePath, error: dbError } = await sc.rpc('delete_card_photo_and_invalidate_export', {
     p_user_id: user.id,
     p_library_card_id: libraryCardId,
   })
   if (dbError) return NextResponse.json({ error: 'Could not delete card photo' }, { status: 500 })
 
-  const { error: photoCleanupError } = await removePhotoPrefix(sc, user.id, libraryCardId)
+  // The RPC returns the exact path that was canonical inside the transaction.
+  // Remove only those bytes: sweeping the prefix can race with a concurrent
+  // confirm and delete a newly promoted photo.
+  let photoCleanupError = null
+  if (typeof deletedStoragePath === 'string' && deletedStoragePath.length > 0) {
+    const { error } = await sc.storage.from(BUCKET).remove([deletedStoragePath])
+    photoCleanupError = error
+  }
   if (photoCleanupError) console.error('DELETE /api/photos orphan cleanup error:', photoCleanupError)
 
-  return NextResponse.json({ success: true, photo_cleanup_pending: Boolean(photoCleanupError) })
+  return NextResponse.json({
+    success: true,
+    deleted_storage_path: deletedStoragePath || null,
+    photo_cleanup_pending: Boolean(photoCleanupError),
+  })
 }
