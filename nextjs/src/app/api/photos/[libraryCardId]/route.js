@@ -14,6 +14,20 @@ function makeServiceClient() {
   )
 }
 
+async function removePhotoPrefix(sc, userId, libraryCardId) {
+  const folder = `${userId}/${libraryCardId}`
+  for (let page = 0; page < 100; page += 1) {
+    const { data: files, error } = await sc.storage.from(BUCKET).list(folder, { limit: 1000, offset: 0 })
+    if (error) return { error }
+    const paths = (files || []).filter(file => file.name).map(file => `${folder}/${file.name}`)
+    if (!paths.length) return { error: null }
+    const { error: removeErr } = await sc.storage.from(BUCKET).remove(paths)
+    if (removeErr) return { error: removeErr }
+    if (paths.length < 1000) return { error: null }
+  }
+  return { error: new Error('Photo prefix cleanup exceeded safety limit') }
+}
+
 // GET /api/photos/[libraryCardId]
 // Returns a short-TTL signed URL for the owner's card photo.
 // Query param ?size=small for thumbnail variant (640px), default full size.
@@ -72,25 +86,26 @@ export async function DELETE(request, { params }) {
 
   const sc = makeServiceClient()
 
-  const { data: photo } = await sc
-    .from('card_photos')
-    .select('storage_path, user_id')
-    .eq('library_card_id', libraryCardId)
+  const { data: card } = await sc
+    .from('library_cards')
+    .select('id, user_id')
+    .eq('id', libraryCardId)
     .maybeSingle()
 
-  if (!photo) {
-    return NextResponse.json({ success: true })  // idempotent
-  }
-
-  if (photo.user_id !== user.id) {
+  if (card && card.user_id !== user.id) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
+  if (!card) return NextResponse.json({ success: true }) // idempotent for a missing card
 
-  // Delete storage object (ignore errors — row cleanup is more important)
-  await sc.storage.from(BUCKET).remove([photo.storage_path])
+  // Remove canonical metadata and its snapshot atomically before deleting bytes.
+  const { error: dbError } = await sc.rpc('delete_card_photo_and_invalidate_export', {
+    p_user_id: user.id,
+    p_library_card_id: libraryCardId,
+  })
+  if (dbError) return NextResponse.json({ error: 'Could not delete card photo' }, { status: 500 })
 
-  // Delete DB row (CASCADE from library_cards also handles this, but explicit is safer)
-  await sc.from('card_photos').delete().eq('library_card_id', libraryCardId)
+  const { error: photoCleanupError } = await removePhotoPrefix(sc, user.id, libraryCardId)
+  if (photoCleanupError) console.error('DELETE /api/photos orphan cleanup error:', photoCleanupError)
 
-  return NextResponse.json({ success: true })
+  return NextResponse.json({ success: true, photo_cleanup_pending: Boolean(photoCleanupError) })
 }

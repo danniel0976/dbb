@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { getCardById, getImageUrl } from '@/lib/scryfall'
 import { useToast } from '@/components/Toast'
 import CameraCapture from '@/components/CameraCapture'
+import FacebookSaleImage from '@/components/FacebookSaleImage'
 import { X, Star, Minus, Plus, Trash2, Tag, Loader2, Camera, RotateCcw, Maximize2, Package } from 'lucide-react'
 
 const MULTIPLIERS = [2.5, 2.8, 3.0]
@@ -950,6 +951,12 @@ export default function CardDetailModal({ libraryRow, onClose, onSave, onDelete 
                 }
               }}
               onCaptureCancel={() => setPendingPhotoAction(null)}
+            />
+
+            <FacebookSaleImage
+              libraryRow={libraryRow}
+              hasPhoto={hasPhoto}
+              hasUnsavedDetails={condition !== libraryRow.condition || foil !== libraryRow.foil}
             />
 
             {/* Bazaar listing */}

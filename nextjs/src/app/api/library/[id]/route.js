@@ -12,6 +12,20 @@ function makeServiceClient() {
   )
 }
 
+async function removePhotoPrefix(sc, userId, libraryCardId) {
+  const folder = `${userId}/${libraryCardId}`
+  for (let page = 0; page < 100; page += 1) {
+    const { data: files, error } = await sc.storage.from(BUCKET).list(folder, { limit: 1000, offset: 0 })
+    if (error) return { error }
+    const paths = (files || []).filter(file => file.name).map(file => `${folder}/${file.name}`)
+    if (!paths.length) return { error: null }
+    const { error: removeErr } = await sc.storage.from(BUCKET).remove(paths)
+    if (removeErr) return { error: removeErr }
+    if (paths.length < 1000) return { error: null }
+  }
+  return { error: new Error('Photo prefix cleanup exceeded safety limit') }
+}
+
 // Check if any active listing for this library_card has a quantity exceeding the new owned quantity.
 // If so, reject — the seller would be offering more copies than they own.
 // FAILS CLOSED: any query error returns a 503 so the quantity update is blocked until
@@ -119,13 +133,16 @@ export async function PATCH(request, { params }) {
     }
   }
 
-  const { data: card, error } = await supabase
-    .from('library_cards')
-    .update(updates)
-    .eq('id', params.id)
-    .eq('user_id', user.id)
-    .select()
-    .single()
+  const atomicExportUpdate = updates.condition !== undefined || updates.foil !== undefined
+  const updateClient = atomicExportUpdate ? makeServiceClient() : supabase
+  const updateQuery = atomicExportUpdate
+    ? updateClient.rpc('update_library_card_and_invalidate_export', {
+        p_user_id: user.id,
+        p_library_card_id: params.id,
+        p_updates: updates,
+      })
+    : updateClient.from('library_cards').update(updates).eq('id', params.id).eq('user_id', user.id).select().single()
+  const { data: card, error } = await updateQuery
 
   if (error) {
     console.error('PATCH library_cards error:', error)
@@ -165,18 +182,6 @@ export async function DELETE(request, { params }) {
     )
   }
 
-  // Clean up card photo before deleting the card (storage object must be removed manually)
-  const { data: photo } = await sc
-    .from('card_photos')
-    .select('storage_path')
-    .eq('library_card_id', params.id)
-    .maybeSingle()
-  if (photo?.storage_path) {
-    await sc.storage.from(BUCKET).remove([photo.storage_path])
-    // DB row will cascade-delete with library_cards, but explicit cleanup is safer
-    await sc.from('card_photos').delete().eq('library_card_id', params.id)
-  }
-
   const { error } = await supabase
     .from('library_cards')
     .delete()
@@ -188,5 +193,9 @@ export async function DELETE(request, { params }) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  return NextResponse.json({ success: true })
+  // The database no longer references photo bytes. Cleanup can now fail safely.
+  const { error: photoCleanupError } = await removePhotoPrefix(sc, user.id, params.id)
+  if (photoCleanupError) console.error('DELETE library_cards orphan photo cleanup error:', photoCleanupError)
+
+  return NextResponse.json({ success: true, photo_cleanup_pending: Boolean(photoCleanupError) })
 }

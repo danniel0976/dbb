@@ -179,12 +179,11 @@ export default function CameraCapture({ libraryCardId, onUploaded, onCancel, car
       const urlData = await urlRes.json().catch(() => ({}))
       if (!urlRes.ok) throw new Error(urlData.error || 'Could not get upload URL')
 
-      // Step 2: Upload directly to Supabase Storage via PUT with upsert header
+      // Step 2: Upload the immutable candidate directly to Supabase Storage.
       const uploadRes = await fetch(urlData.upload_url, {
         method: 'PUT',
         headers: {
           'Content-Type': 'image/jpeg',
-          'x-upsert': 'true',
         },
         body: capturedBlob,
       })

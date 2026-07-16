@@ -33,13 +33,15 @@ export async function POST(request) {
   }
 
   const { library_card_id: libraryCardId, storage_path: storagePath } = body
-  if (!libraryCardId || !storagePath) {
+  if (!libraryCardId || !storagePath || typeof storagePath !== 'string') {
     return NextResponse.json({ error: 'library_card_id and storage_path are required' }, { status: 400 })
   }
 
   // Verify the storage path matches the expected pattern (prevent path injection)
-  const expectedPath = `${user.id}/${libraryCardId}.jpg`
-  if (storagePath !== expectedPath) {
+  const expectedPrefix = `${user.id}/${libraryCardId}/`
+  const candidateName = storagePath.slice(expectedPrefix.length)
+  const candidatePattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.jpg$/i
+  if (!storagePath.startsWith(expectedPrefix) || !candidatePattern.test(candidateName)) {
     return NextResponse.json({ error: 'Storage path mismatch' }, { status: 403 })
   }
 
@@ -60,14 +62,14 @@ export async function POST(request) {
   // Verify the uploaded object exists and check its size
   const { data: fileList, error: listErr } = await sc.storage
     .from(BUCKET)
-    .list(user.id, { limit: 100, search: `${libraryCardId}.jpg` })
+    .list(`${user.id}/${libraryCardId}`, { limit: 100, search: candidateName })
 
   if (listErr) {
     console.error('[POST /api/photos/confirm] list error:', listErr.message)
     return NextResponse.json({ error: 'Could not verify upload' }, { status: 500 })
   }
 
-  const uploadedFile = (fileList || []).find(f => f.name === `${libraryCardId}.jpg`)
+  const uploadedFile = (fileList || []).find(f => f.name === candidateName)
   if (!uploadedFile) {
     return NextResponse.json({ error: 'Upload not found — please try again' }, { status: 404 })
   }
@@ -82,17 +84,25 @@ export async function POST(request) {
     )
   }
 
-  // Upsert card_photos row
-  const { error: dbErr } = await sc
-    .from('card_photos')
-    .upsert(
-      { user_id: user.id, library_card_id: libraryCardId, storage_path: storagePath },
-      { onConflict: 'library_card_id' }
-    )
+  // Promote the candidate and invalidate its export snapshot in one DB transaction.
+  // The previous object remains readable until this transaction has succeeded.
+  const { data: previousPath, error: dbErr } = await sc.rpc('promote_card_photo', {
+    p_user_id: user.id,
+    p_library_card_id: libraryCardId,
+    p_storage_path: storagePath,
+  })
 
   if (dbErr) {
     console.error('[POST /api/photos/confirm] db upsert error:', dbErr.message)
-    // DB row failed but storage succeeded — still return success (photo is stored)
+    // The candidate never became canonical. Avoid leaving it orphaned.
+    await sc.storage.from(BUCKET).remove([storagePath])
+    return NextResponse.json({ error: 'Could not confirm photo upload' }, { status: 500 })
+  }
+
+  // Promotion is complete; only now is it safe to remove the former canonical bytes.
+  if (previousPath && previousPath !== storagePath) {
+    const { error: removeErr } = await sc.storage.from(BUCKET).remove([previousPath])
+    if (removeErr) console.error('[POST /api/photos/confirm] previous photo cleanup error:', removeErr.message)
   }
 
   // Return a short-lived signed URL so the UI can display the photo immediately

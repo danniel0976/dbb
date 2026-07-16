@@ -54,7 +54,9 @@ export async function POST(request) {
   // Owner can retake/replace the photo at any time (active listing or not).
   // The photo persists across listing cycles until the owner retakes it or removes the card.
 
-  const storagePath = `${user.id}/${libraryCardId}.jpg`
+  // Every upload is an immutable candidate. It only becomes canonical when
+  // /api/photos/confirm atomically promotes this path in the database.
+  const storagePath = `${user.id}/${libraryCardId}/${crypto.randomUUID()}.jpg`
 
   // Create signed upload URL — client uploads directly to Supabase Storage
   const { data: uploadData, error: uploadUrlErr } = await sc.storage
@@ -72,9 +74,6 @@ export async function POST(request) {
     return NextResponse.json({ error: 'Could not create upload URL' }, { status: 500 })
   }
 
-  // For upsert, the signed upload URL needs to be used with PUT and the x-upsert header
-  // The Supabase SDK returns a signed_url that can be used with a PUT request
-  // Build the full URL with upsert param
   const uploadUrl = uploadData.signedUrl
 
   return NextResponse.json({
