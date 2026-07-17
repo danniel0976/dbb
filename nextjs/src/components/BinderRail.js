@@ -120,7 +120,7 @@ function BinderItem({ binder, isSelected, onSelect, onRename, onDelete, onMerge 
   }
 
   return (
-    <div className={`group relative flex items-center rounded-lg flex-shrink-0 md:flex-shrink md:w-full transition-colors ${isSelected ? 'bg-dbb-accent/15' : 'hover:bg-gray-100 dark:hover:bg-white/5'}`}>
+    <div className={`group relative flex min-h-11 items-center rounded-full flex-shrink-0 md:flex-shrink md:w-full md:rounded-[12px] transition-colors ${isSelected ? 'bg-dbb-accent/15' : 'hover:bg-gray-100 dark:hover:bg-white/5'}`}>
       <button
         onClick={() => onSelect(binder.id)}
         className={`flex-1 min-w-0 text-left px-3 py-1.5 md:py-2 transition-colors ${isSelected ? 'text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'}`}
@@ -135,7 +135,7 @@ function BinderItem({ binder, isSelected, onSelect, onRename, onDelete, onMerge 
         <button
           onClick={e => { e.stopPropagation(); setMenuOpen(v => !v) }}
           title="Binder actions"
-          className={`p-1.5 rounded mr-1 transition-colors ${
+          className={`flex h-11 w-11 items-center justify-center rounded-full mr-1 transition-colors ${
             menuOpen ? 'text-white' : 'text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-300 opacity-0 group-hover:opacity-100 focus:opacity-100'
           }`}
         >
@@ -287,7 +287,7 @@ export default function BinderRail({ initialBinders = [], selectedId, onSelect, 
       {/* All cards */}
       <button
         onClick={() => onSelect(null)}
-        className={`flex items-center gap-2 px-3 py-1.5 md:py-2 rounded-lg text-sm transition-colors flex-shrink-0 md:flex-shrink md:w-full ${
+        className={`flex min-h-11 items-center gap-2 rounded-full px-4 py-2 text-sm transition-colors flex-shrink-0 md:flex-shrink md:w-full md:rounded-[12px] ${
           !selectedId ? 'bg-dbb-accent/15 text-white font-medium' : 'text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5 hover:text-white'
         }`}
       >

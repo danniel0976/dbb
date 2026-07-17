@@ -9,7 +9,7 @@ import AdvancedSearchPanel, { buildFilterChips } from '@/components/AdvancedSear
 import AddCardModal from '@/components/AddCardModal'
 import CameraCapture from '@/components/CameraCapture'
 import { useToast } from '@/components/Toast'
-import { Search, SortAsc, CheckSquare, X, Star, StarOff, Trash2, FolderOpen, Filter, Tag, PlusCircle, Package } from 'lucide-react'
+import { Search, SortAsc, CheckSquare, X, Star, StarOff, Trash2, FolderOpen, Filter, Tag, PlusCircle, Package, ChevronDown } from 'lucide-react'
 import Link from 'next/link'
 
 const SORTS = [
@@ -366,6 +366,7 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
   }, [])
 
   const [selectingAll, setSelectingAll] = useState(false)
+  const [showMoreBulkActions, setShowMoreBulkActions] = useState(false)
 
   const selectAll = useCallback(async () => {
     setSelectingAll(true)
@@ -536,11 +537,11 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
 
   // Build skeleton grid for initial load
   const skeletonGrid = (
-    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
       {Array.from({ length: 12 }).map((_, i) => (
-        <div key={i} className="bg-white dark:bg-dbb-secondary rounded-dbb overflow-hidden border border-gray-200 dark:border-dbb-tertiary/30">
-          <div className="aspect-[2/3] card-skeleton" />
-          <div className="p-2 space-y-1.5">
+        <div key={i} className="overflow-hidden rounded-[12px] bg-white shadow-sm dark:bg-dbb-secondary">
+          <div className="aspect-[5/7] card-skeleton" />
+          <div className="space-y-2 p-3">
             <div className="h-3 skeleton rounded w-3/4" />
             <div className="flex justify-between">
               <div className="h-2.5 skeleton rounded w-8" />
@@ -553,35 +554,49 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
   )
 
   return (
-    <div>
-      {/* Toolbar */}
-      <div className="flex flex-wrap items-center gap-3 mb-3">
-        <div className="relative flex-1 min-w-48">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500" />
+    <div className={multiSelect && selectedCount > 0 ? 'pb-24 sm:pb-0' : ''}>
+      {/* Library summary and disciplined action hierarchy */}
+      <div className="mb-4 flex items-end justify-between gap-4">
+        <div>
+          <p className="text-dbb-sm text-gray-500 dark:text-gray-400">
+            {total} card{total !== 1 ? 's' : ''}{binderId ? ' in this binder' : ' in your collection'}
+          </p>
+        </div>
+        <button
+          onClick={() => setShowAddCard(true)}
+          className="btn btn-primary btn-md inline-flex min-h-11 shrink-0 items-center gap-1.5"
+          title="Add individual card"
+        >
+          <PlusCircle className="h-4 w-4" />
+          Add card
+        </button>
+      </div>
+
+      <div className="dbb-glass-chrome sticky top-[56px] z-20 -mx-2 mb-4 rounded-[16px] p-2 sm:static sm:mx-0 sm:rounded-[16px] sm:p-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative min-w-[min(100%,220px)] flex-1">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-gray-500" />
           <input
             type="text"
             placeholder="Search by name..."
             value={q}
             onChange={(e) => handleSearchChange(e.target.value)}
-            className="w-full bg-white dark:bg-dbb-secondary border border-gray-200 dark:border-dbb-tertiary/50 rounded-dbb pl-9 pr-4 py-2 text-sm focus:border-dbb-accent focus:outline-none placeholder-gray-400 dark:placeholder-gray-600"
+            className="min-h-11 w-full rounded-[12px] border border-black/10 bg-white/80 pl-9 pr-4 text-[16px] text-gray-900 outline-none placeholder:text-gray-400 focus:border-dbb-accent dark:border-white/10 dark:bg-dbb-secondary/80 dark:text-white dark:placeholder:text-gray-600"
           />
-        </div>
-        <div className="flex items-center gap-2">
-          <SortAsc className="w-4 h-4 text-gray-400 dark:text-gray-500" />
+          </div>
+          <label className="flex min-h-11 items-center gap-2 rounded-[12px] border border-black/10 bg-white/70 px-3 text-sm text-gray-600 dark:border-white/10 dark:bg-dbb-secondary/70 dark:text-gray-300">
+            <SortAsc className="h-4 w-4 text-gray-400 dark:text-gray-500" />
+            <span className="sr-only">Sort library</span>
           <select
             value={sort}
             onChange={(e) => handleSortChange(e.target.value)}
-            className="bg-white dark:bg-dbb-secondary border border-gray-200 dark:border-dbb-tertiary/50 rounded-dbb px-3 py-2 text-sm text-gray-900 dark:text-white focus:border-dbb-accent focus:outline-none"
+              className="bg-transparent text-sm text-gray-900 outline-none dark:text-white"
           >
             {SORTS.map(s => (
               <option key={s.value} value={s.value}>{s.label}</option>
             ))}
           </select>
-        </div>
-
-        <div className="text-sm text-gray-600 dark:text-gray-500">
-          {total} card{total !== 1 ? 's' : ''}
-        </div>
+          </label>
 
         {/* Multi-select toggle */}
         <button
@@ -590,19 +605,20 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
             else setMultiSelect(true)
           }}
           title={multiSelect ? 'Exit multi-select' : 'Multi-select'}
-          className={`p-2 rounded-dbb border transition-colors ${
+          className={`flex min-h-11 items-center gap-2 rounded-[12px] border px-3 text-sm transition-colors ${
             multiSelect
               ? 'border-dbb-accent text-dbb-accent bg-dbb-accent/10'
               : 'border-gray-200 dark:border-dbb-tertiary/50 text-gray-500 dark:text-gray-400 hover:border-dbb-accent/50'
           }`}
         >
-          <CheckSquare className="w-4 h-4" />
+          <CheckSquare className="h-4 w-4" />
+          <span className="hidden sm:inline">Select</span>
         </button>
 
         {/* Filters button */}
         <button
           onClick={() => setShowPanel(v => !v)}
-          className={`flex items-center gap-1.5 px-3 py-2 text-sm border rounded-dbb transition-colors ${
+          className={`flex min-h-11 items-center gap-1.5 rounded-[12px] border px-3 text-sm transition-colors ${
             showPanel || filterActive
               ? 'border-dbb-accent text-dbb-accent bg-dbb-accent/10'
               : 'border-gray-200 dark:border-dbb-tertiary/50 text-gray-500 dark:text-gray-400 hover:border-dbb-accent/50'
@@ -616,16 +632,7 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
             </span>
           )}
         </button>
-
-        {/* Add card button */}
-        <button
-          onClick={() => setShowAddCard(true)}
-          className="flex items-center gap-1.5 px-3 py-2 text-sm border border-dbb-tertiary/50 text-gray-400 rounded-dbb hover:border-dbb-accent/50 hover:text-dbb-accent transition-colors"
-          title="Add individual card"
-        >
-          <PlusCircle className="w-4 h-4" />
-          Add card
-        </button>
+        </div>
       </div>
 
       {/* Active filter chips */}
@@ -664,7 +671,7 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
 
       {/* Multi-select header bar */}
       {multiSelect && (
-        <div className="flex items-center gap-3 mb-4 px-4 py-2.5 bg-gray-100 dark:bg-dbb-secondary/80 border border-gray-200 dark:border-dbb-tertiary/50 rounded-dbb">
+        <div className="mb-4 flex min-h-11 items-center gap-3 rounded-[12px] bg-black/[.04] px-4 py-2.5 dark:bg-white/[.06]">
           {/* Select-all / status label */}
           {selectingAll ? (
             <span className="text-sm text-dbb-accent animate-pulse">
@@ -752,16 +759,17 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
             {cards.map(card => (
               <div key={card.id} className="relative">
                 {multiSelect && (
                   <button
                     onClick={() => toggleSelect(card.id)}
-                    className={`absolute top-2 left-2 z-10 w-6 h-6 rounded border-2 flex items-center justify-center transition-colors ${
+                    aria-label={`${selectedIds.has(card.id) ? 'Deselect' : 'Select'} ${card.card_index?.name || 'card'}`}
+                    className={`absolute left-1 top-1 z-10 flex h-11 w-11 items-center justify-center rounded-full transition-colors ${
                       selectedIds.has(card.id)
-                        ? 'bg-dbb-accent border-dbb-accent text-white'
-                        : 'bg-white/80 dark:bg-dbb-primary/80 border-gray-300 dark:border-gray-500 hover:border-dbb-accent'
+                        ? 'bg-dbb-accent text-white'
+                        : 'bg-black/35 text-white backdrop-blur-sm hover:bg-black/50'
                     }`}
                   >
                     {selectedIds.has(card.id) && (
@@ -796,45 +804,45 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
 
       {/* Multi-select action bar (fixed bottom) */}
       {multiSelect && selectedCount > 0 && (
-        <div className="fixed bottom-0 left-0 right-0 z-40 bg-white dark:bg-dbb-primary border-t border-dbb-accent/30 shadow-2xl">
-          <div className="container mx-auto px-4 py-3 flex items-center gap-3 flex-wrap">
+        <div className="dbb-glass-chrome dbb-glass-chrome--edge-top fixed bottom-0 left-0 right-0 z-40 border-t border-black/10 dark:border-white/10">
+          <div className="container mx-auto flex items-center gap-3 px-4 py-3 pb-[calc(12px+env(safe-area-inset-bottom))]">
             <span className="text-sm font-medium text-gray-900 dark:text-white">
               {selectedCount} selected
             </span>
-            <div className="flex items-center gap-2 ml-auto flex-wrap">
+            <div className="ml-auto flex items-center gap-2">
               <button
                 onClick={() => handleBulkStar(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-200 dark:border-dbb-tertiary/50 rounded-dbb text-gray-600 dark:text-gray-300 hover:border-dbb-gold hover:text-dbb-gold transition-colors"
+                className="flex min-h-11 items-center gap-1.5 rounded-[12px] border border-black/10 bg-white/60 px-3 text-sm text-gray-700 transition-colors hover:border-dbb-gold hover:text-dbb-gold dark:border-white/10 dark:bg-white/10 dark:text-gray-200"
               >
                 <Star className="w-4 h-4" /> Star all
               </button>
               <button
-                onClick={() => handleBulkStar(false)}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-200 dark:border-dbb-tertiary/50 rounded-dbb text-gray-600 dark:text-gray-300 hover:border-gray-400 transition-colors"
-              >
-                <StarOff className="w-4 h-4" /> Unstar all
-              </button>
-              <button
                 onClick={() => setShowBinderPicker(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-200 dark:border-dbb-tertiary/50 rounded-dbb text-gray-600 dark:text-gray-300 hover:border-dbb-accent hover:text-dbb-accent transition-colors"
+                className="hidden min-h-11 items-center gap-1.5 rounded-[12px] border border-black/10 bg-white/60 px-3 text-sm text-gray-700 transition-colors hover:border-dbb-accent hover:text-dbb-accent dark:border-white/10 dark:bg-white/10 dark:text-gray-200 sm:flex"
               >
                 <FolderOpen className="w-4 h-4" /> Move to binder
               </button>
-              <button
-                onClick={() => setShowListPicker(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-200 dark:border-dbb-tertiary/50 rounded-dbb text-gray-600 dark:text-gray-300 hover:border-green-500 hover:text-green-400 transition-colors"
-              >
-                <Tag className="w-4 h-4" /> List on Bazaar
-              </button>
-              <button
-                onClick={handleBulkDelete}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-red-200 dark:border-red-800 rounded-dbb text-red-600 dark:text-red-400 hover:border-red-500 hover:text-red-300 transition-colors"
-              >
-                <Trash2 className="w-4 h-4" /> Delete all
-              </button>
+              <div className="relative">
+                <button
+                  onClick={() => setShowMoreBulkActions(v => !v)}
+                  aria-expanded={showMoreBulkActions}
+                  className="flex min-h-11 items-center gap-1.5 rounded-[12px] border border-black/10 bg-white/60 px-3 text-sm text-gray-700 transition-colors hover:border-dbb-accent dark:border-white/10 dark:bg-white/10 dark:text-gray-200"
+                >
+                  More <ChevronDown className={`h-4 w-4 transition-transform ${showMoreBulkActions ? 'rotate-180' : ''}`} />
+                </button>
+                {showMoreBulkActions && (
+                  <div className="dbb-glass-sheet absolute bottom-full right-0 mb-2 w-48 rounded-[16px] p-1 shadow-xl">
+                    <button onClick={() => handleBulkStar(false)} className="flex min-h-11 w-full items-center gap-2 rounded-[10px] px-3 text-left text-sm text-gray-700 hover:bg-black/5 dark:text-gray-200 dark:hover:bg-white/10"><StarOff className="h-4 w-4" /> Unstar all</button>
+                    <button onClick={() => setShowBinderPicker(true)} className="flex min-h-11 w-full items-center gap-2 rounded-[10px] px-3 text-left text-sm text-gray-700 hover:bg-black/5 dark:text-gray-200 dark:hover:bg-white/10 sm:hidden"><FolderOpen className="h-4 w-4" /> Move to binder</button>
+                    <button onClick={() => setShowListPicker(true)} className="flex min-h-11 w-full items-center gap-2 rounded-[10px] px-3 text-left text-sm text-gray-700 hover:bg-black/5 dark:text-gray-200 dark:hover:bg-white/10"><Tag className="h-4 w-4" /> List on Bazaar</button>
+                    <button onClick={handleBulkDelete} className="flex min-h-11 w-full items-center gap-2 rounded-[10px] px-3 text-left text-sm text-red-600 hover:bg-black/5 dark:text-red-400 dark:hover:bg-white/10"><Trash2 className="h-4 w-4" /> Delete all</button>
+                  </div>
+                )}
+              </div>
               <button
                 onClick={exitMultiSelect}
-                className="p-1.5 text-gray-500 hover:text-gray-900 dark:hover:text-white transition-colors"
+                aria-label="Exit multi-select"
+                className="flex h-11 w-11 items-center justify-center text-gray-500 transition-colors hover:text-gray-900 dark:hover:text-white"
               >
                 <X className="w-4 h-4" />
               </button>

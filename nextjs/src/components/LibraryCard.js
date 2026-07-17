@@ -13,13 +13,6 @@ const CONDITION_COLORS = {
   DMG: 'bg-red-900 text-white',
 }
 
-const RARITY_BORDER = {
-  common: 'border-rarity-common',
-  uncommon: 'border-rarity-uncommon',
-  rare: 'border-rarity-rare',
-  mythic: 'border-rarity-mythic',
-}
-
 export default function LibraryCard({ libraryRow, onStar, onDelete, onOpen, dimmed, priceData }) {
   const [imageUrl, setImageUrl] = useState(null)
   const [imgLoaded, setImgLoaded] = useState(false)
@@ -27,8 +20,6 @@ export default function LibraryCard({ libraryRow, onStar, onDelete, onOpen, dimm
 
   const ci = libraryRow.card_index
   const isFoil = libraryRow.foil !== 'normal'
-  const rarity = ci?.rarity || 'common'
-
   useEffect(() => {
     let cancelled = false
     getCardById(libraryRow.scryfall_id)
@@ -43,13 +34,24 @@ export default function LibraryCard({ libraryRow, onStar, onDelete, onOpen, dimm
 
   const myrPrice = priceData?.myr_3_0 ?? null
 
+  const handleOpenKeyDown = (event) => {
+    if ((event.key === 'Enter' || event.key === ' ') && onOpen) {
+      event.preventDefault()
+      onOpen(libraryRow)
+    }
+  }
+
   return (
-    <div
-      className={`group relative bg-white dark:bg-dbb-secondary rounded-dbb overflow-hidden border border-gray-200 dark:border-dbb-tertiary/40 card-hover cursor-pointer flex flex-col ${isFoil ? 'foil-card' : ''} ${dimmed ? 'opacity-50' : ''}`}
+    <article
+      className={['group relative flex flex-col overflow-hidden rounded-[12px] bg-white shadow-sm transition-shadow duration-200 dark:bg-dbb-secondary', isFoil && 'foil-card', dimmed && 'opacity-50'].filter(Boolean).join(' ')}
     >
       {/* Image area */}
       <div
-        className="aspect-[2/3] relative bg-gray-100 dark:bg-dbb-primary"
+        role="button"
+        tabIndex={0}
+        aria-label={`View details for ${ci?.name || 'card'}`}
+        onKeyDown={handleOpenKeyDown}
+        className="relative aspect-[5/7] cursor-pointer bg-gray-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-dbb-accent dark:bg-dbb-primary"
         onClick={() => onOpen(libraryRow)}
       >
         {!imgLoaded && !imgError && (
@@ -59,7 +61,7 @@ export default function LibraryCard({ libraryRow, onStar, onDelete, onOpen, dimm
           <img
             src={imageUrl}
             alt={ci?.name || 'Card'}
-            className={`w-full h-full object-cover transition-opacity duration-300 ${imgLoaded ? 'opacity-100' : 'opacity-0'}`}
+            className={`h-full w-full object-contain transition-opacity duration-300 ${imgLoaded ? 'opacity-100' : 'opacity-0'}`}
             onLoad={() => setImgLoaded(true)}
             onError={() => setImgError(true)}
             loading="lazy"
@@ -73,59 +75,56 @@ export default function LibraryCard({ libraryRow, onStar, onDelete, onOpen, dimm
 
         {/* Qty badge */}
         {libraryRow.quantity > 1 && (
-          <div className="absolute top-1.5 left-1.5 bg-black/80 text-white text-xs font-bold px-1.5 py-0.5 rounded">
+          <div className="absolute left-2 top-2 rounded-full bg-black/75 px-2 py-1 text-[11px] font-semibold text-white">
             ×{libraryRow.quantity}
           </div>
         )}
 
         {/* Foil badge */}
         {isFoil && (
-          <div className="absolute top-1.5 right-1.5 bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xs font-bold px-1.5 py-0.5 rounded">
+          <div className="absolute right-2 top-2 rounded-full bg-black/75 px-2 py-1 text-[11px] font-semibold text-white">
             {libraryRow.foil === 'etched' ? 'ETCHED' : 'FOIL'}
           </div>
         )}
 
-        {/* Hover overlay */}
-        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-          <span className="text-white text-xs font-semibold">View Details</span>
-        </div>
+        {/* Star remains visible without relying on hover or a detail view. */}
+        {onStar && (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onStar(libraryRow) }}
+            className={['absolute right-2 top-2 flex h-11 w-11 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white', libraryRow.starred ? 'text-yellow-300' : 'text-white/80 hover:text-yellow-200'].join(' ')}
+            title={libraryRow.starred ? 'Unstar' : 'Star'}
+            aria-label={libraryRow.starred ? `Unstar ${ci?.name || 'card'}` : `Star ${ci?.name || 'card'}`}
+            aria-pressed={libraryRow.starred}
+          >
+            <Star className="h-[19px] w-[19px]" fill={libraryRow.starred ? 'currentColor' : 'none'} />
+          </button>
+        )}
       </div>
 
       {/* Card info */}
-      <div className="p-2 flex flex-col gap-1">
-        <div className="flex items-start justify-between gap-1">
-          <h3 className="text-xs font-semibold truncate flex-1 leading-tight text-gray-900 dark:text-gray-200" title={ci?.name}>
+      <div className="flex flex-col gap-1.5 p-3">
+        <div className="min-w-0">
+          <h3 className="truncate text-dbb-sm font-semibold leading-tight text-gray-900 dark:text-gray-100" title={ci?.name}>
             {ci?.name || '—'}
           </h3>
-          <button
-            onClick={(e) => { e.stopPropagation(); onStar(libraryRow) }}
-            className={`flex-shrink-0 p-0.5 rounded transition-colors ${
-              libraryRow.starred
-                ? 'text-yellow-400 hover:text-yellow-300'
-                : 'text-gray-400 dark:text-gray-600 hover:text-yellow-400'
-            }`}
-            title={libraryRow.starred ? 'Unstar' : 'Star'}
-          >
-            <Star className="w-3.5 h-3.5" fill={libraryRow.starred ? 'currentColor' : 'none'} />
-          </button>
         </div>
 
-        <div className="flex items-center justify-between gap-1">
-          <span className="text-gray-500 text-xs uppercase">{ci?.set_code}</span>
-          <span className={`text-xs px-1 py-0.5 rounded font-medium ${CONDITION_COLORS[libraryRow.condition] || 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300'}`}>
-            {libraryRow.condition}
+        <div className="flex min-w-0 items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+          <span className="truncate uppercase tracking-wide">{ci?.set_code || '—'}</span>
+          <span aria-hidden="true" className="text-gray-300 dark:text-gray-600">·</span>
+          <span className="truncate font-medium text-gray-600 dark:text-gray-300">
+            {libraryRow.condition || '—'}
           </span>
         </div>
 
-        {/* Price display in thumbnail (MYR @ ×3.0) */}
-        {myrPrice != null && (
-          <div className="pt-0.5 border-t border-gray-200 dark:border-dbb-tertiary/30">
-            <span className="text-xs font-semibold price-green">
-              RM {myrPrice.toFixed(2)}
-            </span>
-          </div>
-        )}
+        {/* Price remains visible on the card face, including before pricing resolves. */}
+        <div className="pt-0.5">
+          <span className="text-dbb-sm font-medium price-green">
+            RM {myrPrice != null ? myrPrice.toFixed(2) : '—'}
+          </span>
+        </div>
       </div>
-    </div>
+    </article>
   )
 }
