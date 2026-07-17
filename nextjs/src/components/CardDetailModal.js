@@ -354,6 +354,7 @@ function ListingSection({ libraryRow, hasPhoto, onRequirePhoto }) {
   const [pricePreview, setPricePreview] = useState(null)
   const [submitting, setSubmitting] = useState(false)
   const [photoRequired, setPhotoRequired] = useState(false)
+  const [merchantProfileRequired, setMerchantProfileRequired] = useState(false)
 
   const ownedQty = libraryRow.quantity || 1
 
@@ -408,6 +409,10 @@ function ListingSection({ libraryRow, hasPhoto, onRequirePhoto }) {
           onRequirePhoto?.(handleList)
           return
         }
+        if (err.code === 'MERCHANT_PROFILE_REQUIRED' || err.code === 'MERCHANT_PROFILE_UNAVAILABLE') {
+          setMerchantProfileRequired(true)
+          return
+        }
         throw new Error(err.error || 'Failed')
       }
       const data = await res.json()
@@ -430,14 +435,21 @@ function ListingSection({ libraryRow, hasPhoto, onRequirePhoto }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ multiplier, duration_hours: durationHours }),
       })
-      if (!res.ok) throw new Error('Failed')
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        if (err.code === 'MERCHANT_PROFILE_REQUIRED' || err.code === 'MERCHANT_PROFILE_UNAVAILABLE') {
+          setMerchantProfileRequired(true)
+          return
+        }
+        throw new Error(err.error || 'Failed to relist card')
+      }
       const data = await res.json()
       setListing(data.listing || { ...listing, status: 'active', multiplier })
       setShowPicker(false)
       setIsRelist(false)
       toast('Card relisted on Bazaar', 'success')
-    } catch {
-      toast('Failed to relist card', 'error')
+    } catch (error) {
+      toast(error.message || 'Failed to relist card', 'error')
     } finally {
       setSubmitting(false)
     }
@@ -553,6 +565,27 @@ function ListingSection({ libraryRow, hasPhoto, onRequirePhoto }) {
           >
             Cancel
           </button>
+        </div>
+      )
+    }
+
+    if (merchantProfileRequired) {
+      return (
+        <div className="pt-2 border-t border-gray-200 dark:border-gray-700 space-y-2">
+          <p className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded px-2 py-1.5">
+            Complete your seller payment information in Profile before listing or relisting.
+          </p>
+          <div className="flex items-center gap-3">
+            <a href="/profile" className="text-xs font-medium text-dbb-accent hover:underline">
+              Complete seller profile
+            </a>
+            <button
+              onClick={() => { setMerchantProfileRequired(false); setShowPicker(false); setIsRelist(false) }}
+              className="text-xs text-gray-500 hover:text-gray-900 dark:hover:text-white transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
         </div>
       )
     }

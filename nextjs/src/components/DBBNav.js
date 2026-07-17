@@ -9,7 +9,6 @@ const NAV_LINKS = [
   { href: '/library', label: 'Library' },
   { href: '/bazaar', label: 'Bazaar' },
   { href: '/orders', label: 'Orders' },
-  { href: '/scan', label: 'Scan' },
   { href: '/import', label: 'Import' },
   { href: '/profile', label: 'Profile' },
 ]

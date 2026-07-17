@@ -38,6 +38,7 @@ const claimSales = source('nextjs/src/app/api/claim-sales/route.js')
 const claimSaleEdit = source('nextjs/src/app/api/claim-sales/[id]/edit/route.js')
 const claimSaleCancel = source('nextjs/src/app/api/claim-sales/[id]/cancel/route.js')
 const cart = source('nextjs/src/components/CartView.js')
+const cardDetail = source('nextjs/src/components/CardDetailModal.js')
 
 console.log('\n=== Phase 39 Checkout and Orders Tests ===\n')
 
@@ -104,6 +105,7 @@ test('seller payment information is private and gates active sale mutations but 
   assert(!claimSaleCancel.includes('requireCompleteMerchantProfile'), 'claim sale cancellation must remain available')
   assert(!listingEdit.split('export async function DELETE')[1].split('export async function PATCH')[0].includes('requireCompleteMerchantProfile'), 'single unlisting must remain available')
   assert(sql.includes('listings_require_merchant_profile'), 'database merchant gate missing')
+  assert(cardDetail.includes("err.code === 'MERCHANT_PROFILE_REQUIRED'") && cardDetail.includes('Complete seller profile'), 'list/relist merchant-profile guidance missing')
 })
 
 test('fulfilment is store pickup only with Cards & Hobbies default and address', () => {
