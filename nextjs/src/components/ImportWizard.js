@@ -143,12 +143,12 @@ export default function ImportWizard() {
       <div className="flex items-center gap-2 mb-8">
         {[1, 2, 3].map((s, i) => (
           <div key={s} className="flex items-center gap-2">
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-colors ${
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-dbb-sm font-bold transition-colors ${
               step === s ? 'bg-dbb-accent text-white' :
               step > s ? 'bg-green-600 text-white' :
               'bg-gray-200 dark:bg-gray-700 dark:text-gray-400'
             }`}>{step > s ? '✓' : s}</div>
-            <span className={`text-sm hidden sm:inline ${step === s ? 'text-gray-900 dark:text-white' : 'text-gray-500 dark:text-gray-500'}`}>
+            <span className={`text-dbb-sm hidden sm:inline ${step === s ? 'text-gray-900 dark:text-white' : 'text-gray-500 dark:text-gray-500'}`}>
               {['Upload', 'Destination', 'Results'][i]}
             </span>
             {i < 2 && <div className="w-8 h-px bg-gray-700 mx-1" />}
@@ -161,7 +161,7 @@ export default function ImportWizard() {
         <div className="space-y-6">
           <div>
             <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-1">Upload ManaBox Export</h2>
-            <p className="text-gray-500 dark:text-gray-500 dark:text-gray-400 text-sm">Export your collection from ManaBox as CSV, then upload it here.</p>
+            <p className="text-gray-500 dark:text-gray-500 dark:text-gray-400 text-dbb-sm">Export your collection from ManaBox as CSV, then upload it here.</p>
           </div>
 
           <div
@@ -186,9 +186,9 @@ export default function ImportWizard() {
               <div className="flex flex-col items-center gap-2">
                 <FileText className="w-10 h-10 text-green-400" />
                 <p className="text-white font-medium">{file.name}</p>
-                <p className="text-gray-500 dark:text-gray-500 dark:text-gray-400 text-sm">{preview?.total?.toLocaleString()} rows found</p>
+                <p className="text-gray-500 dark:text-gray-500 dark:text-gray-400 text-dbb-sm">{preview?.total?.toLocaleString()} rows found</p>
                 <button
-                  className="text-xs text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 underline mt-1"
+                  className="text-dbb-xs text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 underline mt-1"
                   onClick={e => { e.stopPropagation(); setFile(null); setPreview(null) }}
                 >
                   Remove file
@@ -198,20 +198,20 @@ export default function ImportWizard() {
               <div className="flex flex-col items-center gap-3">
                 <Upload className="w-10 h-10 text-gray-500" />
                 <p className="text-gray-700 dark:text-gray-700 dark:text-gray-300 font-medium">Drop your ManaBox CSV here</p>
-                <p className="text-gray-500 text-sm">or click to browse</p>
+                <p className="text-gray-500 text-dbb-sm">or click to browse</p>
               </div>
             )}
           </div>
 
           {error && (
-            <div className="flex items-center gap-2 text-red-400 text-sm bg-red-900/20 border border-red-800 rounded-lg px-4 py-3">
+            <div className="flex items-center gap-2 text-red-400 text-dbb-sm bg-red-900/20 border border-red-800 rounded-lg px-4 py-3">
               <AlertCircle className="w-4 h-4 flex-shrink-0" />
               {error}
             </div>
           )}
 
           {preview?.headerMismatch && (
-            <div className="bg-yellow-900/20 border border-yellow-700 rounded-lg px-4 py-3 text-sm text-yellow-300">
+            <div className="bg-yellow-900/20 border border-yellow-700 rounded-lg px-4 py-3 text-dbb-sm text-yellow-300">
               <strong>Header mismatch:</strong> Missing columns: {preview.missingHeaders.join(', ')}. Import may have issues.
             </div>
           )}
@@ -219,9 +219,9 @@ export default function ImportWizard() {
           {/* Preview table */}
           {preview?.rows?.length > 0 && (
             <div>
-              <p className="text-gray-400 text-xs mb-2">Preview — first {preview.rows.length} rows</p>
+              <p className="text-gray-400 text-dbb-xs mb-2">Preview — first {preview.rows.length} rows</p>
               <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
-                <table className="w-full text-xs">
+                <table className="w-full text-dbb-xs">
                   <thead>
                     <tr className="bg-gray-800 text-gray-400">
                       {['Name', 'Set code', 'Quantity', 'Condition', 'Foil'].map(h => (
@@ -260,26 +260,26 @@ export default function ImportWizard() {
         <div className="space-y-6">
           <div>
             <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-1">Name Your Binder</h2>
-            <p className="text-gray-500 dark:text-gray-500 dark:text-gray-400 text-sm">
+            <p className="text-gray-500 dark:text-gray-500 dark:text-gray-400 text-dbb-sm">
               <span className="text-white">{file?.name}</span> · {preview?.total?.toLocaleString()} rows
             </p>
           </div>
 
           <div className="p-4 rounded-xl border border-dbb-accent/40 bg-dbb-accent/5">
-            <label className="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-2">Binder name</label>
+            <label className="block text-dbb-sm font-medium text-gray-600 dark:text-gray-300 mb-2">Binder name</label>
             <input
               type="text"
               value={binderName}
               onChange={e => setBinderName(e.target.value)}
-              className="w-full bg-white dark:bg-dbb-primary border border-gray-300 dark:border-gray-600 focus:border-dbb-accent rounded-lg px-3 py-2 text-gray-900 dark:text-white placeholder-gray-500 text-sm outline-none transition-colors"
+              className="w-full bg-white dark:bg-dbb-primary border border-gray-300 dark:border-gray-600 focus:border-dbb-accent rounded-lg h-11 px-3 text-gray-900 dark:text-white placeholder-gray-500 text-dbb-sm outline-none transition-colors"
               maxLength={60}
               autoFocus
             />
-            <p className="mt-3 text-xs text-gray-500">Each import creates a new binder. You can merge binders later.</p>
+            <p className="mt-3 text-dbb-xs text-gray-500">Each import creates a new binder. You can merge binders later.</p>
           </div>
 
           {error && (
-            <div className="flex items-center gap-2 text-red-400 text-sm bg-red-900/20 border border-red-800 rounded-lg px-4 py-3">
+            <div className="flex items-center gap-2 text-red-400 text-dbb-sm bg-red-900/20 border border-red-800 rounded-lg px-4 py-3">
               <AlertCircle className="w-4 h-4 flex-shrink-0" />
               {error}
             </div>
@@ -317,7 +317,7 @@ export default function ImportWizard() {
             <CheckCircle className="w-8 h-8 text-green-400 flex-shrink-0" />
             <div>
               <h2 className="text-xl font-bold text-gray-900 dark:text-white">Import complete</h2>
-              <p className="text-gray-500 dark:text-gray-500 dark:text-gray-400 text-sm">Imported into <span className="text-white">{result.binderName}</span></p>
+              <p className="text-gray-500 dark:text-gray-500 dark:text-gray-400 text-dbb-sm">Imported into <span className="text-white">{result.binderName}</span></p>
             </div>
           </div>
 
@@ -325,15 +325,15 @@ export default function ImportWizard() {
           <div className="grid grid-cols-3 gap-3">
             <div className="bg-green-900/20 border border-green-800 rounded-xl p-4 text-center">
               <p className="text-2xl font-bold text-green-400">{result.inserted.toLocaleString()}</p>
-              <p className="text-xs text-green-300 mt-1">Cards added</p>
+              <p className="text-dbb-xs text-green-300 mt-1">Cards added</p>
             </div>
             <div className="bg-blue-900/20 border border-blue-800 rounded-xl p-4 text-center">
               <p className="text-2xl font-bold text-blue-400">{result.merged.toLocaleString()}</p>
-              <p className="text-xs text-blue-300 mt-1">Quantities merged</p>
+              <p className="text-dbb-xs text-blue-300 mt-1">Quantities merged</p>
             </div>
             <div className="bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 text-center">
               <p className="text-2xl font-bold text-gray-700 dark:text-gray-300">{result.skipped.length.toLocaleString()}</p>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Skipped</p>
+              <p className="text-dbb-xs text-gray-500 dark:text-gray-400 mt-1">Skipped</p>
             </div>
           </div>
 
@@ -342,13 +342,13 @@ export default function ImportWizard() {
             <div className="border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
               <button
                 onClick={() => setSkippedOpen(o => !o)}
-                className="w-full flex items-center justify-between px-4 py-3 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors text-sm"
+                className="w-full flex items-center justify-between px-4 py-3 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors text-dbb-sm"
               >
                 <span className="text-gray-700 dark:text-gray-300 font-medium">{result.skipped.length} skipped rows</span>
                 <div className="flex items-center gap-2">
                   <button
                     onClick={(e) => { e.stopPropagation(); downloadSkippedCSV(result.skipped) }}
-                    className="flex items-center gap-1 text-xs text-gray-400 hover:text-white border border-gray-600 hover:border-gray-400 rounded px-2 py-1 transition-colors"
+                    className="flex items-center gap-1 text-dbb-xs text-gray-400 hover:text-white border border-gray-600 hover:border-gray-400 rounded px-2 py-1 transition-colors"
                   >
                     <Download className="w-3 h-3" />
                     Download CSV
@@ -358,8 +358,8 @@ export default function ImportWizard() {
               </button>
               {skippedOpen && (
                 <div className="max-h-64 overflow-y-auto">
-                  <table className="w-full text-xs">
-                    <thead className="sticky top-0 bg-gray-100 dark:bg-gray-900">
+                  <table className="w-full text-dbb-xs">
+                    <thead className="sticky top-0 dbb-glass-chrome">
                       <tr className="text-gray-500">
                         <th className="px-3 py-2 text-left">Line</th>
                         <th className="px-3 py-2 text-left">Name</th>
@@ -386,14 +386,14 @@ export default function ImportWizard() {
           <div className="flex gap-3">
             <button
               onClick={reset}
-              className="flex items-center gap-2 px-4 py-3 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-700 dark:text-gray-600 dark:text-gray-300 font-medium rounded-xl transition-colors text-sm"
+              className="flex items-center gap-2 px-4 py-3 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-700 dark:text-gray-600 dark:text-gray-300 font-medium rounded-xl transition-colors text-dbb-sm"
             >
               <RotateCcw className="w-4 h-4" />
               Import another
             </button>
             <Link
               href="/library"
-              className="flex-1 py-3 bg-dbb-accent hover:bg-dbb-accent-hov text-white font-medium rounded-xl transition-colors text-center text-sm"
+              className="flex-1 py-3 bg-dbb-accent hover:bg-dbb-accent-hov text-white font-medium rounded-xl transition-colors text-center text-dbb-sm"
             >
               Go to Library →
             </Link>

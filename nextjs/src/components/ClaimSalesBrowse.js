@@ -108,7 +108,7 @@ function ClaimSaleTile({ cs, userId, isFollowed, onToggleFollow }) {
           <img
             src={thumbUrl}
             alt=""
-            className="w-full h-full object-cover opacity-60 group-hover:opacity-80 transition-opacity"
+            className="w-full h-full object-contain opacity-60 group-hover:opacity-80 transition-opacity"
             loading="lazy"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-white dark:from-dbb-secondary to-transparent" />
@@ -119,17 +119,17 @@ function ClaimSaleTile({ cs, userId, isFollowed, onToggleFollow }) {
       <div className="p-3 border-b border-gray-200 dark:border-dbb-tertiary/30">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
-            <h3 className="text-sm font-semibold text-gray-900 dark:text-white truncate">
+            <h3 className="text-dbb-sm font-semibold text-gray-900 dark:text-white truncate">
               {cs.title}
             </h3>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+            <p className="text-dbb-xs text-gray-500 dark:text-gray-400 mt-0.5">
               {cs.seller_name || 'Unknown seller'}
             </p>
           </div>
           <button
             onClick={handleFollow}
             disabled={followLoading || !userId}
-            className={`flex items-center gap-1 text-xs px-2 py-1 rounded-dbb border transition-colors flex-shrink-0 ${
+            className={`flex items-center gap-1 text-dbb-xs px-2 py-1 rounded-dbb border transition-colors flex-shrink-0 ${
               following
                 ? 'bg-dbb-accent/10 text-dbb-accent border-dbb-accent/30'
                 : 'text-gray-500 dark:text-gray-400 border-gray-200 dark:border-dbb-tertiary/40 hover:border-dbb-accent/50 hover:text-dbb-accent'
@@ -144,7 +144,7 @@ function ClaimSaleTile({ cs, userId, isFollowed, onToggleFollow }) {
 
       {/* Body */}
       <div className="p-3 space-y-2">
-        <div className="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
+        <div className="flex items-center gap-3 text-dbb-xs text-gray-500 dark:text-gray-400">
           <span className="flex items-center gap-1">
             <Grid className="w-3.5 h-3.5" />
             {cs.card_count || 0} card{(cs.card_count || 0) !== 1 ? 's' : ''}
@@ -156,7 +156,7 @@ function ClaimSaleTile({ cs, userId, isFollowed, onToggleFollow }) {
         </div>
 
         {cs.description && (
-          <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-2">
+          <p className="text-dbb-xs text-gray-500 dark:text-gray-400 line-clamp-2">
             {cs.description}
           </p>
         )}
@@ -266,7 +266,7 @@ export default function ClaimSalesBrowse({ userId }) {
       <div className="mb-4 flex items-center gap-2">
         <button
           onClick={() => setSection('hot')}
-          className={`flex items-center gap-1.5 px-4 py-2 rounded-dbb text-sm font-medium transition-colors ${
+          className={`flex items-center gap-1.5 px-4 py-2 rounded-dbb text-dbb-sm font-medium transition-colors ${
             section === 'hot'
               ? 'bg-dbb-accent text-white'
               : 'bg-white dark:bg-dbb-secondary text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-dbb-tertiary/40 hover:border-dbb-accent/50'
@@ -277,7 +277,7 @@ export default function ClaimSalesBrowse({ userId }) {
         </button>
         <button
           onClick={() => setSection('ending_soon')}
-          className={`flex items-center gap-1.5 px-4 py-2 rounded-dbb text-sm font-medium transition-colors ${
+          className={`flex items-center gap-1.5 px-4 py-2 rounded-dbb text-dbb-sm font-medium transition-colors ${
             section === 'ending_soon'
               ? 'bg-dbb-accent text-white'
               : 'bg-white dark:bg-dbb-secondary text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-dbb-tertiary/40 hover:border-dbb-accent/50'
@@ -287,7 +287,7 @@ export default function ClaimSalesBrowse({ userId }) {
           Ending Soon
         </button>
         {!loading && total > 0 && (
-          <span className="text-sm text-gray-500 dark:text-gray-400 ml-2">
+          <span className="text-dbb-sm text-gray-500 dark:text-gray-400 ml-2">
             {total} claim sale{total !== 1 ? 's' : ''}
           </span>
         )}

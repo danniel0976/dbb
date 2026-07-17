@@ -528,7 +528,7 @@ export default function ClaimSaleImageGenerator({ onCancel }) {
                       className="w-full flex items-center gap-3 px-3 py-2 hover:bg-gray-50 dark:hover:bg-dbb-secondary/50 transition-colors text-left"
                     >
                       {ed.image_uris?.small ? (
-                        <img src={ed.image_uris.small} alt="" className="w-10 h-14 rounded object-cover flex-shrink-0" />
+                        <img src={ed.image_uris.small} alt="" className="w-10 h-14 rounded object-contain flex-shrink-0" />
                       ) : (
                         <div className="w-10 h-14 bg-gray-100 dark:bg-dbb-secondary rounded flex items-center justify-center flex-shrink-0">
                           <span className="text-gray-400 text-xs">?</span>

@@ -152,8 +152,8 @@ export default function CartView() {
         <div key={group.seller_id || '__unknown__'} className="bg-white dark:bg-dbb-secondary rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
           {/* Seller header */}
           <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-dbb-primary/60 flex items-center justify-between">
-            <span className="text-sm font-semibold text-gray-900 dark:text-white">{group.seller_name}</span>
-            <span className="text-xs text-gray-600 dark:text-gray-500">
+            <span className="text-dbb-sm font-semibold text-gray-900 dark:text-white">{group.seller_name}</span>
+            <span className="text-dbb-xs text-gray-600 dark:text-gray-500">
               {group.items.length} item{group.items.length !== 1 ? 's' : ''}
             </span>
           </div>
@@ -172,7 +172,7 @@ export default function CartView() {
                   {/* Card info */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                      <span className="text-dbb-sm font-medium text-gray-900 dark:text-white truncate">
                         {ci?.name || 'Unknown card'}
                       </span>
                       {!item.is_available && (
@@ -186,7 +186,7 @@ export default function CartView() {
                         </span>
                       )}
                     </div>
-                    <div className="text-xs text-gray-600 dark:text-gray-500 mt-0.5 space-x-2">
+                    <div className="text-dbb-xs text-gray-600 dark:text-gray-500 mt-0.5 space-x-2">
                       {ci?.set_name && <span>{ci.set_name}</span>}
                       {ci?.collector_number && <span>#{ci.collector_number}</span>}
                       {item.library_card?.condition && (
@@ -201,13 +201,13 @@ export default function CartView() {
                   <div className="text-right flex-shrink-0">
                     {item.is_available && item.myr_price != null ? (
                       <>
-                        <div className="text-sm font-semibold text-dbb-accent">
+                        <div className="text-dbb-sm font-semibold text-dbb-accent">
                           RM {item.myr_price.toFixed(2)}
                         </div>
                         <div className="text-[10px] text-gray-600">×{item.multiplier}</div>
                       </>
                     ) : (
-                      <div className="text-xs text-gray-600">—</div>
+                      <div className="text-dbb-xs text-gray-600">—</div>
                     )}
                   </div>
 
@@ -230,8 +230,8 @@ export default function CartView() {
 
           {/* Seller subtotal */}
           <div className="px-4 py-2.5 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-dbb-primary/40 flex justify-between items-center">
-            <span className="text-xs text-gray-600 dark:text-gray-500">Subtotal ({group.seller_name})</span>
-            <span className="text-sm font-medium text-gray-900 dark:text-white">
+            <span className="text-dbb-xs text-gray-600 dark:text-gray-500">Subtotal ({group.seller_name})</span>
+            <span className="text-dbb-sm font-medium text-gray-900 dark:text-white">
               RM {group.subtotal.toFixed(2)}
             </span>
           </div>
@@ -241,20 +241,20 @@ export default function CartView() {
       <div className="bg-white dark:bg-dbb-secondary rounded-xl border border-gray-200 dark:border-gray-700 p-5">
         <div className="flex items-center gap-2 mb-3">
           <MapPin className="w-4 h-4 text-dbb-accent" />
-          <h2 className="text-sm font-semibold text-gray-900 dark:text-white">TCG store pickup</h2>
+          <h2 className="text-dbb-sm font-semibold text-gray-900 dark:text-white">TCG store pickup</h2>
         </div>
         <select
           value={pickupLocationId}
           onChange={event => setPickupLocationId(event.target.value)}
-          className="w-full bg-gray-50 dark:bg-dbb-primary border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-dbb-accent"
+          className="w-full bg-gray-50 dark:bg-dbb-primary border border-gray-200 dark:border-gray-700 rounded-lg h-11 px-3 text-dbb-sm focus:outline-none focus:border-dbb-accent"
         >
           {locations.map(location => <option key={location.id} value={location.id}>{location.name}</option>)}
         </select>
         {selectedLocation && (
           <div className="mt-3 rounded-lg bg-gray-50 dark:bg-dbb-primary/60 border border-gray-200 dark:border-gray-700 p-3">
-            <p className="text-sm font-medium">{selectedLocation.name}</p>
-            <p className="text-xs text-gray-500 mt-1">{selectedLocation.address}</p>
-            {selectedLocation.operating_notes && <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">{selectedLocation.operating_notes}</p>}
+            <p className="text-dbb-sm font-medium">{selectedLocation.name}</p>
+            <p className="text-dbb-xs text-gray-500 mt-1">{selectedLocation.address}</p>
+            {selectedLocation.operating_notes && <p className="text-dbb-xs text-amber-600 dark:text-amber-400 mt-2">{selectedLocation.operating_notes}</p>}
           </div>
         )}
       </div>
@@ -262,18 +262,18 @@ export default function CartView() {
       {/* Grand total */}
       <div className="bg-white dark:bg-dbb-primary border border-dbb-accent/30 rounded-xl px-5 py-4 flex items-center justify-between">
         <div>
-          <p className="text-sm text-gray-600 dark:text-gray-400">Grand Total</p>
+          <p className="text-dbb-sm text-gray-600 dark:text-gray-400">Grand Total</p>
           {items.some(i => !i.is_available) && (
-            <p className="text-xs text-gray-500 dark:text-gray-600 mt-0.5">Unavailable items not included</p>
+            <p className="text-dbb-xs text-gray-500 dark:text-gray-600 mt-0.5">Unavailable items not included</p>
           )}
         </div>
         <div className="text-right">
           <p className="text-2xl font-bold text-dbb-accent">RM {grandTotal.toFixed(2)}</p>
-          <p className="text-xs text-gray-600 dark:text-gray-500">{availableItems.length} item{availableItems.length !== 1 ? 's' : ''}</p>
+          <p className="text-dbb-xs text-gray-600 dark:text-gray-500">{availableItems.length} item{availableItems.length !== 1 ? 's' : ''}</p>
         </div>
       </div>
 
-      <div className="flex items-center justify-between text-sm">
+      <div className="flex items-center justify-between text-dbb-sm">
         <Link href="/bazaar" className="btn btn-outline btn-sm inline-flex items-center gap-1">
           <ExternalLink className="w-3.5 h-3.5" /> Continue shopping
         </Link>
@@ -297,7 +297,7 @@ function CheckoutPaymentResult({ result }) {
         <CheckCircle2 className="w-6 h-6 text-green-500 flex-shrink-0" />
         <div>
           <h2 className="font-semibold text-gray-900 dark:text-white">Orders created</h2>
-          <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">Bank in separately to each seller. These private payment details are shown only in this checkout result; save your transfer receipts.</p>
+          <p className="text-dbb-sm text-gray-600 dark:text-gray-300 mt-1">Bank in separately to each seller. These private payment details are shown only in this checkout result; save your transfer receipts.</p>
         </div>
       </div>
 
@@ -306,29 +306,29 @@ function CheckoutPaymentResult({ result }) {
           <div className="p-5 border-b border-gray-200 dark:border-gray-700">
             <div className="flex justify-between gap-4">
               <div>
-                <p className="text-xs text-gray-500">Pay seller</p>
+                <p className="text-dbb-xs text-gray-500">Pay seller</p>
                 <h3 className="font-semibold">{order.payment?.seller_name || 'Seller'}</h3>
               </div>
               <div className="text-right">
-                <p className="text-xs text-gray-500">Order total</p>
+                <p className="text-dbb-xs text-gray-500">Order total</p>
                 <p className="text-xl font-bold text-dbb-accent">RM {Number(order.total_myr).toFixed(2)}</p>
               </div>
             </div>
-            <div className="grid sm:grid-cols-2 gap-x-5 gap-y-2 mt-4 text-sm">
+            <div className="grid sm:grid-cols-2 gap-x-5 gap-y-2 mt-4 text-dbb-sm">
               <PaymentLine label="Bank / provider" value={order.payment?.bank_name} />
               <PaymentLine label="Account name" value={order.payment?.account_name} />
               <PaymentLine label="Account number" value={order.payment?.account_number} />
               <PaymentLine label="DuitNow ID" value={order.payment?.duitnow_id} />
             </div>
-            {order.payment?.payment_instructions && <p className="text-sm mt-3 p-3 bg-gray-50 dark:bg-dbb-primary rounded-lg">{order.payment.payment_instructions}</p>}
+            {order.payment?.payment_instructions && <p className="text-dbb-sm mt-3 p-3 bg-gray-50 dark:bg-dbb-primary rounded-lg">{order.payment.payment_instructions}</p>}
             <div className="flex flex-wrap gap-4 mt-4">
               {order.payment?.bank_qr_url && <QrImage label="Bank / DuitNow QR" src={order.payment.bank_qr_url} />}
               {order.payment?.tng_qr_url && <QrImage label="Touch 'n Go QR" src={order.payment.tng_qr_url} />}
             </div>
           </div>
           <div className="p-4 bg-gray-50 dark:bg-dbb-primary/50">
-            <p className="text-xs font-medium">Pickup: {order.pickup_locations?.name}</p>
-            <p className="text-xs text-gray-500 mt-1">{order.pickup_locations?.address}</p>
+            <p className="text-dbb-xs font-medium">Pickup: {order.pickup_locations?.name}</p>
+            <p className="text-dbb-xs text-gray-500 mt-1">{order.pickup_locations?.address}</p>
             <p className="text-[11px] text-gray-500 mt-2">Order {order.id}</p>
           </div>
         </div>
@@ -349,7 +349,7 @@ function PaymentLine({ label, value }) {
 function QrImage({ label, src }) {
   return (
     <div>
-      <p className="text-xs text-gray-500 mb-1">{label}</p>
+      <p className="text-dbb-xs text-gray-500 mb-1">{label}</p>
       <img src={src} alt={label} className="w-40 h-40 object-contain bg-white border rounded-lg" />
     </div>
   )

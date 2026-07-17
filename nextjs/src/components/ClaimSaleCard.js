@@ -98,7 +98,7 @@ export default function ClaimSaleCard({ listing, onClick }) {
           <img
             src={imageUrl}
             alt={ci?.name || 'Card'}
-            className={`w-full h-full object-cover transition-opacity duration-300 ${imgLoaded ? 'opacity-100' : 'opacity-0'}`}
+            className={`w-full h-full object-contain transition-opacity duration-300 ${imgLoaded ? 'opacity-100' : 'opacity-0'}`}
             onLoad={() => setImgLoaded(true)}
             loading="lazy"
           />
@@ -119,7 +119,7 @@ export default function ClaimSaleCard({ listing, onClick }) {
 
       {/* Info */}
       <div className="p-2.5 space-y-1.5">
-        <p className="text-sm font-medium text-gray-900 dark:text-white leading-tight line-clamp-2">
+        <p className="text-dbb-sm font-medium text-gray-900 dark:text-white leading-tight line-clamp-2">
           {ci?.name || '—'}
         </p>
 
@@ -142,14 +142,14 @@ export default function ClaimSaleCard({ listing, onClick }) {
           {priceLoading ? (
             <div className="h-4 skeleton rounded w-16" />
           ) : myrPrice != null ? (
-            <p className="text-sm font-semibold price-green">
+            <p className="text-dbb-sm font-semibold price-green">
               RM {myrPrice.toFixed(2)}
               <span className="ml-1.5 text-[10px] text-gray-500 font-normal">
                 ×{listing.multiplier}
               </span>
             </p>
           ) : (
-            <p className="text-xs text-gray-500 dark:text-gray-600">Price unavailable</p>
+            <p className="text-dbb-xs text-gray-500 dark:text-gray-600">Price unavailable</p>
           )}
         </div>
       </div>

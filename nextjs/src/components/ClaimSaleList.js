@@ -32,7 +32,7 @@ export default function ClaimSaleList({ claimSales: initial, hasMore, total }) {
           <p className="text-gray-500 dark:text-gray-400">
             No active claim sales right now.
           </p>
-          <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">
+          <p className="text-dbb-sm text-gray-400 dark:text-gray-500 mt-1">
             Claim sales are multi-card bundles listed by sellers.
           </p>
           <Link href="/bazaar" className="btn btn-primary btn-md inline-flex mt-4">
@@ -46,7 +46,7 @@ export default function ClaimSaleList({ claimSales: initial, hasMore, total }) {
   return (
     <div className="container mx-auto px-4 py-6 max-w-7xl">
       <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-1">Claim Sales</h1>
-      <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+      <p className="text-dbb-sm text-gray-500 dark:text-gray-400 mb-6">
         Multi-card bundles from sellers. Claim the whole sale before it expires.
       </p>
 
@@ -64,19 +64,19 @@ export default function ClaimSaleList({ claimSales: initial, hasMore, total }) {
                 <h3 className="font-semibold text-gray-900 dark:text-white group-hover:text-dbb-accent transition-colors line-clamp-2">
                   {cs.title}
                 </h3>
-                <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400 shrink-0">
+                <div className="flex items-center gap-1 text-dbb-xs text-gray-500 dark:text-gray-400 shrink-0">
                   <Star size={12} />
                   {cs.follower_count || 0}
                 </div>
               </div>
 
               {cs.description && (
-                <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-2 mb-2">
+                <p className="text-dbb-xs text-gray-500 dark:text-gray-400 line-clamp-2 mb-2">
                   {cs.description}
                 </p>
               )}
 
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500 dark:text-gray-400">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-dbb-xs text-gray-500 dark:text-gray-400">
                 {cs.seller_name && (
                   <span>by {cs.seller_name}</span>
                 )}
@@ -99,7 +99,7 @@ export default function ClaimSaleList({ claimSales: initial, hasMore, total }) {
       </div>
 
       {hasMore && (
-        <p className="text-center text-sm text-gray-500 dark:text-gray-400 mt-6">
+        <p className="text-center text-dbb-sm text-gray-500 dark:text-gray-400 mt-6">
           Showing {claimSales.length} of {total} claim sales
         </p>
       )}

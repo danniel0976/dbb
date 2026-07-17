@@ -138,10 +138,10 @@ export default function MerchantProfileForm() {
     <form onSubmit={save} className="bg-white dark:bg-dbb-secondary border border-gray-200 dark:border-gray-700 rounded-xl p-6 mb-6">
       <div className="flex items-start justify-between gap-4 mb-5">
         <div>
-          <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Seller payment information</h3>
-          <p className="text-xs text-gray-500 mt-1">Required before listing. Buyers see these details only in their checkout result.</p>
+          <h3 className="text-dbb-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Seller payment information</h3>
+          <p className="text-dbb-xs text-gray-500 mt-1">Required before listing. Buyers see these details only in their checkout result.</p>
         </div>
-        <span className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full ${complete ? 'bg-green-500/10 text-green-600 dark:text-green-400' : 'bg-amber-500/10 text-amber-600 dark:text-amber-400'}`}>
+        <span className={`inline-flex items-center gap-1 text-dbb-xs px-2 py-1 rounded-full ${complete ? 'bg-green-500/10 text-green-600 dark:text-green-400' : 'bg-amber-500/10 text-amber-600 dark:text-amber-400'}`}>
           {complete && <CheckCircle2 className="w-3.5 h-3.5" />}
           {complete ? 'Complete' : 'Required'}
         </span>
@@ -155,14 +155,14 @@ export default function MerchantProfileForm() {
       </div>
 
       <label className="block mt-4">
-        <span className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">Payment instructions</span>
+        <span className="block text-dbb-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">Payment instructions</span>
         <textarea
           value={form.payment_instructions}
           onChange={event => update('payment_instructions', event.target.value)}
           maxLength={500}
           rows={3}
           placeholder="Optional reference or transfer note instructions"
-          className="w-full bg-gray-50 dark:bg-dbb-primary border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-dbb-accent"
+          className="w-full bg-gray-50 dark:bg-dbb-primary border border-gray-200 dark:border-gray-700 rounded-lg h-11 px-3 text-dbb-sm focus:outline-none focus:border-dbb-accent"
         />
       </label>
 
@@ -172,7 +172,7 @@ export default function MerchantProfileForm() {
       </div>
 
       {message && (
-        <p className={`text-xs mt-4 ${message.type === 'error' ? 'text-red-500' : 'text-green-600 dark:text-green-400'}`}>{message.text}</p>
+        <p className={`text-dbb-xs mt-4 ${message.type === 'error' ? 'text-red-500' : 'text-green-600 dark:text-green-400'}`}>{message.text}</p>
       )}
 
       <button type="submit" disabled={saving || Boolean(uploading)} className="btn btn-primary btn-md mt-5 inline-flex items-center gap-2">
@@ -186,14 +186,14 @@ export default function MerchantProfileForm() {
 function Field({ label, value, onChange, required = false, placeholder = '' }) {
   return (
     <label>
-      <span className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">{label}{required ? ' *' : ''}</span>
+      <span className="block text-dbb-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">{label}{required ? ' *' : ''}</span>
       <input
         value={value}
         onChange={event => onChange(event.target.value)}
         required={required}
         maxLength={120}
         placeholder={placeholder}
-        className="w-full bg-gray-50 dark:bg-dbb-primary border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-dbb-accent"
+        className="w-full bg-gray-50 dark:bg-dbb-primary border border-gray-200 dark:border-gray-700 rounded-lg h-11 px-3 text-dbb-sm focus:outline-none focus:border-dbb-accent"
       />
     </label>
   )
@@ -202,7 +202,7 @@ function Field({ label, value, onChange, required = false, placeholder = '' }) {
 function QrField({ label, kind, url, busy, onUpload, onRemove }) {
   return (
     <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-3">
-      <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">{label} (optional)</p>
+      <p className="text-dbb-xs font-medium text-gray-600 dark:text-gray-400 mb-2">{label} (optional)</p>
       {url && <img src={url} alt={`${label} preview`} className="w-28 h-28 object-contain bg-white rounded border mb-2" />}
       <div className="flex items-center gap-2">
         <label className="btn btn-outline btn-sm inline-flex items-center gap-1 cursor-pointer">

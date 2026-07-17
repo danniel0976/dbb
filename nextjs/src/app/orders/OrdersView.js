@@ -96,7 +96,7 @@ export default function OrdersView() {
 
   return (
     <div className="space-y-5">
-      {error && <div className="p-3 rounded-lg border border-red-500/30 bg-red-500/10 text-sm text-red-600 dark:text-red-400">{error}</div>}
+      {error && <div className="p-3 rounded-lg border border-red-500/30 bg-red-500/10 text-dbb-sm text-red-600 dark:text-red-400">{error}</div>}
       {orders.map(order => {
         const sellerNext = order.role === 'seller' ? SELLER_NEXT[order.status] : null
         const buyerCanComplete = order.role === 'buyer' && order.status === 'dropped_off'
@@ -106,20 +106,20 @@ export default function OrdersView() {
           <article key={order.id} className="bg-white dark:bg-dbb-secondary border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
             <div className="p-5 border-b border-gray-200 dark:border-gray-700 flex flex-wrap justify-between gap-3">
               <div>
-                <p className="text-xs text-gray-500">{order.role === 'buyer' ? `Buying from ${order.seller_name}` : `Selling to ${order.buyer_name}`}</p>
+                <p className="text-dbb-xs text-gray-500">{order.role === 'buyer' ? `Buying from ${order.seller_name}` : `Selling to ${order.buyer_name}`}</p>
                 <h2 className="font-semibold mt-1">{STATUS_LABELS[order.status] || order.status}</h2>
                 <p className="text-[11px] text-gray-500 mt-1">Order {order.id}</p>
               </div>
               <div className="text-right">
                 <p className="text-xl font-bold text-dbb-accent">RM {Number(order.total_myr).toFixed(2)}</p>
-                <p className="text-xs text-gray-500">{new Date(order.created_at).toLocaleString('en-MY')}</p>
+                <p className="text-dbb-xs text-gray-500">{new Date(order.created_at).toLocaleString('en-MY')}</p>
               </div>
             </div>
 
             <div className="p-5">
               <div className="space-y-2">
                 {(order.order_items || []).map(item => (
-                  <div key={item.id} className="flex justify-between gap-4 text-sm">
+                  <div key={item.id} className="flex justify-between gap-4 text-dbb-sm">
                     <span>{item.card_name} <span className="text-gray-500">{item.set_code ? `(${item.set_code})` : ''} {item.collector_number ? `#${item.collector_number}` : ''}</span></span>
                     <span className="font-medium">RM {Number(item.line_myr).toFixed(2)}</span>
                   </div>
@@ -129,24 +129,24 @@ export default function OrdersView() {
               <div className="mt-4 p-3 rounded-lg bg-gray-50 dark:bg-dbb-primary/60 flex gap-2">
                 <MapPin className="w-4 h-4 text-dbb-accent flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-sm font-medium">{order.pickup_locations?.name}</p>
-                  <p className="text-xs text-gray-500 mt-1">{order.pickup_locations?.address}</p>
+                  <p className="text-dbb-sm font-medium">{order.pickup_locations?.name}</p>
+                  <p className="text-dbb-xs text-gray-500 mt-1">{order.pickup_locations?.address}</p>
                 </div>
               </div>
 
               <OrderTimeline order={order} />
 
               {openCancelRequest && (
-                <div className="mt-4 p-3 rounded-lg border border-amber-500/30 bg-amber-500/10 text-sm">
+                <div className="mt-4 p-3 rounded-lg border border-amber-500/30 bg-amber-500/10 text-dbb-sm">
                   <p className="font-medium text-amber-700 dark:text-amber-300">Buyer requested cancellation</p>
-                  <p className="text-xs mt-1">{openCancelRequest.reason}</p>
+                  <p className="text-dbb-xs mt-1">{openCancelRequest.reason}</p>
                   <p className="text-[11px] text-gray-500 mt-1">Requested {new Date(openCancelRequest.requested_at).toLocaleString('en-MY')}</p>
                 </div>
               )}
               {order.status === 'cancelled' && (
-                <div className="mt-4 p-3 rounded-lg border border-red-500/30 bg-red-500/10 text-sm">
+                <div className="mt-4 p-3 rounded-lg border border-red-500/30 bg-red-500/10 text-dbb-sm">
                   <p className="font-medium">Cancelled by seller</p>
-                  <p className="text-xs mt-1">{order.cancellation_reason}</p>
+                  <p className="text-dbb-xs mt-1">{order.cancellation_reason}</p>
                   <p className="text-[11px] text-gray-500 mt-1">{order.cancelled_at && new Date(order.cancelled_at).toLocaleString('en-MY')}</p>
                 </div>
               )}
@@ -191,7 +191,7 @@ function OrderTimeline({ order }) {
         const timestamp = order[field]
         return (
           <div key={field} className={`rounded-lg border p-2 ${timestamp ? 'border-green-500/30 bg-green-500/5' : 'border-gray-200 dark:border-gray-700'}`}>
-            <div className="flex items-center gap-1 text-xs font-medium">
+            <div className="flex items-center gap-1 text-dbb-xs font-medium">
               {timestamp ? <CheckCircle2 className="w-3.5 h-3.5 text-green-500" /> : <Clock3 className="w-3.5 h-3.5 text-gray-400" />}
               {label}
             </div>

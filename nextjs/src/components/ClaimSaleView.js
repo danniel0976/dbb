@@ -173,7 +173,7 @@ export default function ClaimSaleView({
       {/* Back link */}
       <Link
         href="/bazaar"
-        className="inline-flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400 hover:text-dbb-accent transition-colors mb-4"
+        className="inline-flex items-center gap-1.5 text-dbb-sm text-gray-500 dark:text-gray-400 hover:text-dbb-accent transition-colors mb-4"
       >
         <ArrowLeft size={16} />
         Back to Bazaar
@@ -197,7 +197,7 @@ export default function ClaimSaleView({
               {claimSale.title}
             </h1>
             {claimSale.description && !editingDescription && (
-              <p className="text-gray-600 dark:text-gray-400 text-sm mt-2 whitespace-pre-wrap">
+              <p className="text-gray-600 dark:text-gray-400 text-dbb-sm mt-2 whitespace-pre-wrap">
                 {claimSale.description}
               </p>
             )}
@@ -207,7 +207,7 @@ export default function ClaimSaleView({
                 <textarea
                   value={descriptionValue}
                   onChange={(e) => setDescriptionValue(e.target.value)}
-                  className="w-full rounded-dbb border border-gray-300 dark:border-dbb-tertiary bg-white dark:bg-dbb-primary px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-dbb-accent"
+                  className="w-full rounded-dbb border border-gray-300 dark:border-dbb-tertiary bg-white dark:bg-dbb-primary px-3 py-2 text-dbb-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-dbb-accent"
                   rows={3}
                   placeholder="Add a description..."
                 />
@@ -234,7 +234,7 @@ export default function ClaimSaleView({
             {isOwner && !isExpired && !editingDescription && (
               <button
                 onClick={() => setEditingDescription(true)}
-                className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-dbb-accent transition-colors mt-2"
+                className="inline-flex items-center gap-1 text-dbb-xs text-gray-500 hover:text-dbb-accent transition-colors mt-2"
               >
                 <Edit3 size={12} />
                 Edit description
@@ -242,7 +242,7 @@ export default function ClaimSaleView({
             )}
 
             {/* Meta info row */}
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-3 text-xs text-gray-500 dark:text-gray-400">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-3 text-dbb-xs text-gray-500 dark:text-gray-400">
               {sellerName && (
                 <span>
                   by <span className="font-medium text-gray-700 dark:text-gray-300">{sellerName}</span>
@@ -280,14 +280,14 @@ export default function ClaimSaleView({
                 />
                 {isFollowing ? 'Following' : 'Follow'}
                 {followerCount > 0 && (
-                  <span className="ml-1 text-xs opacity-70">({followerCount})</span>
+                  <span className="ml-1 text-dbb-xs opacity-70">({followerCount})</span>
                 )}
               </button>
             )}
 
             {/* Follower count (owner view) */}
             {isOwner && followerCount > 0 && (
-              <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+              <div className="flex items-center gap-1.5 text-dbb-xs text-gray-500 dark:text-gray-400">
                 <Star size={12} />
                 {followerCount} {followerCount === 1 ? 'follower' : 'followers'}
               </div>
