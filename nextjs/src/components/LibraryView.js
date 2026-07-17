@@ -1,16 +1,19 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useReducer, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import LibraryCard from '@/components/LibraryCard'
 import CardDetailModal from '@/components/CardDetailModal'
 import BinderPicker from '@/components/BinderPicker'
 import AdvancedSearchPanel, { buildFilterChips } from '@/components/AdvancedSearchPanel'
+import FilterSheet from '@/components/FilterSheet'
 import AddCardModal from '@/components/AddCardModal'
 import CameraCapture from '@/components/CameraCapture'
 import { useToast } from '@/components/Toast'
 import { Search, SortAsc, CheckSquare, X, Star, StarOff, Trash2, FolderOpen, Filter, Tag, PlusCircle, Package } from 'lucide-react'
 import Link from 'next/link'
+import { parseLibraryQueryState, serializeLibraryQueryState } from '@/lib/librarySearchState'
+import { filterSheetReducer, initFilterSheetState } from '@/lib/filterSheetState'
 
 const SORTS = [
   { value: 'newest', label: 'Newest first' },
@@ -21,44 +24,6 @@ const SORTS = [
   { value: 'price_high', label: 'Price: High → Low' },
   { value: 'price_low', label: 'Price: Low → High' },
 ]
-
-function parseInitialFilters(searchParams) {
-  const colorsStr = searchParams.get('colors') || ''
-  const colors = colorsStr ? colorsStr.split('') : []
-  const rarityStr = searchParams.get('rarity') || ''
-  const rarity = rarityStr ? rarityStr.split(',') : []
-  return {
-    colors: colors.length ? colors : [],
-    color_mode: searchParams.get('color_mode') || 'or',
-    type_line: searchParams.get('type_line') || '',
-    cmc_min: searchParams.get('cmc_min') || '',
-    cmc_max: searchParams.get('cmc_max') || '',
-    rarity: rarity.length ? rarity : [],
-    foil: searchParams.get('foil') || 'all',
-    starred: searchParams.get('starred') === '1',
-    set_code: searchParams.get('set') || '',
-    binder_id: searchParams.get('binder_id') || '',
-  }
-}
-
-function serializeFilters(filters, q, sort) {
-  const params = new URLSearchParams()
-  if (q) params.set('q', q)
-  if (sort && sort !== 'newest') params.set('sort', sort)
-  if (filters.colors && filters.colors.length) params.set('colors', filters.colors.join(''))
-  if (filters.colors && filters.colors.length && filters.color_mode && filters.color_mode !== 'or') {
-    params.set('color_mode', filters.color_mode)
-  }
-  if (filters.type_line) params.set('type_line', filters.type_line)
-  if (filters.cmc_min != null && filters.cmc_min !== '') params.set('cmc_min', filters.cmc_min)
-  if (filters.cmc_max != null && filters.cmc_max !== '') params.set('cmc_max', filters.cmc_max)
-  if (filters.rarity && filters.rarity.length) params.set('rarity', filters.rarity.join(','))
-  if (filters.foil && filters.foil !== 'all') params.set('foil', filters.foil)
-  if (filters.starred) params.set('starred', '1')
-  if (filters.set_code) params.set('set', filters.set_code)
-  if (filters.binder_id) params.set('binder_id', filters.binder_id)
-  return params
-}
 
 function hasActiveFilters(filters) {
   return (
@@ -98,10 +63,11 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
   const [page, setPage] = useState(1)
   const [loadingMore, setLoadingMore] = useState(false)
   const [initialLoading, setInitialLoading] = useState(!initialData?.cards?.length)
-  const [sort, setSort] = useState('newest')
-  const [q, setQ] = useState('')
+  const initialQueryState = parseLibraryQueryState(searchParams)
+  const [sort, setSort] = useState(initialQueryState.sort)
+  const [q, setQ] = useState(initialQueryState.q)
   const [selectedCard, setSelectedCard] = useState(null)
-  const [advFilters, setAdvFilters] = useState(() => parseInitialFilters(searchParams))
+  const [advFilters, setAdvFilters] = useState(() => initialQueryState.filters)
   const [showPanel, setShowPanel] = useState(false)
   const [priceMap, setPriceMap] = useState({})
 
@@ -159,7 +125,7 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
   }, [binderId])
 
   const pushUrl = useCallback((overrides = {}) => {
-    const urlParams = serializeFilters(
+    const urlParams = serializeLibraryQueryState(
       overrides.filters ?? currentFilters.current,
       overrides.q ?? currentQ.current,
       overrides.sort ?? currentSort.current
@@ -168,6 +134,33 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
     if (binderParam) urlParams.set('binder', binderParam)
     router.push(`?${urlParams}`, { scroll: false })
   }, [router, searchParams])
+
+  // Reconstruct state from the URL on Back/Forward navigation (popstate).
+  // Our own pushUrl()/router.push() calls already keep currentQ/currentSort/
+  // currentFilters refs in sync before the URL changes, so this only fires a
+  // reload when the URL changed *without* going through our handlers.
+  const isFirstUrlSync = useRef(true)
+  useEffect(() => {
+    if (isFirstUrlSync.current) {
+      isFirstUrlSync.current = false
+      return
+    }
+    const parsed = parseLibraryQueryState(searchParams)
+    const unchanged =
+      parsed.q === currentQ.current &&
+      parsed.sort === currentSort.current &&
+      JSON.stringify(parsed.filters) === JSON.stringify(currentFilters.current)
+    if (unchanged) return
+
+    setQ(parsed.q)
+    setSort(parsed.sort)
+    setAdvFilters(parsed.filters)
+    currentQ.current = parsed.q
+    currentSort.current = parsed.sort
+    currentFilters.current = parsed.filters
+    reload({ q: parsed.q, sort: parsed.sort, filters: parsed.filters })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams])
 
   const fetchPrices = useCallback(async (cardsToPrice) => {
     if (!cardsToPrice?.length) return
@@ -534,6 +527,23 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
   const filterActive = hasActiveFilters(advFilters)
   const activeFilterCount = activeChips.length
 
+  // Mobile filter sheet — staged draft state (Phase 41 feature #1), sharing
+  // the same commit path (handleFiltersChange -> reload/URL) that the
+  // desktop inline AdvancedSearchPanel already uses. Edits inside the sheet
+  // only mutate sheet.draft; Apply is the only path that calls
+  // handleFiltersChange. Closing without Apply discards the draft.
+  const [sheet, dispatchSheet] = useReducer(filterSheetReducer, advFilters, initFilterSheetState)
+  const mobileFiltersButtonRef = useRef(null)
+  const openMobileSheet = () => dispatchSheet({ type: 'OPEN', applied: advFilters })
+  const closeMobileSheet = () => dispatchSheet({ type: 'CLOSE' })
+  const clearMobileDraft = () => dispatchSheet({ type: 'REPLACE_DRAFT', draft: { ...EMPTY_FILTERS } })
+  const applyMobileSheet = () => {
+    const next = sheet.draft
+    dispatchSheet({ type: 'APPLY' })
+    handleFiltersChange(next)
+  }
+  const draftFilterCount = buildFilterChips(sheet.draft, binders, []).length
+
   // Build skeleton grid for initial load
   const skeletonGrid = (
     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
@@ -554,8 +564,87 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
 
   return (
     <div>
-      {/* Toolbar */}
-      <div className="flex flex-wrap items-center gap-3 mb-3">
+      {/* Mobile discovery toolbar (Phase 41 feature #1): row 1 = full-width
+          search + clear, row 2 = Filters (staged sheet, active count) + Sort
+          + result count. Desktop keeps the row below + inline panel. */}
+      <div className="lg:hidden space-y-2 mb-3">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500" />
+          <input
+            type="text"
+            placeholder="Search by name..."
+            value={q}
+            onChange={(e) => handleSearchChange(e.target.value)}
+            className="w-full bg-white dark:bg-dbb-secondary border border-gray-200 dark:border-dbb-tertiary/50 rounded-dbb pl-9 pr-9 py-2.5 min-h-[44px] text-sm focus:border-dbb-accent focus:outline-none placeholder-gray-400 dark:placeholder-gray-600"
+          />
+          {q && (
+            <button
+              onClick={() => handleSearchChange('')}
+              aria-label="Clear search"
+              className="absolute right-1 top-1/2 -translate-y-1/2 min-w-[36px] min-h-[36px] flex items-center justify-center hover:text-red-400 transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            ref={mobileFiltersButtonRef}
+            onClick={openMobileSheet}
+            className={`flex items-center gap-1.5 px-3 min-h-[44px] text-sm border rounded-dbb transition-colors ${
+              filterActive
+                ? 'border-dbb-accent text-dbb-accent bg-dbb-accent/10'
+                : 'border-gray-200 dark:border-dbb-tertiary/50 text-gray-500 dark:text-gray-400'
+            }`}
+          >
+            <Filter className="w-4 h-4" />
+            Filters
+            {activeFilterCount > 0 && (
+              <span className="ml-0.5 bg-dbb-accent text-white text-xs font-bold rounded-full w-4 h-4 flex items-center justify-center">
+                {activeFilterCount}
+              </span>
+            )}
+          </button>
+          <div className="flex items-center gap-1.5 flex-1 min-w-0">
+            <SortAsc className="w-4 h-4 text-gray-400 dark:text-gray-500 shrink-0" />
+            <select
+              value={sort}
+              onChange={(e) => handleSortChange(e.target.value)}
+              className="w-full min-h-[44px] bg-white dark:bg-dbb-secondary border border-gray-200 dark:border-dbb-tertiary/50 rounded-dbb px-2 text-sm text-gray-900 dark:text-white focus:border-dbb-accent focus:outline-none"
+            >
+              {SORTS.map(s => (
+                <option key={s.value} value={s.value}>{s.label}</option>
+              ))}
+            </select>
+          </div>
+          <span className="text-xs text-gray-600 dark:text-gray-500 whitespace-nowrap shrink-0">
+            {total} card{total !== 1 ? 's' : ''}
+          </span>
+        </div>
+      </div>
+
+      <FilterSheet
+        open={sheet.open}
+        title="Filters"
+        onClose={closeMobileSheet}
+        onApply={applyMobileSheet}
+        onClearAll={clearMobileDraft}
+        applyLabel={draftFilterCount > 0 ? `Apply filters (${draftFilterCount})` : 'Apply filters'}
+        triggerRef={mobileFiltersButtonRef}
+      >
+        <AdvancedSearchPanel
+          open={sheet.open}
+          embedded
+          onClose={closeMobileSheet}
+          filters={sheet.draft}
+          onFiltersChange={(next) => dispatchSheet({ type: 'REPLACE_DRAFT', draft: next })}
+          binders={binders}
+          binderId={binderId}
+        />
+      </FilterSheet>
+
+      {/* Toolbar — desktop only; mobile uses the row-1/row-2 toolbar above */}
+      <div className="hidden lg:flex flex-wrap items-center gap-3 mb-3">
         <div className="relative flex-1 min-w-48">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500" />
           <input

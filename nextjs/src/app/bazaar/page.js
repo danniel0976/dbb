@@ -2,6 +2,7 @@ import { createClient as createAuthClient } from '@/lib/supabaseServer'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import DBBNav from '@/components/DBBNav'
 import BazaarView from '@/components/BazaarView'
+import { getActiveListingFacets } from '@/lib/listingsQueries'
 
 export const metadata = { title: 'Bazaar — DBB' }
 
@@ -60,17 +61,26 @@ export default async function BazaarPage() {
       const total = count || 0
       initialData = { listings: enriched, total, hasMore: 24 < total, page: 1 }
 
-      const setMap = {}
-      const raritySet = new Set()
-      for (const l of listings) {
-        const ci = l.library_cards?.card_index
-        if (ci?.set_code) setMap[ci.set_code] = ci.set_name || ci.set_code
-        if (ci?.rarity) raritySet.add(ci.rarity)
-      }
-      filterOptions = {
-        sets: Object.entries(setMap).map(([code, name]) => ({ code, name })),
-        rarities: [...raritySet],
-        cardTypes: [],
+      // Facet options must reflect ALL active, unexpired listings, not just
+      // this first page — otherwise most valid set/type filter values are
+      // invisible (Phase 41 tech audit P1 #4).
+      try {
+        filterOptions = await getActiveListingFacets(sc)
+      } catch {
+        // Facet source failed — fall back to deriving from the loaded page
+        // rather than showing a broken/empty filter panel.
+        const setMap = {}
+        const raritySet = new Set()
+        for (const l of listings) {
+          const ci = l.library_cards?.card_index
+          if (ci?.set_code) setMap[ci.set_code] = ci.set_name || ci.set_code
+          if (ci?.rarity) raritySet.add(ci.rarity)
+        }
+        filterOptions = {
+          sets: Object.entries(setMap).map(([code, name]) => ({ code, name })),
+          rarities: [...raritySet],
+          cardTypes: [],
+        }
       }
     }
   } catch {

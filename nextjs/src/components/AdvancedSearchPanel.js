@@ -62,6 +62,9 @@ export default function AdvancedSearchPanel({
   onFiltersChange,
   binders = [],
   binderId,
+  // When true, renders without its own card chrome/header — used inside
+  // FilterSheet, which already supplies the title/close row and container.
+  embedded = false,
 }) {
   const [sets, setSets] = useState([])
   const [localFilters, setLocalFilters] = useState(filters)
@@ -103,13 +106,15 @@ export default function AdvancedSearchPanel({
   if (!open) return null
 
   return (
-    <div className="bg-white dark:bg-dbb-secondary border border-gray-200 dark:border-gray-700 rounded-xl p-4 mb-4 space-y-4">
-      <div className="flex items-center justify-between">
-        <h3 className="font-semibold text-sm text-gray-800 dark:text-gray-200">Advanced Filters</h3>
-        <button onClick={onClose} className="text-gray-400 dark:text-gray-500 hover:text-gray-900 dark:hover:text-white transition-colors">
-          <X className="w-4 h-4" />
-        </button>
-      </div>
+    <div className={embedded ? 'space-y-4 p-4' : 'bg-white dark:bg-dbb-secondary border border-gray-200 dark:border-gray-700 rounded-xl p-4 mb-4 space-y-4'}>
+      {!embedded && (
+        <div className="flex items-center justify-between">
+          <h3 className="font-semibold text-sm text-gray-800 dark:text-gray-200">Advanced Filters</h3>
+          <button onClick={onClose} className="text-gray-400 dark:text-gray-500 hover:text-gray-900 dark:hover:text-white transition-colors">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {/* Colors */}
       <div className="space-y-2">

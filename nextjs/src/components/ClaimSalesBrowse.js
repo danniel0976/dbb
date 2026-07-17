@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Flame, Clock, Star, Grid, Loader2 } from 'lucide-react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { Flame, Clock, Star, Grid, Loader2, Search, X } from 'lucide-react'
 import Link from 'next/link'
 import LoadingSkeleton from '@/components/LoadingSkeleton'
 
@@ -171,8 +172,33 @@ function ClaimSaleTile({ cs, userId, isFollowed, onToggleFollow }) {
   )
 }
 
+// Parse/serialize this view's URL state. Scoped param names (cs_*) avoid
+// colliding with BazaarView's own `search`/`sort` params if Bazaar URL state
+// is added later; reusing Library's "one parser, reload reconstructs the
+// same query" pattern (Phase 41 P0-2) so a copied/reloaded/back-navigated
+// Claim Sales URL restores the same section and search text.
+function parseClaimSalesQueryState(sp) {
+  const section = sp.get('cs_section')
+  return {
+    section: section === 'ending_soon' ? 'ending_soon' : 'hot',
+    q: sp.get('cs_q') || '',
+  }
+}
+
+function serializeClaimSalesQueryState(section, q) {
+  const params = new URLSearchParams()
+  if (section && section !== 'hot') params.set('cs_section', section)
+  if (q) params.set('cs_q', q)
+  return params
+}
+
 export default function ClaimSalesBrowse({ userId }) {
-  const [section, setSection] = useState('hot') // 'hot' | 'ending_soon'
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const initialState = parseClaimSalesQueryState(searchParams)
+
+  const [section, setSection] = useState(initialState.section) // 'hot' | 'ending_soon'
+  const [q, setQ] = useState(initialState.q)
   const [sales, setSales] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -183,8 +209,22 @@ export default function ClaimSalesBrowse({ userId }) {
   const [followedIds, setFollowedIds] = useState(new Set())
   const reqGenRef = useRef(0)
   const abortRef = useRef(null)
+  const currentSection = useRef(section)
+  const currentQ = useRef(q)
+  const searchTimeout = useRef(null)
 
-  const loadSales = useCallback(async (sortKey, p = 1) => {
+  const pushUrl = useCallback((overrides = {}) => {
+    const nextSection = overrides.section ?? currentSection.current
+    const nextQ = overrides.q ?? currentQ.current
+    const params = new URLSearchParams(searchParams.toString())
+    const csParams = serializeClaimSalesQueryState(nextSection, nextQ)
+    params.delete('cs_section')
+    params.delete('cs_q')
+    for (const [k, v] of csParams) params.set(k, v)
+    router.replace(`?${params}`, { scroll: false })
+  }, [router, searchParams])
+
+  const loadSales = useCallback(async (sortKey, p = 1, searchText = currentQ.current) => {
     const gen = ++reqGenRef.current
     // Abort any in-flight request
     if (abortRef.current) abortRef.current.abort()
@@ -198,7 +238,9 @@ export default function ClaimSalesBrowse({ userId }) {
       setLoadingMore(true)
     }
     try {
-      const res = await fetch(`/api/claim-sales?sort=${sortKey}&page=${p}`, { signal: controller.signal })
+      const params = new URLSearchParams({ sort: sortKey, page: String(p) })
+      if (searchText) params.set('search', searchText)
+      const res = await fetch(`/api/claim-sales?${params}`, { signal: controller.signal })
       if (gen !== reqGenRef.current) return // stale response
       if (!res.ok) throw new Error('Failed to load')
       const data = await res.json()
@@ -222,6 +264,43 @@ export default function ClaimSalesBrowse({ userId }) {
       }
     }
   }, [])
+
+  const sortKeyFor = (s) => (s === 'hot' ? 'most_followed' : 'ending_soon')
+
+  const handleSectionChange = (nextSection) => {
+    setSection(nextSection)
+    currentSection.current = nextSection
+    pushUrl({ section: nextSection })
+  }
+
+  const handleSearchChange = (nextQ) => {
+    setQ(nextQ)
+    currentQ.current = nextQ
+    pushUrl({ q: nextQ })
+    clearTimeout(searchTimeout.current)
+    searchTimeout.current = setTimeout(() => {
+      loadSales(sortKeyFor(currentSection.current), 1, nextQ)
+    }, 300)
+  }
+
+  // Reconstruct state from the URL on Back/Forward navigation, mirroring
+  // LibraryView's popstate sync so a copied/reloaded/back-navigated URL
+  // reruns the same section + search rather than silently diverging.
+  const isFirstUrlSync = useRef(true)
+  useEffect(() => {
+    if (isFirstUrlSync.current) {
+      isFirstUrlSync.current = false
+      return
+    }
+    const parsed = parseClaimSalesQueryState(searchParams)
+    if (parsed.section === currentSection.current && parsed.q === currentQ.current) return
+    setSection(parsed.section)
+    setQ(parsed.q)
+    currentSection.current = parsed.section
+    currentQ.current = parsed.q
+    loadSales(sortKeyFor(parsed.section), 1, parsed.q)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams])
 
   // Batch fetch follow state once per page load (not per tile)
   useEffect(() => {
@@ -248,7 +327,7 @@ export default function ClaimSalesBrowse({ userId }) {
 
   const loadMore = useCallback(() => {
     if (loadingMore || !hasMore) return
-    loadSales(section === 'hot' ? 'most_followed' : 'ending_soon', page + 1)
+    loadSales(sortKeyFor(section), page + 1)
   }, [loadingMore, hasMore, page, section, loadSales])
 
   const handleToggleFollow = useCallback((csId, isFollowing) => {
@@ -262,10 +341,10 @@ export default function ClaimSalesBrowse({ userId }) {
 
   return (
     <div className="flex-1 lg:ml-72 p-4 lg:p-6">
-      {/* Section toggle */}
-      <div className="mb-4 flex items-center gap-2">
+      {/* Section toggle + search */}
+      <div className="mb-4 flex flex-wrap items-center gap-2">
         <button
-          onClick={() => setSection('hot')}
+          onClick={() => handleSectionChange('hot')}
           className={`flex items-center gap-1.5 px-4 py-2 rounded-dbb text-sm font-medium transition-colors ${
             section === 'hot'
               ? 'bg-dbb-accent text-white'
@@ -276,7 +355,7 @@ export default function ClaimSalesBrowse({ userId }) {
           Hot
         </button>
         <button
-          onClick={() => setSection('ending_soon')}
+          onClick={() => handleSectionChange('ending_soon')}
           className={`flex items-center gap-1.5 px-4 py-2 rounded-dbb text-sm font-medium transition-colors ${
             section === 'ending_soon'
               ? 'bg-dbb-accent text-white'
@@ -286,6 +365,24 @@ export default function ClaimSalesBrowse({ userId }) {
           <Clock className="w-4 h-4" />
           Ending Soon
         </button>
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Search claim sales..."
+            value={q}
+            onChange={(e) => handleSearchChange(e.target.value)}
+            className="w-40 sm:w-64 bg-white dark:bg-dbb-secondary border border-gray-200 dark:border-dbb-tertiary/50 rounded-dbb pl-9 pr-8 py-2 text-sm focus:border-dbb-accent focus:outline-none placeholder-gray-400 dark:placeholder-gray-500"
+          />
+          {q && (
+            <button
+              onClick={() => handleSearchChange('')}
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:text-red-400 transition-colors"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
         {!loading && total > 0 && (
           <span className="text-sm text-gray-500 dark:text-gray-400 ml-2">
             {total} claim sale{total !== 1 ? 's' : ''}
@@ -299,7 +396,7 @@ export default function ClaimSalesBrowse({ userId }) {
         <div className="text-center py-12">
           <p className="text-red-600 dark:text-red-400 mb-4">{error}</p>
           <button
-            onClick={() => loadSales(section === 'hot' ? 'most_followed' : 'ending_soon', 1)}
+            onClick={() => loadSales(sortKeyFor(section), 1)}
             className="btn btn-primary btn-md"
           >
             Try Again

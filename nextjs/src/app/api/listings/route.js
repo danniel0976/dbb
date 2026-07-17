@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient as createAuthClient } from '@/lib/supabaseServer'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { requireCompleteMerchantProfile } from '@/lib/merchantProfile'
+import { ensurePriceCache, lookupPrice, sellPrice } from '@/lib/pricingCache'
 
 export const runtime = 'nodejs'
 
@@ -72,6 +73,17 @@ export async function GET(request) {
   const rarities = (searchParams.get('rarities') || '').split(',').filter(Boolean)
   const colors = (searchParams.get('colors') || '').split(',').filter(Boolean)
   const cardType = searchParams.get('cardType') || null
+  const minPriceRaw = searchParams.get('minPrice')
+  const maxPriceRaw = searchParams.get('maxPrice')
+  const minPrice = minPriceRaw !== null && minPriceRaw !== '' && !Number.isNaN(Number(minPriceRaw)) ? Number(minPriceRaw) : null
+  const maxPrice = maxPriceRaw !== null && maxPriceRaw !== '' && !Number.isNaN(Number(maxPriceRaw)) ? Number(maxPriceRaw) : null
+  // Price mode: any request that needs the *displayed* MYR price (CKD USD ×
+  // multiplier) rather than DB columns must be resolved in application code,
+  // because the price cache lives outside Postgres (Storage-backed JSON, no
+  // snapshot column — see Phase 41 Decisions #1). Filtering/sorting therefore
+  // fetches every row matching the non-price predicates (no DB range/limit)
+  // and slices the page after computing/filtering/sorting by price in JS.
+  const priceMode = minPrice !== null || maxPrice !== null || sort === 'price_high' || sort === 'price_low'
 
   const sc = makeServiceClient()
 
@@ -106,14 +118,19 @@ export async function GET(request) {
     if (colors.length > 0) q = q.overlaps('library_cards.card_index.colors', colors)
     if (cardType) q = q.ilike('library_cards.card_index.type_line', `%${cardType}%`)
 
-    if (sort === 'name_az') q = q.order('library_cards.card_index.name', { ascending: true })
-    else if (sort === 'rarity') q = q.order('library_cards.card_index.rarity', { ascending: false })
-    else if (sort === 'price_high') q = q.order('multiplier', { ascending: false })
-    else if (sort === 'price_low') q = q.order('multiplier', { ascending: true })
-    else q = q.order('created_at', { ascending: false })
+    if (priceMode) {
+      // Price filter/sort is resolved in JS below; keep a deterministic base
+      // order (newest) so ties are stable prior to the JS price sort.
+      q = q.order('created_at', { ascending: false }).order('id', { ascending: true })
+    } else {
+      if (sort === 'name_az') q = q.order('library_cards.card_index.name', { ascending: true })
+      else if (sort === 'rarity') q = q.order('library_cards.card_index.rarity', { ascending: false })
+      else q = q.order('created_at', { ascending: false })
+      q = q.order('id', { ascending: true })
 
-    const from = (page - 1) * PAGE_SIZE
-    q = q.range(from, from + PAGE_SIZE - 1)
+      const from = (page - 1) * PAGE_SIZE
+      q = q.range(from, from + PAGE_SIZE - 1)
+    }
     return q
   }
 
@@ -125,10 +142,59 @@ export async function GET(request) {
     const { data, error, count } = result
     if (error) throw error
 
+    let rows = data || []
+    let total = count || 0
+    let from = (page - 1) * PAGE_SIZE
+
+    if (priceMode) {
+      try {
+        await ensurePriceCache()
+      } catch (err) {
+        console.error('[GET /api/listings] price cache unavailable:', err?.message || err)
+      }
+
+      const priced = rows.map(l => {
+        const scryfallId = l.library_cards?.scryfall_id
+        const foil = l.library_cards?.foil || 'normal'
+        const ckdUsd = scryfallId ? lookupPrice(scryfallId, foil) : null
+        const myrPrice = ckdUsd != null ? sellPrice(ckdUsd, Number(l.multiplier)) : null
+        return { listing: l, myrPrice }
+      })
+
+      let filtered = priced
+      if (minPrice !== null || maxPrice !== null) {
+        // A price range is active: exclude listings whose displayed price is
+        // unknown (matches the tile's "Price unavailable" state) rather than
+        // silently including them.
+        filtered = filtered.filter(({ myrPrice }) => {
+          if (myrPrice == null) return false
+          if (minPrice !== null && myrPrice < minPrice) return false
+          if (maxPrice !== null && myrPrice > maxPrice) return false
+          return true
+        })
+      }
+
+      if (sort === 'price_low' || sort === 'price_high') {
+        const dir = sort === 'price_low' ? 1 : -1
+        filtered = filtered.slice().sort((a, b) => {
+          // Missing-price listings always sort after priced listings.
+          if (a.myrPrice == null && b.myrPrice == null) return a.listing.id < b.listing.id ? -1 : 1
+          if (a.myrPrice == null) return 1
+          if (b.myrPrice == null) return -1
+          if (a.myrPrice !== b.myrPrice) return dir * (a.myrPrice - b.myrPrice)
+          return a.listing.id < b.listing.id ? -1 : 1
+        })
+      }
+
+      total = filtered.length
+      from = (page - 1) * PAGE_SIZE
+      rows = filtered.slice(from, from + PAGE_SIZE).map(({ listing, myrPrice }) => ({ ...listing, _myr_price: myrPrice }))
+    }
+
     // Bazaar tiles deliberately do not expose a seller identity. Count the
     // distinct sellers offering each exact printing; identities remain in the
     // card-detail seller selector.
-    const scryfallIds = [...new Set((data || [])
+    const scryfallIds = [...new Set((rows || [])
       .map(l => l.library_cards?.scryfall_id)
       .filter(Boolean))]
     const sellersByCard = new Map()
@@ -148,13 +214,11 @@ export async function GET(request) {
       }
     }
 
-    const listings = (data || []).map(l => ({
+    const listings = (rows || []).map(l => ({
       ...l,
       seller_count: sellersByCard.get(l.library_cards?.scryfall_id)?.size || 1,
     }))
 
-    const total = count || 0
-    const from = (page - 1) * PAGE_SIZE
     return NextResponse.json({ listings, total, hasMore: from + PAGE_SIZE < total, page })
   } catch (err) {
     console.error('[GET /api/listings]', err?.message || err)

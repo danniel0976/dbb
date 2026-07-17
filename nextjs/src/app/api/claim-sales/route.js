@@ -26,6 +26,7 @@ export async function GET(request) {
   const sort = searchParams.get('sort') || 'newest'
   const setCode = searchParams.get('set_code') || null
   const userId = searchParams.get('user_id') || null
+  const search = (searchParams.get('search') || '').trim()
 
   const sc = makeServiceClient()
 
@@ -47,6 +48,7 @@ export async function GET(request) {
 
     if (setCode) baseQuery = baseQuery.eq('set_code', setCode)
     if (userId) baseQuery = baseQuery.eq('user_id', userId)
+    if (search) baseQuery = baseQuery.ilike('title', `%${search}%`)
 
     let data, count
 
