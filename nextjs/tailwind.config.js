@@ -16,8 +16,11 @@ module.exports = {
         'dbb-tertiary': 'rgb(var(--dbb-border-rgb) / <alpha-value>)',
         'dbb-accent': 'rgb(var(--dbb-accent-rgb) / <alpha-value>)',
         'dbb-accent-hov': 'rgb(var(--dbb-accent-hov-rgb) / <alpha-value>)',
-        'dbb-mint': '#3AC692',
-        'dbb-mint-hov': '#2DA27C',
+        // dbb-mint retired (DBB Glass Mono, Pass 1) — aliased to the single accent
+        // so any lingering usages still render sanely until Pass 2 removes them.
+        'dbb-mint': 'rgb(var(--dbb-accent-rgb) / <alpha-value>)',
+        'dbb-mint-hov': 'rgb(var(--dbb-accent-hov-rgb) / <alpha-value>)',
+        'dbb-surface-elevated': 'var(--dbb-surface-elevated)',
         'dbb-price': 'rgb(var(--dbb-price-rgb) / <alpha-value>)',
         'dbb-pink': '#E02179',
         'dbb-gold': '#f4d03f',
@@ -39,14 +42,34 @@ module.exports = {
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', 'sans-serif'],
-        display: ['Barlow Condensed', 'Inter', 'sans-serif'],
+        // Barlow Condensed retired (DBB Glass Mono, Pass 1) — Inter used for
+        // display/heading text too, paired with tighter tracking (see
+        // `tracking-heading` below).
+        display: ['Inter', 'system-ui', 'sans-serif'],
+      },
+      letterSpacing: {
+        'heading': '-0.02em',
+      },
+      fontSize: {
+        'dbb-xs': '12px',
+        'dbb-sm': '14px',
+        'dbb-base': '17px',
+        'dbb-lg': '22px',
+        'dbb-xl': '28px',
+        'dbb-2xl': '34px',
       },
       borderRadius: {
         'dbb': '8px',
+        'dbb-sm': 'var(--r-sm)',
+        'dbb-md': 'var(--r-md)',
+        'dbb-lg': 'var(--r-lg)',
+        'dbb-xl': 'var(--r-xl)',
       },
       boxShadow: {
         'card': '0 1px 2px rgba(0,0,0,0.3)',
         'card-hover': '0 12px 32px 2px rgba(0,0,0,0.12), 0 4px 8px rgba(0,0,0,0.08)',
+        'dbb-sm': 'var(--shadow-sm)',
+        'dbb-md': 'var(--shadow-md)',
       },
       transitionProperty: {
         'card': 'box-shadow',

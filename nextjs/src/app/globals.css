@@ -2,54 +2,99 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ── CSS Variables: Design Tokens v2 (Phase 23 — Red Accent) ── */
+/* ── CSS Variables: Design Tokens v3 (DBB Glass Mono — Pass 1) ── */
 :root {
   /* Light mode (default) — RGB channels for Tailwind opacity support */
-  --dbb-accent-rgb: 220 38 38;       /* red-600 */
-  --dbb-accent-hov-rgb: 185 28 28;   /* red-700 */
+  --dbb-accent-rgb: 255 59 48;       /* iOS system red */
+  --dbb-accent-hov-rgb: 224 40 30;   /* darkened accent for hover */
   --dbb-surface-rgb: 255 255 255;    /* white */
-  --dbb-bg-rgb: 248 248 248;        /* page bg */
-  --dbb-text-rgb: 18 18 18;         /* primary text */
-  --dbb-text-secondary-rgb: 94 97 108;
-  --dbb-border-rgb: 222 227 231;
-  --dbb-price-rgb: 5 119 45;         /* price green */
+  --dbb-bg-rgb: 245 245 247;         /* page bg */
+  --dbb-text-rgb: 29 29 31;          /* primary text */
+  --dbb-text-secondary-rgb: 110 110 115;
+  --dbb-border-rgb: 0 0 0;           /* hairline border, used with low alpha */
+  --dbb-price-rgb: 5 119 45;         /* price green — domain-semantic, unchanged */
 
   /* Non-RGB vars for scrollbar and other direct uses */
-  --dbb-accent: #DC2626;
-  --dbb-accent-hov: #B91C1C;
+  --dbb-accent: #FF3B30;
+  --dbb-accent-hov: #E0281E;
   --dbb-surface: #FFFFFF;
-  --dbb-bg: #F8F8F8;
-  --dbb-text: #121212;
-  --dbb-text-secondary: #5E616C;
-  --dbb-border: #DEE3E7;
+  --dbb-surface-elevated: #FFFFFF;
+  --dbb-bg: #F5F5F7;
+  --dbb-text: #1D1D1F;
+  --dbb-text-secondary: #6E6E73;
+  --dbb-border: rgba(0, 0, 0, 0.08);
   --dbb-price: #05772D;
   --dbb-scrollbar-thumb: #94a3b8;
   --dbb-scrollbar-track: #e2e8f0;
   --dbb-scrollbar-thumb-hover: #64748b;
+
+  /* Radius scale */
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 16px;
+  --r-xl: 22px;
+
+  /* Shadows — soft ambient + key, light mode */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06), 0 8px 24px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 2px 6px rgba(0, 0, 0, 0.07), 0 12px 32px rgba(0, 0, 0, 0.08);
+
+  /* Typography */
+  --tracking-heading: -0.02em;
+  --font-size-xs: 12px;
+  --font-size-sm: 14px;
+  --font-size-base: 17px;
+  --font-size-lg: 22px;
+  --font-size-xl: 28px;
+  --font-size-2xl: 34px;
+
+  /* Glass materials (tokens only — not yet applied to components, see Pass 2) */
+  --glass-chrome-blur: 20px;
+  --glass-chrome-bg-light: rgba(245, 245, 247, 0.72);
+  --glass-chrome-bg-dark: rgba(28, 28, 30, 0.65);
+  --glass-sheet-blur: 24px;
+  --glass-sheet-bg-light: rgba(255, 255, 255, 0.80);
+  --glass-sheet-bg-dark: rgba(28, 28, 30, 0.78);
+  --glass-highlight-light: rgba(255, 255, 255, 0.6);
+  --glass-highlight-dark: rgba(255, 255, 255, 0.25);
+  --glass-scrim: rgba(0, 0, 0, 0.35);
 }
 
 .dark {
   /* Dark mode */
-  --dbb-accent-rgb: 239 68 68;       /* red-500 */
-  --dbb-accent-hov-rgb: 220 38 38;   /* red-600 */
-  --dbb-surface-rgb: 30 41 59;      /* slate-800 */
-  --dbb-bg-rgb: 15 23 42;          /* slate-900 */
-  --dbb-text-rgb: 241 245 249;
-  --dbb-text-secondary-rgb: 148 163 184;
-  --dbb-border-rgb: 51 65 85;
-  --dbb-price-rgb: 34 197 94;       /* green-500 */
+  --dbb-accent-rgb: 255 69 58;       /* iOS system red — dark */
+  --dbb-accent-hov-rgb: 224 40 30;
+  --dbb-surface-rgb: 28 28 30;       /* surface */
+  --dbb-bg-rgb: 10 10 12;            /* true-black-adjacent page bg */
+  --dbb-text-rgb: 245 245 247;
+  --dbb-text-secondary-rgb: 152 152 157;
+  --dbb-border-rgb: 255 255 255;     /* hairline border, used with low alpha */
+  --dbb-price-rgb: 34 197 94;        /* green-500 — domain-semantic, unchanged */
 
-  --dbb-accent: #EF4444;
-  --dbb-accent-hov: #DC2626;
-  --dbb-surface: #1E293B;
-  --dbb-bg: #0F172A;
-  --dbb-text: #F1F5F9;
-  --dbb-text-secondary: #94A3B8;
-  --dbb-border: #334155;
+  --dbb-accent: #FF453A;
+  --dbb-accent-hov: #E0281E;
+  --dbb-surface: #1C1C1E;
+  --dbb-surface-elevated: #2C2C2E;
+  --dbb-bg: #0A0A0C;
+  --dbb-text: #F5F5F7;
+  --dbb-text-secondary: #98989D;
+  --dbb-border: rgba(255, 255, 255, 0.10);
   --dbb-price: #22C55E;
-  --dbb-scrollbar-thumb: #EF4444;
-  --dbb-scrollbar-track: #0F172A;
-  --dbb-scrollbar-thumb-hover: #DC2626;
+  --dbb-scrollbar-thumb: #FF453A;
+  --dbb-scrollbar-track: #0A0A0C;
+  --dbb-scrollbar-thumb-hover: #E0281E;
+
+  /* Shadows — near-invisible in dark mode; hierarchy via surface tone */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 /* ── Light mode (default) ── */
@@ -61,12 +106,8 @@ body {
 
 /* ── Dark mode body ── */
 .dark body {
-  color: #F1F5F9;
-  background: linear-gradient(
-      to bottom,
-      #0f172a,
-      #0a0f1e
-    );
+  color: var(--dbb-text);
+  background: var(--dbb-bg);
 }
 
 /* Custom scrollbar — light */
@@ -226,26 +267,36 @@ body {
   100% { background-position: -200% -200%; }
 }
 
-/* ── Button system v2 (Phase 23 — Red Accent) ── */
+/* ── Button system v3 (DBB Glass Mono — Pass 1) ── */
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   font-weight: 600;
-  transition: all 0.2s ease;
+  transition: background-color 200ms ease-out, border-color 200ms ease-out, color 200ms ease-out, transform 100ms ease-out;
   cursor: pointer;
   font-size: 0.875rem;
   line-height: 1.25rem;
   border: none;
 }
 
+.btn:active {
+  transform: scale(0.97);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn:active {
+    transform: none;
+  }
+}
+
 .btn-lg { padding: 0.75rem 1rem; }
 .btn-md { padding: 0.5rem 1rem; }
 .btn-sm { padding: 0.5rem 0.75rem; }
 
-/* btn-primary: red accent via CSS variable — auto light/dark */
+/* btn-primary: accent via CSS variable — auto light/dark */
 .btn-primary {
   background-color: var(--dbb-accent);
   color: white;
@@ -254,33 +305,35 @@ body {
   background-color: var(--dbb-accent-hov);
 }
 
+/* btn-mint retired in favor of the single accent (DBB Glass Mono) — kept as an
+   alias so any lingering usages still render sanely until Pass 2 removes them. */
 .btn-mint {
-  background-color: #3AC692;
+  background-color: var(--dbb-accent);
   color: white;
 }
 .btn-mint:hover {
-  background-color: #2DA27C;
+  background-color: var(--dbb-accent-hov);
 }
 
-/* btn-secondary: light mode default, dark mode override */
+/* btn-secondary: monochrome surface, light mode default, dark mode override */
 .btn-secondary {
-  background-color: #F7F7F8;
-  color: #374151;
-  border: 1px solid #DEE3E7;
+  background-color: var(--dbb-bg);
+  color: var(--dbb-text);
+  border: 1px solid var(--dbb-border);
 }
 .btn-secondary:hover {
-  background-color: #e5e7eb;
+  background-color: rgb(var(--dbb-border-rgb) / 0.06);
 }
 .dark .btn-secondary {
-  background-color: #1e293b;
-  color: #e2e8f0;
-  border: 1px solid #334155;
+  background-color: var(--dbb-surface-elevated);
+  color: var(--dbb-text);
+  border: 1px solid var(--dbb-border);
 }
 .dark .btn-secondary:hover {
-  background-color: #334155;
+  background-color: rgb(var(--dbb-border-rgb) / 0.14);
 }
 
-/* btn-outline: red accent outline via CSS variable — auto light/dark */
+/* btn-outline: accent outline via CSS variable — auto light/dark */
 .btn-outline {
   background-color: transparent;
   color: var(--dbb-accent);
@@ -293,11 +346,11 @@ body {
 
 .btn-danger {
   background-color: transparent;
-  color: #ef4444;
-  border: 1px solid #ef4444;
+  color: var(--dbb-accent);
+  border: 1px solid var(--dbb-accent);
 }
 .btn-danger:hover {
-  background-color: #ef4444;
+  background-color: var(--dbb-accent);
   color: white;
 }
 
