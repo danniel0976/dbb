@@ -364,3 +364,76 @@ body {
   color: var(--dbb-price);
   font-weight: 600;
 }
+
+/* ── Glass chrome (DBB Glass Mono — Pass 2) ──
+   Applied to the top bar and mobile bottom tab bar. Uses a scroll-edge fade
+   (soft gradient mask on the trailing edge) instead of a hard border line. */
+.dbb-glass-chrome {
+  background: var(--glass-chrome-bg-light);
+  -webkit-backdrop-filter: blur(var(--glass-chrome-blur));
+  backdrop-filter: blur(var(--glass-chrome-blur));
+  position: relative;
+}
+.dark .dbb-glass-chrome {
+  background: var(--glass-chrome-bg-dark);
+}
+.dbb-glass-chrome::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -8px;
+  height: 8px;
+  background: linear-gradient(to bottom, rgb(var(--dbb-border-rgb) / 0.06), transparent);
+  pointer-events: none;
+}
+/* Bottom tab bar fades upward into content instead of downward */
+.dbb-glass-chrome--edge-top::after {
+  top: -8px;
+  bottom: auto;
+  background: linear-gradient(to top, rgb(var(--dbb-border-rgb) / 0.06), transparent);
+}
+
+@supports not (backdrop-filter: blur(1px)) {
+  .dbb-glass-chrome {
+    background: var(--dbb-surface);
+  }
+  .dark .dbb-glass-chrome {
+    background: var(--dbb-surface);
+  }
+}
+
+/* Floating glass sheet — account menu dropdown, bottom sheets */
+.dbb-glass-sheet {
+  background: var(--glass-sheet-bg-light);
+  -webkit-backdrop-filter: blur(var(--glass-sheet-blur));
+  backdrop-filter: blur(var(--glass-sheet-blur));
+}
+.dark .dbb-glass-sheet {
+  background: var(--glass-sheet-bg-dark);
+}
+@supports not (backdrop-filter: blur(1px)) {
+  .dbb-glass-sheet {
+    background: var(--dbb-surface);
+  }
+  .dark .dbb-glass-sheet {
+    background: var(--dbb-surface);
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .dbb-glass-chrome,
+  .dbb-glass-sheet {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    background: var(--dbb-surface);
+  }
+}
+
+/* Reserve space for the fixed mobile bottom tab bar so page content is never
+   obscured beneath it (see DBBNav.js). */
+@media (max-width: 639px) {
+  body.dbb-has-tabbar {
+    padding-bottom: calc(64px + env(safe-area-inset-bottom));
+  }
+}

@@ -21,6 +21,42 @@ const INITIAL_FILTERS = {
   search: '',
 }
 
+const SORT_LABELS = {
+  newest: 'Newest',
+  price_high: 'Price: High → Low',
+  price_low: 'Price: Low → High',
+  name_az: 'Name: A–Z',
+  rarity: 'Rarity',
+}
+
+/** Human-readable chip labels for everything in `filters` except sort/search. */
+function buildChips(filters, filterOptions) {
+  const chips = []
+  if (filters.setCode) {
+    const set = filterOptions.sets.find(s => s.code === filters.setCode)
+    chips.push({ key: 'setCode', label: set?.name || filters.setCode, clear: (f) => ({ ...f, setCode: null }) })
+  }
+  for (const r of filters.rarities) {
+    chips.push({ key: `rarity-${r}`, label: r, clear: (f) => ({ ...f, rarities: f.rarities.filter(x => x !== r) }) })
+  }
+  for (const c of filters.colors) {
+    chips.push({ key: `color-${c}`, label: c, clear: (f) => ({ ...f, colors: f.colors.filter(x => x !== c) }) })
+  }
+  if (filters.cardType) {
+    chips.push({ key: 'cardType', label: filters.cardType, clear: (f) => ({ ...f, cardType: null }) })
+  }
+  if (filters.isFoil !== null && filters.isFoil !== undefined) {
+    chips.push({ key: 'isFoil', label: filters.isFoil ? 'Foil only' : 'Non-foil only', clear: (f) => ({ ...f, isFoil: null }) })
+  }
+  if (filters.minPrice != null) {
+    chips.push({ key: 'minPrice', label: `Min RM${filters.minPrice}`, clear: (f) => ({ ...f, minPrice: null }) })
+  }
+  if (filters.maxPrice != null) {
+    chips.push({ key: 'maxPrice', label: `Max RM${filters.maxPrice}`, clear: (f) => ({ ...f, maxPrice: null }) })
+  }
+  return chips
+}
+
 export default function BazaarView({ initialData, filterOptions: initialFilterOptions, userId }) {
   const [listings, setListings] = useState(initialData?.listings || [])
   const [total, setTotal] = useState(initialData?.total || 0)
@@ -29,7 +65,7 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
   const [loading, setLoading] = useState(!initialData)
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState(null)
-  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [filterSheetOpen, setFilterSheetOpen] = useState(false)
   const [filters, setFilters] = useState(INITIAL_FILTERS)
   const [filterOptions] = useState(initialFilterOptions || { sets: [], rarities: [], cardTypes: [] })
   const [selectedListing, setSelectedListing] = useState(null)
@@ -64,6 +100,14 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
       .catch(err => { if (err?.name !== 'AbortError') setPrices({}) })
     return () => controller.abort()
   }, [listings])
+
+  // Lock body scroll while the mobile filter bottom sheet is open.
+  useEffect(() => {
+    if (filterSheetOpen) {
+      document.body.style.overflow = 'hidden'
+      return () => { document.body.style.overflow = '' }
+    }
+  }, [filterSheetOpen])
 
   const buildParams = useCallback((f = filters, p = 1) => {
     const params = new URLSearchParams({ page: String(p), sort: f.sortBy })
@@ -135,9 +179,18 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
     }
   }
 
+  const applyFilters = (next) => {
+    setFilters(next)
+    loadListings(next)
+  }
+
   const clearFilters = () => {
     setFilters(INITIAL_FILTERS)
     loadListings(INITIAL_FILTERS)
+  }
+
+  const removeChip = (chip) => {
+    applyFilters(chip.clear(filters))
   }
 
   const hasActiveFilters = Object.entries(filters).some(([key, v]) => {
@@ -147,6 +200,8 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
     if (Array.isArray(v)) return v.length > 0
     return v !== null && v !== undefined
   })
+
+  const chips = buildChips(filters, filterOptions)
 
   const handleSelectListing = async (listing) => {
     if (!userId) {
@@ -182,194 +237,240 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
 
   return (
     <div className="min-h-screen">
-      {/* Sub-header */}
-      <div className="sticky top-[57px] z-30 bg-white/95 dark:bg-dbb-primary/95 backdrop-blur border-b border-gray-200 dark:border-dbb-tertiary/30">
-        <div className="container mx-auto px-4 py-3 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              className={`lg:hidden p-2 hover:bg-gray-100 dark:hover:bg-dbb-secondary rounded-dbb transition-colors ${bazaarSection === 'claim_sales' ? 'hidden' : ''}`}
-            >
-              <Filter className="w-5 h-5" />
-            </button>
-            <h1 className="text-lg font-semibold text-gray-900 dark:text-white">Bazaar</h1>
-            {/* Section toggle */}
-            <div className="flex items-center gap-1 ml-1">
-              <button
-                onClick={() => setBazaarSection('singles')}
-                className={`flex items-center gap-1 px-2.5 py-1 rounded-dbb text-xs font-medium transition-colors ${
-                  bazaarSection === 'singles'
-                    ? 'bg-dbb-accent text-white'
-                    : 'text-gray-500 dark:text-gray-400 hover:text-dbb-accent'
-                }`}
-              >
-                <Grid className="w-3.5 h-3.5" />
-                Singles
-              </button>
-              <button
-                onClick={() => setBazaarSection('claim_sales')}
-                className={`flex items-center gap-1 px-2.5 py-1 rounded-dbb text-xs font-medium transition-colors ${
-                  bazaarSection === 'claim_sales'
-                    ? 'bg-dbb-accent text-white'
-                    : 'text-gray-500 dark:text-gray-400 hover:text-dbb-accent'
-                }`}
-              >
-                <Layers className="w-3.5 h-3.5" />
-                Claim Sales
-              </button>
-            </div>
-            {bazaarSection === 'singles' && !loading && (
-              <span className="text-sm text-gray-600 dark:text-gray-500">
-                {total} listing{total !== 1 ? 's' : ''}
-              </span>
-            )}
-          </div>
-          <div className={`flex items-center gap-2 ${bazaarSection === 'claim_sales' ? 'hidden' : ''}`}>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+      {/* Page title region */}
+      <div className="container mx-auto px-4 pt-6 pb-3">
+        <div className="flex items-baseline gap-3 flex-wrap">
+          <h1 className="text-dbb-xl sm:text-dbb-2xl font-bold tracking-heading text-gray-900 dark:text-white">Bazaar</h1>
+          {bazaarSection === 'singles' && !loading && (
+            <span className="text-dbb-sm text-gray-500 dark:text-gray-400">
+              {total} listing{total !== 1 ? 's' : ''}
+            </span>
+          )}
+        </div>
+
+        {/* Singles / Claim Sales segmented control */}
+        <div
+          role="tablist"
+          aria-label="Bazaar section"
+          className="relative inline-flex mt-4 p-1 h-11 rounded-full bg-gray-100 dark:bg-dbb-secondary"
+        >
+          <div
+            aria-hidden="true"
+            className="absolute top-1 bottom-1 w-[calc(50%-4px)] rounded-full bg-white dark:bg-dbb-surface-elevated shadow-dbb-sm transition-transform duration-200 ease-out"
+            style={{ transform: bazaarSection === 'claim_sales' ? 'translateX(calc(100% + 8px))' : 'translateX(0)' }}
+          />
+          <button
+            role="tab"
+            aria-selected={bazaarSection === 'singles'}
+            onClick={() => setBazaarSection('singles')}
+            className={`relative z-10 flex items-center gap-1.5 px-4 h-full rounded-full text-sm font-medium transition-colors ${
+              bazaarSection === 'singles' ? 'text-gray-900 dark:text-white' : 'text-gray-500 dark:text-gray-400'
+            }`}
+          >
+            <Grid className="w-3.5 h-3.5" />
+            Singles
+          </button>
+          <button
+            role="tab"
+            aria-selected={bazaarSection === 'claim_sales'}
+            onClick={() => setBazaarSection('claim_sales')}
+            className={`relative z-10 flex items-center gap-1.5 px-4 h-full rounded-full text-sm font-medium transition-colors ${
+              bazaarSection === 'claim_sales' ? 'text-gray-900 dark:text-white' : 'text-gray-500 dark:text-gray-400'
+            }`}
+          >
+            <Layers className="w-3.5 h-3.5" />
+            Claim Sales
+          </button>
+        </div>
+
+        {/* Search — primary control */}
+        {bazaarSection === 'singles' && (
+          <div className="mt-4 flex items-center gap-2">
+            <div className="relative flex-1 max-w-xl">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <input
                 type="text"
                 placeholder="Search cards..."
                 value={filters.search}
                 onChange={(e) => updateFilter('search', e.target.value)}
-                className="w-40 sm:w-64 bg-white dark:bg-dbb-secondary border border-gray-200 dark:border-dbb-tertiary/50 rounded-dbb pl-9 pr-8 py-2 text-sm focus:border-dbb-accent focus:outline-none placeholder-gray-400 dark:placeholder-gray-500"
+                className="w-full h-11 sm:h-12 bg-white dark:bg-dbb-secondary border border-gray-200 dark:border-dbb-tertiary/50 rounded-full pl-10 pr-9 text-dbb-sm focus:border-dbb-accent focus:outline-none placeholder-gray-400 dark:placeholder-gray-500 shadow-dbb-sm"
               />
               {filters.search && (
                 <button
                   onClick={() => updateFilter('search', '')}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:text-red-400 transition-colors"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-dbb-accent transition-colors"
+                  aria-label="Clear search"
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
               )}
             </div>
-            {hasActiveFilters && (
-              <button
-                onClick={clearFilters}
-                className="flex items-center gap-1 text-sm text-dbb-accent hover:text-dbb-accent-hov transition-colors"
-              >
-                <X className="w-4 h-4" /> Clear
-              </button>
-            )}
+            <button
+              onClick={() => setFilterSheetOpen(true)}
+              className="lg:hidden flex items-center justify-center gap-1.5 h-11 px-4 rounded-full border border-gray-200 dark:border-dbb-tertiary/50 bg-white dark:bg-dbb-secondary text-sm font-medium shadow-dbb-sm active:scale-[0.97] transition-transform"
+            >
+              <Filter className="w-4 h-4" />
+              Filters
+              {hasActiveFilters && <span className="w-1.5 h-1.5 rounded-full bg-dbb-accent" />}
+            </button>
           </div>
-        </div>
+        )}
       </div>
 
       {bazaarSection === 'claim_sales' ? (
         <ClaimSalesBrowse userId={userId} />
       ) : (
-        <div className="flex">
-          {/* Sidebar — Desktop */}
-          <aside className="hidden lg:block w-72 fixed left-0 top-[105px] bottom-0 overflow-y-auto border-r border-dbb-tertiary/30 bg-gray-50 dark:bg-dbb-primary/50">
-            <Sidebar
-              filters={filters}
-              updateFilter={updateFilter}
-              clearFilters={clearFilters}
-              filterOptions={filterOptions}
-            />
-          </aside>
-
-          {/* Sidebar — Mobile */}
-          {sidebarOpen && (
-            <>
-              <div
-                className="fixed inset-0 bg-black/50 z-40 lg:hidden"
-                onClick={() => setSidebarOpen(false)}
+        <div className="container mx-auto px-4 pb-8">
+          <div className="lg:flex lg:items-start lg:gap-6">
+            {/* Filter panel — Desktop: contained floating panel inside the page
+                flow, not pinned to the browser edge. */}
+            <aside className="hidden lg:block w-64 shrink-0 sticky top-[76px] rounded-dbb-lg bg-white dark:bg-dbb-secondary shadow-dbb-sm border border-black/[0.04] dark:border-white/[0.06] max-h-[calc(100vh-96px)] overflow-y-auto">
+              <Sidebar
+                filters={filters}
+                updateFilter={updateFilter}
+                clearFilters={clearFilters}
+                filterOptions={filterOptions}
               />
-              <aside className="fixed left-0 top-0 bottom-0 w-80 z-50 lg:hidden">
-                <div className="h-full bg-white dark:bg-dbb-primary overflow-y-auto">
-                  <div className="p-4 border-b border-gray-200 dark:border-dbb-tertiary/30 flex items-center justify-between">
-                    <h2 className="text-lg font-semibold">Filters</h2>
-                    <button onClick={() => setSidebarOpen(false)} className="p-2 hover:bg-gray-100 dark:hover:bg-dbb-secondary rounded-dbb">
+            </aside>
+
+            {/* Filter bottom sheet — Mobile (replaces the left drawer) */}
+            {filterSheetOpen && (
+              <div className="lg:hidden fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label="Filters">
+                <div
+                  className="absolute inset-0 bg-black/50"
+                  onClick={() => setFilterSheetOpen(false)}
+                />
+                <div className="absolute left-0 right-0 bottom-0 max-h-[85vh] rounded-t-dbb-xl dbb-glass-sheet shadow-dbb-md flex flex-col">
+                  <div className="shrink-0 flex items-center justify-center pt-2 pb-1">
+                    <span className="w-9 h-1 rounded-full bg-gray-300 dark:bg-gray-600" />
+                  </div>
+                  <div className="shrink-0 px-4 pb-3 flex items-center justify-between border-b border-black/5 dark:border-white/10">
+                    <h2 className="text-dbb-lg font-semibold text-gray-900 dark:text-white">Filters</h2>
+                    <button
+                      onClick={() => setFilterSheetOpen(false)}
+                      className="p-2 -mr-2 hover:bg-black/5 dark:hover:bg-white/10 rounded-full"
+                      aria-label="Close filters"
+                    >
                       <X className="w-5 h-5" />
                     </button>
                   </div>
-                  <Sidebar
-                    filters={filters}
-                    updateFilter={updateFilter}
-                    clearFilters={clearFilters}
-                    filterOptions={filterOptions}
-                  />
+                  <div className="flex-1 overflow-y-auto">
+                    <Sidebar
+                      filters={filters}
+                      updateFilter={updateFilter}
+                      clearFilters={clearFilters}
+                      filterOptions={filterOptions}
+                    />
+                  </div>
+                  <div className="shrink-0 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] border-t border-black/5 dark:border-white/10">
+                    <button
+                      onClick={() => setFilterSheetOpen(false)}
+                      className="w-full btn btn-primary btn-lg"
+                    >
+                      Show {total} result{total !== 1 ? 's' : ''}
+                    </button>
+                  </div>
                 </div>
-              </aside>
-            </>
-          )}
-
-          {/* Main Content */}
-          <main className="flex-1 lg:ml-72 p-4 lg:p-6">
-            {/* Sort control */}
-            <div className="mb-4 flex items-center justify-between">
-              <select
-                value={filters.sortBy}
-                onChange={(e) => updateFilter('sortBy', e.target.value)}
-                className="bg-white dark:bg-dbb-secondary border border-gray-200 dark:border-dbb-tertiary/50 rounded-dbb px-3 py-1.5 text-sm focus:border-dbb-accent focus:outline-none"
-              >
-                <option value="newest">Newest</option>
-                <option value="price_high">Price: High → Low</option>
-                <option value="price_low">Price: Low → High</option>
-                <option value="name_az">Name: A–Z</option>
-                <option value="rarity">Rarity</option>
-              </select>
-              {hasMore && !loading && (
-                <p className="text-xs text-gray-500">Scroll for more</p>
-              )}
-            </div>
-
-            {loading ? (
-              <LoadingSkeleton count={12} />
-            ) : error ? (
-              <div className="text-center py-12">
-                <p className="text-red-600 dark:text-red-400 mb-4">{error}</p>
-                <button onClick={() => loadListings()} className="btn btn-primary btn-md">
-                  Try Again
-                </button>
               </div>
-            ) : listings.length === 0 ? (
-              <div className="text-center py-16">
-                <Grid className="w-16 h-16 mx-auto mb-4 text-gray-600" />
-                <h2 className="text-xl font-semibold mb-2">
-                  {hasActiveFilters ? 'No listings match your filters' : 'No cards on the bazaar yet'}
-                </h2>
-                <p className="text-gray-500 dark:text-gray-400 mb-4">
-                  {hasActiveFilters
-                    ? 'Try adjusting your filters or clearing them.'
-                    : 'List yours from your library to get started.'}
-                </p>
-                {hasActiveFilters ? (
-                  <button onClick={clearFilters} className="btn btn-primary btn-md">
-                    Clear All Filters
+            )}
+
+            {/* Main content */}
+            <main className="flex-1 min-w-0 mt-4 lg:mt-0">
+              {/* Active filter chips — one horizontally-scrollable row */}
+              {chips.length > 0 && (
+                <div className="flex items-center gap-2 mb-3 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none">
+                  {chips.map(chip => (
+                    <button
+                      key={chip.key}
+                      onClick={() => removeChip(chip)}
+                      className="shrink-0 flex items-center gap-1 pl-3 pr-2 h-8 rounded-full bg-dbb-accent/10 text-dbb-accent text-xs font-medium hover:bg-dbb-accent/15 transition-colors"
+                    >
+                      {chip.label}
+                      <X className="w-3 h-3" />
+                    </button>
+                  ))}
+                  <button
+                    onClick={clearFilters}
+                    className="shrink-0 text-xs text-gray-500 dark:text-gray-400 hover:text-dbb-accent transition-colors underline underline-offset-2"
+                  >
+                    Clear all
                   </button>
-                ) : (
-                  <a href="/library" className="btn btn-primary btn-md inline-block">
-                    Go to your library →
-                  </a>
+                </div>
+              )}
+
+              {/* Result toolbar — sort control lives here, directly above the grid */}
+              <div className="flex items-center justify-between mb-4">
+                <select
+                  value={filters.sortBy}
+                  onChange={(e) => updateFilter('sortBy', e.target.value)}
+                  aria-label="Sort by"
+                  className="bg-white dark:bg-dbb-secondary border border-gray-200 dark:border-dbb-tertiary/50 rounded-dbb px-3 py-1.5 text-sm focus:border-dbb-accent focus:outline-none"
+                >
+                  {Object.entries(SORT_LABELS).map(([value, label]) => (
+                    <option key={value} value={value}>{label}</option>
+                  ))}
+                </select>
+                {hasMore && !loading && (
+                  <p className="text-xs text-gray-500">Scroll for more</p>
                 )}
               </div>
-            ) : (
-              <>
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-                  {listings.map(listing => (
-                    <BazaarCard
-                      key={listing.id}
-                      listing={listing}
-                      priceData={prices[`${listing.library_cards?.scryfall_id}:${listing.library_cards?.foil || 'normal'}`]}
-                      onClick={() => setSelectedListing(listing)}
-                    />
-                  ))}
+
+              {loading ? (
+                <LoadingSkeleton count={12} />
+              ) : error ? (
+                <div className="text-center py-12">
+                  <p className="text-red-600 dark:text-red-400 mb-4">{error}</p>
+                  <button onClick={() => loadListings()} className="btn btn-primary btn-md">
+                    Try Again
+                  </button>
                 </div>
-                <div id="bazaar-sentinel" className="h-20 flex items-center justify-center py-4">
-                  {loadingMore && (
-                    <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400 text-sm">
-                      <Loader2 className="w-4 h-4 animate-spin" /> Loading more...
-                    </div>
-                  )}
-                  {!hasMore && listings.length > 0 && (
-                    <div className="text-gray-600 dark:text-gray-500 text-sm">All {total} listings shown</div>
+              ) : listings.length === 0 ? (
+                <div className="text-center py-16">
+                  <Grid className="w-16 h-16 mx-auto mb-4 text-gray-600" />
+                  <h2 className="text-xl font-semibold mb-2">
+                    {hasActiveFilters ? 'No listings match your filters' : 'No cards on the bazaar yet'}
+                  </h2>
+                  <p className="text-gray-500 dark:text-gray-400 mb-4">
+                    {hasActiveFilters
+                      ? 'Try adjusting your filters or clearing them.'
+                      : 'List yours from your library to get started.'}
+                  </p>
+                  {hasActiveFilters ? (
+                    <button onClick={clearFilters} className="btn btn-primary btn-md">
+                      Clear All Filters
+                    </button>
+                  ) : (
+                    <a href="/library" className="btn btn-primary btn-md inline-block">
+                      Go to your library →
+                    </a>
                   )}
                 </div>
-              </>
-            )}
-          </main>
+              ) : (
+                <>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 min-[900px]:grid-cols-4 min-[1440px]:grid-cols-5 gap-3 sm:gap-4 lg:gap-5">
+                    {listings.map(listing => (
+                      <BazaarCard
+                        key={listing.id}
+                        listing={listing}
+                        priceData={prices[`${listing.library_cards?.scryfall_id}:${listing.library_cards?.foil || 'normal'}`]}
+                        onClick={() => setSelectedListing(listing)}
+                      />
+                    ))}
+                  </div>
+                  <div id="bazaar-sentinel" className="h-20 flex items-center justify-center py-4">
+                    {loadingMore && (
+                      <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400 text-sm">
+                        <Loader2 className="w-4 h-4 animate-spin" /> Loading more...
+                      </div>
+                    )}
+                    {!hasMore && listings.length > 0 && (
+                      <div className="text-gray-600 dark:text-gray-500 text-sm">All {total} listings shown</div>
+                    )}
+                  </div>
+                </>
+              )}
+            </main>
+          </div>
         </div>
       )}
 
