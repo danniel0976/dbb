@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
-import { X, Loader2, User, Camera, Calendar, Maximize2 } from 'lucide-react'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { X, Loader2, User, Camera, Calendar, Maximize2, MoreHorizontal } from 'lucide-react'
 
 function relativeTime(isoString, future = false) {
   if (!isoString) return null
@@ -33,7 +33,6 @@ const RARITY_COLORS = {
 const FOIL_LABELS = { foil: 'Foil', etched: 'Etched', normal: 'Non-foil' }
 
 // ConditionProof — lazy-loaded lightbox showing the seller's real-life card photo.
-// Only fetched when the buyer explicitly clicks "View card condition".
 function ConditionProof({ listingId, onClose }) {
   const [photoUrl, setPhotoUrl] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -52,41 +51,47 @@ function ConditionProof({ listingId, onClose }) {
       className="fixed inset-0 z-[70] bg-black/80 flex items-center justify-center p-4"
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
-      <div className="bg-white dark:bg-dbb-primary border border-dbb-accent/30 rounded-xl max-w-md w-full shadow-2xl">
-        <div className="flex items-center justify-between p-3 border-b border-gray-200 dark:border-gray-700">
-          <h3 className="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-1.5">
-            <Camera className="w-4 h-4 text-dbb-accent" /> Condition proof
+      <div className="bg-white dark:bg-dbb-primary rounded-dbb-xl max-w-md w-full shadow-2xl overflow-hidden">
+        {/* Glass chrome header */}
+        <div className="dbb-glass-chrome flex items-center justify-between px-4 py-3">
+          <h3 className="text-dbb-sm font-semibold text-gray-900 dark:text-white flex items-center gap-1.5">
+            <Camera className="h-4 w-4 text-dbb-accent" /> Condition proof
           </h3>
-          <button onClick={onClose} className="p-1 hover:text-dbb-accent transition-colors">
-            <X className="w-4 h-4" />
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            className="flex h-11 w-11 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-black/5 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-white/10 dark:hover:text-white"
+          >
+            <X className="h-5 w-5" />
           </button>
         </div>
-        <div className="p-3">
+        {/* Solid body */}
+        <div className="p-4">
           {loading ? (
-            <div className="flex items-center justify-center gap-2 py-8 text-sm text-gray-500 dark:text-gray-600">
-              <Loader2 className="w-4 h-4 animate-spin" /> Loading photo...
+            <div className="flex items-center justify-center gap-2 py-8 text-dbb-sm text-gray-500 dark:text-gray-600">
+              <Loader2 className="h-4 w-4 animate-spin" /> Loading photo...
             </div>
           ) : photoUrl ? (
             <div className="relative">
               <img
                 src={photoUrl}
                 alt="Card condition proof"
-                className="w-full rounded-lg border border-gray-700"
+                className="w-full rounded-dbb-md object-contain"
               />
               <button
                 onClick={() => setEnlarged(true)}
-                className="absolute bottom-2 right-2 p-1.5 bg-black/60 rounded-lg text-white hover:bg-black/80 transition-colors"
+                className="absolute bottom-2 right-2 flex h-11 w-11 items-center justify-center rounded-dbb-md bg-black/60 text-white transition-colors hover:bg-black/80"
                 title="View full size"
               >
-                <Maximize2 className="w-3.5 h-3.5" />
+                <Maximize2 className="h-4 w-4" />
               </button>
             </div>
           ) : (
-            <div className="flex items-center gap-2 py-6 text-xs text-gray-500 justify-center">
-              <Camera className="w-4 h-4" /> No condition photo available
+            <div className="flex items-center gap-2 py-6 text-dbb-xs text-gray-500 justify-center">
+              <Camera className="h-4 w-4" /> No condition photo available
             </div>
           )}
-          <p className="text-[10px] text-gray-500 dark:text-gray-600 mt-2 text-center">
+          <p className="mt-2 text-center text-dbb-xs text-gray-500 dark:text-gray-600">
             Seller's real-life card photo — condition evidence for this listing.
           </p>
         </div>
@@ -99,15 +104,15 @@ function ConditionProof({ listingId, onClose }) {
           onClick={() => setEnlarged(false)}
         >
           <button
-            className="absolute top-4 right-4 p-2 text-white hover:text-dbb-accent transition-colors"
+            className="absolute top-4 right-4 flex h-11 w-11 items-center justify-center text-white transition-colors hover:text-dbb-accent"
             onClick={() => setEnlarged(false)}
           >
-            <X className="w-6 h-6" />
+            <X className="h-6 w-6" />
           </button>
           <img
             src={photoUrl.split('?')[0]}
             alt="Card condition proof — full size"
-            className="max-w-full max-h-full object-contain rounded-lg"
+            className="max-w-full max-h-full object-contain rounded-dbb-md"
           />
         </div>
       )}
@@ -129,7 +134,6 @@ function SellerPopup({ listingId, onClose, userId }) {
       .finally(() => setLoading(false))
   }, [listingId])
 
-  // Check if current user follows this seller
   useEffect(() => {
     if (!userId || !data?.id) return
     fetch(`/api/follows?check_user=${data.id}`)
@@ -170,32 +174,37 @@ function SellerPopup({ listingId, onClose, userId }) {
       className="fixed inset-0 z-[60] bg-black/60 flex items-center justify-center p-4"
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
-      <div className="bg-white dark:bg-dbb-primary border border-dbb-accent/30 rounded-xl max-w-sm w-full shadow-2xl">
-        <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
-          <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Seller info</h3>
-          <button onClick={onClose} className="p-1 hover:text-dbb-accent transition-colors">
-            <X className="w-4 h-4" />
+      <div className="bg-white dark:bg-dbb-primary rounded-dbb-xl max-w-sm w-full shadow-2xl overflow-hidden">
+        {/* Glass chrome header */}
+        <div className="dbb-glass-chrome flex items-center justify-between px-4 py-3">
+          <h3 className="text-dbb-sm font-semibold text-gray-900 dark:text-white">Seller info</h3>
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            className="flex h-11 w-11 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-black/5 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-white/10 dark:hover:text-white"
+          >
+            <X className="h-5 w-5" />
           </button>
         </div>
-
-        <div className="p-4 space-y-3">
+        {/* Solid body */}
+        <div className="space-y-3 p-4">
           {loading ? (
-            <div className="flex items-center justify-center gap-2 py-6 text-sm text-gray-500 dark:text-gray-600">
-              <Loader2 className="w-4 h-4 animate-spin" /> Loading...
+            <div className="flex items-center justify-center gap-2 py-6 text-dbb-sm text-gray-500 dark:text-gray-600">
+              <Loader2 className="h-4 w-4 animate-spin" /> Loading...
             </div>
           ) : !data ? (
-            <p className="text-sm text-gray-500 text-center py-4">Seller info unavailable.</p>
+            <p className="py-4 text-center text-dbb-sm text-gray-500">Seller info unavailable.</p>
           ) : (
             <>
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-dbb-accent/20 flex items-center justify-center flex-shrink-0">
-                  <User className="w-5 h-5 text-dbb-accent" />
+                <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full bg-dbb-accent/20">
+                  <User className="h-5 w-5 text-dbb-accent" />
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-gray-900 dark:text-white">{data.display_name}</p>
+                  <p className="text-dbb-sm font-semibold text-gray-900 dark:text-white">{data.display_name}</p>
                   {data.member_since && (
-                    <p className="text-xs text-gray-500 flex items-center gap-1">
-                      <Calendar className="w-3 h-3" />
+                    <p className="flex items-center gap-1 text-dbb-xs text-gray-500">
+                      <Calendar className="h-3 w-3" />
                       Member since {formatDate(data.member_since)}
                     </p>
                   )}
@@ -205,14 +214,14 @@ function SellerPopup({ listingId, onClose, userId }) {
                 <button
                   onClick={handleFollowUser}
                   disabled={followLoading}
-                  className={`w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-dbb text-sm font-medium transition-colors ${
+                  className={`flex min-h-[44px] w-full items-center justify-center gap-1.5 rounded-dbb-md text-dbb-sm font-medium transition-colors ${
                     isFollowing
                       ? 'bg-dbb-accent/10 text-dbb-accent border border-dbb-accent/30'
-                      : 'btn btn-primary btn-md'
+                      : 'bg-dbb-accent text-white hover:bg-dbb-accent-hov'
                   }`}
                 >
                   {followLoading ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <Loader2 className="h-4 w-4 animate-spin" />
                   ) : isFollowing ? (
                     <>Following</>
                   ) : (
@@ -244,7 +253,10 @@ export default function BazaarDetailModal({ listing, onClose, onSelectListing, u
   const [sellerPopupId, setSellerPopupId] = useState(null)
   const [proofListingId, setProofListingId] = useState(null)
 
-  // Fetch Scryfall card data (cached in sessionStorage)
+  const sheetRef = useRef(null)
+  const closeBtnRef = useRef(null)
+
+  // Fetch Scryfall card data
   useEffect(() => {
     if (!scryfallId) { setCardLoading(false); return }
     const cacheKey = `sf_card_${scryfallId}`
@@ -271,7 +283,7 @@ export default function BazaarDetailModal({ listing, onClose, onSelectListing, u
       .finally(() => setCardLoading(false))
   }, [scryfallId])
 
-  // Fetch CKD pricing from the batch endpoint
+  // Fetch CKD pricing
   useEffect(() => {
     if (!scryfallId) { setPriceLoading(false); return }
     const foilType = lc?.foil || 'normal'
@@ -289,7 +301,7 @@ export default function BazaarDetailModal({ listing, onClose, onSelectListing, u
       .finally(() => setPriceLoading(false))
   }, [scryfallId, lc?.foil])
 
-  // Fetch all active listings for this card (all sellers)
+  // Fetch all active listings for this card
   useEffect(() => {
     if (!scryfallId) { setSellersLoading(false); return }
     fetch(`/api/listings/card/${scryfallId}`)
@@ -299,14 +311,40 @@ export default function BazaarDetailModal({ listing, onClose, onSelectListing, u
       .finally(() => setSellersLoading(false))
   }, [scryfallId])
 
-  const handleKeyDown = useCallback((e) => {
-    if (e.key === 'Escape') onClose()
-  }, [onClose])
-
+  // Focus trap + scroll lock (matches CardDetailModal Pass 4a pattern)
   useEffect(() => {
-    document.addEventListener('keydown', handleKeyDown)
-    return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [handleKeyDown])
+    closeBtnRef.current?.focus()
+
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        onClose()
+        return
+      }
+      if (e.key !== 'Tab') return
+      const focusables = sheetRef.current?.querySelectorAll(
+        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      )
+      if (!focusables || focusables.length === 0) return
+      const first = focusables[0]
+      const last = focusables[focusables.length - 1]
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault()
+        last.focus()
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault()
+        first.focus()
+      }
+    }
+
+    document.addEventListener('keydown', onKeyDown)
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.removeEventListener('keydown', onKeyDown)
+      document.body.style.overflow = prevOverflow
+    }
+  }, [onClose])
 
   const computeMyr = (ckdUsd, multiplier) => {
     if (ckdUsd == null) return null
@@ -323,179 +361,207 @@ export default function BazaarDetailModal({ listing, onClose, onSelectListing, u
   return (
     <>
     <div
-      className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 sm:items-center sm:p-4"
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
+      role="presentation"
     >
-      <div className="bg-white dark:bg-dbb-primary border border-dbb-accent/30 rounded-xl max-w-3xl w-full max-h-[92vh] overflow-y-auto shadow-2xl">
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white dark:bg-dbb-primary z-10">
-          <h2 className="text-lg font-bold text-gray-900 dark:text-white truncate pr-4">{cardName}</h2>
-          <button onClick={onClose} className="p-1 hover:text-dbb-accent transition-colors flex-shrink-0">
-            <X className="w-5 h-5" />
+      {/* Mobile: full-height bottom sheet. Desktop: centered panel.
+          Solid content body; glass chrome only on header/footer. */}
+      <div
+        ref={sheetRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={cardName}
+        className="relative flex h-[92vh] w-full flex-col overflow-hidden rounded-t-dbb-xl bg-white shadow-2xl dark:bg-dbb-primary sm:h-auto sm:max-h-[90vh] sm:max-w-3xl sm:rounded-dbb-xl"
+      >
+        {/* Header — glass chrome */}
+        <div className="dbb-glass-chrome flex shrink-0 items-center justify-between gap-3 px-4 py-3 sm:px-6">
+          <h2 className="truncate text-dbb-lg font-semibold tracking-heading text-gray-900 dark:text-white">{cardName}</h2>
+          <button
+            ref={closeBtnRef}
+            onClick={onClose}
+            aria-label="Close"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-black/5 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-white/10 dark:hover:text-white"
+          >
+            <X className="h-5 w-5" />
           </button>
         </div>
 
-        <div className="flex flex-col sm:flex-row gap-4 p-4">
-          {/* Card image */}
-          <div className="sm:w-44 flex-shrink-0">
-            {cardLoading ? (
-              <div className="aspect-[2/3] skeleton rounded-lg" />
-            ) : imageUrl ? (
-              <img src={imageUrl} alt={cardName} className="w-full rounded-lg shadow-lg" />
-            ) : (
-              <div className="aspect-[2/3] bg-gray-100 dark:bg-dbb-secondary rounded-lg flex items-center justify-center">
-                <span className="text-gray-500 text-sm text-center p-2">{cardName}</span>
-              </div>
-            )}
-          </div>
-
-          {/* Right side */}
-          <div className="flex-1 min-w-0 space-y-4">
-            {/* Card metadata */}
-            <div className="space-y-1 text-sm text-gray-400">
-              {setName && (
-                <div>
-                  <span className="text-gray-500">Set:</span>{' '}
-                  {setName}
-                  {collectorNumber && (
-                    <span className="ml-1 text-gray-600">#{collectorNumber}</span>
-                  )}
-                </div>
-              )}
-              {rarity && (
-                <div>
-                  <span className="text-gray-500">Rarity:</span>{' '}
-                  <span className={RARITY_COLORS[rarity] || 'text-gray-400'}>
-                    {rarity.charAt(0).toUpperCase() + rarity.slice(1)}
-                  </span>
-                </div>
-              )}
-              {typeLine && (
-                <div><span className="text-gray-500">Type:</span> {typeLine}</div>
-              )}
-              {oracleText && (
-                <div className="mt-2 p-2.5 bg-dbb-secondary rounded text-xs leading-relaxed whitespace-pre-line text-gray-600 dark:text-gray-300">
-                  {oracleText}
-                </div>
-              )}
-            </div>
-
-            {/* CKD reference price */}
-            <div className="p-3 bg-gray-100 dark:bg-dbb-secondary rounded-lg">
-              <p className="text-xs text-gray-600 dark:text-gray-500 mb-1">CardKingdom Reference Price</p>
-              {priceLoading ? (
-                <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-600">
-                  <Loader2 className="w-3 h-3 animate-spin" /> Loading...
-                </div>
-              ) : ckdPrice != null ? (
-                <div className="flex items-baseline gap-2">
-                  <span className="text-base font-semibold text-gray-900 dark:text-white">${ckdPrice.toFixed(2)}</span>
-                  <span className="text-xs text-gray-500">CKD USD</span>
-                </div>
+        {/* Scrollable solid body */}
+        <div className="flex-1 overflow-y-auto overscroll-contain">
+          <div className="flex flex-col gap-5 p-4 sm:flex-row sm:gap-6 sm:p-6">
+            {/* Card image — native MTG aspect ratio, never cropped */}
+            <div className="mx-auto w-40 shrink-0 sm:mx-0 sm:w-44">
+              {cardLoading ? (
+                <div className="aspect-[5/7] skeleton rounded-dbb-md" />
+              ) : imageUrl ? (
+                <img
+                  src={imageUrl}
+                  alt={cardName}
+                  className="h-auto w-full rounded-dbb-md object-contain shadow-dbb-md"
+                />
               ) : (
-                <span className="text-xs text-gray-500 dark:text-gray-600">No price data available</span>
+                <div className="flex aspect-[5/7] items-center justify-center rounded-dbb-md bg-gray-100 dark:bg-dbb-secondary">
+                  <span className="p-2 text-center text-dbb-sm text-gray-500">{cardName}</span>
+                </div>
               )}
             </div>
 
-            {/* Sellers / listings */}
-            <div>
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">
-                {sellersLoading
-                  ? 'Loading sellers...'
-                  : sellers?.length === 0
-                  ? 'No sellers available for this card'
-                  : `${sellers.length} seller${sellers.length !== 1 ? 's' : ''}`}
-              </h3>
+            {/* Right side — progressive info panel */}
+            <div className="flex min-w-0 flex-1 flex-col gap-4">
+              {/* Card metadata */}
+              <div className="space-y-1 text-dbb-sm text-gray-600 dark:text-gray-300">
+                {setName && (
+                  <div>
+                    <span className="text-gray-400 dark:text-gray-500">Set</span> · {setName}
+                    {collectorNumber && <span className="ml-1 text-gray-500">#{collectorNumber}</span>}
+                  </div>
+                )}
+                {rarity && (
+                  <div>
+                    <span className="text-gray-400 dark:text-gray-500">Rarity</span> ·{' '}
+                    <span className={RARITY_COLORS[rarity] || 'text-gray-400'}>
+                      {rarity.charAt(0).toUpperCase() + rarity.slice(1)}
+                    </span>
+                  </div>
+                )}
+                {typeLine && (
+                  <div><span className="text-gray-400 dark:text-gray-500">Type</span> · {typeLine}</div>
+                )}
+                {oracleText && (
+                  <div className="mt-2 whitespace-pre-line rounded-dbb-md bg-gray-50 p-3 text-dbb-xs leading-relaxed text-gray-600 dark:bg-dbb-secondary dark:text-gray-300">
+                    {oracleText}
+                  </div>
+                )}
+              </div>
 
-              {sellersLoading ? (
-                <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-600 py-3">
-                  <Loader2 className="w-4 h-4 animate-spin" /> Fetching listings...
-                </div>
-              ) : sellers && sellers.length > 0 ? (
-                <div className="space-y-2">
-                  {sellers.map(s => {
-                    const slc = s.library_cards
-                    const myr = computeMyr(ckdPrice, s.multiplier)
-                    const foilBadge = slc?.foil && FOIL_BADGES[slc.foil]
-                    const isSelected = selectedListingId === s.id
-                    return (
-                      <div
-                        key={s.id}
-                        className={`flex flex-col gap-1.5 p-2.5 rounded-lg border transition-colors ${
-                          isSelected
-                            ? 'border-dbb-accent bg-dbb-accent/10'
-                            : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-dbb-secondary hover:border-gray-300 dark:hover:border-gray-600'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-2 min-w-0 flex-1">
-                          <User className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
-                          <button
-                            onClick={() => setSellerPopupId(s.id)}
-                            className="text-sm text-gray-600 dark:text-gray-300 hover:text-dbb-accent transition-colors truncate max-w-[120px] text-left"
-                            title="View seller profile"
-                          >
-                            {s.seller_name || 'Seller'}
-                          </button>
-                          <span className="text-xs border border-gray-300 dark:border-gray-600 rounded px-1 py-0.5 text-gray-500 dark:text-gray-400 flex-shrink-0">
-                            {slc?.condition || 'NM'}
-                          </span>
-                          {foilBadge && (
-                            <span className={`text-[10px] border rounded px-1 py-0.5 flex-shrink-0 ${foilBadge.cls}`}>
-                              {foilBadge.label}
-                            </span>
-                          )}
-                          {s.quantity > 1 && (
-                            <span className="text-[10px] text-gray-500 dark:text-gray-400 flex-shrink-0">
-                              {s.quantity}×
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2 flex-shrink-0">
-                          <div className="text-right">
-                            <div className="text-sm font-semibold text-dbb-accent">
-                              {myr != null ? `RM ${myr.toFixed(2)}` : '—'}
-                            </div>
-                            <div className="text-[10px] text-gray-500 dark:text-gray-600">×{s.multiplier}</div>
-                          </div>
-                          {/* onSelectListing stub — Phase 11 wires this to cart */}
-                          <button
-                            onClick={() => {
-                              setSelectedListingId(s.id)
-                              onSelectListing(s)
-                            }}
-                            className={`btn btn-sm flex-shrink-0 ${
-                              isSelected
-                                ? 'btn-primary'
-                                : 'btn-secondary hover:bg-dbb-accent hover:text-white'
-                            }`}
-                          >
-                            {isSelected ? 'Selected' : 'Select'}
-                          </button>
-                        </div>
-                        </div>
-                        {/* Listed-at / expires-in timestamps */}
-                        {(s.created_at || s.expires_at) && (
-                          <p className="text-[10px] text-gray-500 dark:text-gray-600 pl-0.5">
-                            {s.created_at && `listed ${relativeTime(s.created_at, false)}`}
-                            {s.created_at && s.expires_at && ' · '}
-                            {s.expires_at && `expires ${relativeTime(s.expires_at, true)}`}
-                          </p>
-                        )}
-                        {/* View card condition (lazy fetch — no auto-load) */}
-                        <button
-                          onClick={() => setProofListingId(s.id)}
-                          className="btn btn-outline btn-sm mt-1"
+              {/* CKD reference price — always visible */}
+              <div className="rounded-dbb-md bg-gray-50 p-3 dark:bg-dbb-secondary">
+                <p className="mb-1 text-dbb-xs text-gray-600 dark:text-gray-500">CardKingdom Reference Price</p>
+                {priceLoading ? (
+                  <div className="flex items-center gap-1.5 text-dbb-xs text-gray-500 dark:text-gray-600">
+                    <Loader2 className="h-3 w-3 animate-spin" /> Loading...
+                  </div>
+                ) : ckdPrice != null ? (
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-base font-semibold text-gray-900 dark:text-white">${ckdPrice.toFixed(2)}</span>
+                    <span className="text-dbb-xs text-gray-500">CKD USD</span>
+                  </div>
+                ) : (
+                  <span className="text-dbb-xs text-gray-500 dark:text-gray-600">No price data available</span>
+                )}
+              </div>
+
+              {/* Sellers / listings */}
+              <div>
+                <h3 className="mb-2 text-dbb-sm font-semibold text-gray-900 dark:text-white">
+                  {sellersLoading
+                    ? 'Loading sellers...'
+                    : sellers?.length === 0
+                    ? 'No sellers available for this card'
+                    : `${sellers.length} seller${sellers.length !== 1 ? 's' : ''}`}
+                </h3>
+
+                {sellersLoading ? (
+                  <div className="flex items-center gap-2 py-3 text-dbb-xs text-gray-500 dark:text-gray-600">
+                    <Loader2 className="h-4 w-4 animate-spin" /> Fetching listings...
+                  </div>
+                ) : sellers && sellers.length > 0 ? (
+                  <div className="space-y-2">
+                    {sellers.map(s => {
+                      const slc = s.library_cards
+                      const myr = computeMyr(ckdPrice, s.multiplier)
+                      const foilBadge = slc?.foil && FOIL_BADGES[slc.foil]
+                      const isSelected = selectedListingId === s.id
+                      return (
+                        <div
+                          key={s.id}
+                          className={`rounded-dbb-md border p-3 transition-colors ${
+                            isSelected
+                              ? 'border-dbb-accent bg-dbb-accent/10'
+                              : 'border-gray-200 bg-white dark:border-gray-700 dark:bg-dbb-secondary hover:border-gray-300 dark:hover:border-gray-600'
+                          }`}
                         >
-                          <Camera className="w-3.5 h-3.5" /> View card condition
-                        </button>
-                      </div>
-                    )
-                  })}
-                </div>
-              ) : null}
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex min-w-0 flex-1 items-center gap-2">
+                              <User className="h-3.5 w-3.5 flex-shrink-0 text-gray-500" />
+                              <button
+                                onClick={() => setSellerPopupId(s.id)}
+                                className="max-w-[120px] truncate text-left text-dbb-sm text-gray-600 transition-colors hover:text-dbb-accent dark:text-gray-300"
+                                title="View seller profile"
+                              >
+                                {s.seller_name || 'Seller'}
+                              </button>
+                              <span className="flex-shrink-0 rounded border border-gray-300 px-1 py-0.5 text-dbb-xs text-gray-500 dark:border-gray-600 dark:text-gray-400">
+                                {slc?.condition || 'NM'}
+                              </span>
+                              {foilBadge && (
+                                <span className={`flex-shrink-0 rounded border px-1 py-0.5 text-dbb-xs ${foilBadge.cls}`}>
+                                  {foilBadge.label}
+                                </span>
+                              )}
+                              {s.quantity > 1 && (
+                                <span className="flex-shrink-0 text-dbb-xs text-gray-500 dark:text-gray-400">
+                                  {s.quantity}×
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex flex-shrink-0 items-center gap-2">
+                              <div className="text-right">
+                                <div className="text-dbb-sm font-semibold text-dbb-accent">
+                                  {myr != null ? `RM ${myr.toFixed(2)}` : '—'}
+                                </div>
+                                <div className="text-dbb-xs text-gray-500 dark:text-gray-600">×{s.multiplier}</div>
+                              </div>
+                              <button
+                                onClick={() => {
+                                  setSelectedListingId(s.id)
+                                  onSelectListing(s)
+                                }}
+                                className={`flex min-h-[44px] flex-shrink-0 items-center rounded-dbb-md px-3 text-dbb-sm font-medium transition-colors ${
+                                  isSelected
+                                    ? 'bg-dbb-accent text-white'
+                                    : 'bg-gray-100 text-gray-600 hover:bg-dbb-accent hover:text-white dark:bg-dbb-secondary dark:text-gray-300'
+                                }`}
+                              >
+                                {isSelected ? 'Selected' : 'Select'}
+                              </button>
+                            </div>
+                          </div>
+                          {(s.created_at || s.expires_at) && (
+                            <p className="mt-1 pl-0.5 text-dbb-xs text-gray-500 dark:text-gray-600">
+                              {s.created_at && `listed ${relativeTime(s.created_at, false)}`}
+                              {s.created_at && s.expires_at && ' · '}
+                              {s.expires_at && `expires ${relativeTime(s.expires_at, true)}`}
+                            </p>
+                          )}
+                          <button
+                            onClick={() => setProofListingId(s.id)}
+                            className="mt-2 flex min-h-[44px] items-center gap-1.5 rounded-dbb-md border border-gray-200 px-3 text-dbb-sm text-gray-600 transition-colors hover:border-dbb-accent hover:text-dbb-accent dark:border-gray-700 dark:text-gray-300"
+                          >
+                            <Camera className="h-3.5 w-3.5" /> View card condition
+                          </button>
+                        </div>
+                      )
+                    })}
+                  </div>
+                ) : null}
+              </div>
             </div>
           </div>
+        </div>
+
+        {/* Sticky footer — glass chrome top edge */}
+        <div
+          className="dbb-glass-chrome dbb-glass-chrome--edge-top flex shrink-0 items-center justify-end gap-3 px-4 py-3 sm:px-6"
+          style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
+        >
+          <button
+            onClick={onClose}
+            className="min-h-[44px] px-4 text-dbb-sm text-gray-500 transition-colors hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
+          >
+            Close
+          </button>
         </div>
       </div>
     </div>

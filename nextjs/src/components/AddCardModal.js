@@ -3,6 +3,44 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { X, Search, Loader2, Plus, ChevronRight, ChevronDown, Filter } from 'lucide-react'
 
+// Focus trap + scroll lock (matches CardDetailModal Pass 4a pattern)
+function useFocusTrap(sheetRef, closeBtnRef, onClose, extraDeps = []) {
+  useEffect(() => {
+    closeBtnRef.current?.focus()
+
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        onClose()
+        return
+      }
+      if (e.key !== 'Tab') return
+      const focusables = sheetRef.current?.querySelectorAll(
+        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      )
+      if (!focusables || focusables.length === 0) return
+      const first = focusables[0]
+      const last = focusables[focusables.length - 1]
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault()
+        last.focus()
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault()
+        first.focus()
+      }
+    }
+
+    document.addEventListener('keydown', onKeyDown)
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.removeEventListener('keydown', onKeyDown)
+      document.body.style.overflow = prevOverflow
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onClose, ...extraDeps])
+}
+
 const CONDITIONS = [
   { value: 'NM', label: 'NM – Near Mint' },
   { value: 'LP', label: 'LP – Lightly Played' },
@@ -82,7 +120,7 @@ function CardImage({ card, size = 'sm' }) {
       alt={card.name}
       loading="lazy"
       onLoad={() => setLoaded(true)}
-      className={`${dims} object-cover rounded flex-shrink-0 transition-opacity duration-200 ${loaded ? 'opacity-100' : 'opacity-0'}`}
+      className={`${dims} object-contain rounded-dbb-md flex-shrink-0 transition-opacity duration-200 ${loaded ? 'opacity-100' : 'opacity-0'}`}
     />
   )
 }
@@ -131,7 +169,7 @@ function AddForm({ edition, cardName, binders, onAdd, onBack, adding }) {
         <select
           value={binderId}
           onChange={e => setBinderId(e.target.value)}
-          className="w-full bg-white dark:bg-dbb-secondary border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-sm focus:border-dbb-accent focus:outline-none"
+          className="h-11 w-full rounded-dbb-md border border-gray-200 bg-white px-3 text-dbb-sm focus:border-dbb-accent focus:outline-none dark:border-gray-700 dark:bg-dbb-secondary"
         >
           {binders.map(b => (
             <option key={b.id} value={b.id}>{b.name}{b.is_default ? ' (default)' : ''}</option>
@@ -145,7 +183,7 @@ function AddForm({ edition, cardName, binders, onAdd, onBack, adding }) {
         <select
           value={condition}
           onChange={e => setCondition(e.target.value)}
-          className="w-full bg-white dark:bg-dbb-secondary border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-sm focus:border-dbb-accent focus:outline-none"
+          className="h-11 w-full rounded-dbb-md border border-gray-200 bg-white px-3 text-dbb-sm focus:border-dbb-accent focus:outline-none dark:border-gray-700 dark:bg-dbb-secondary"
         >
           {CONDITIONS.map(c => (
             <option key={c.value} value={c.value}>{c.label}</option>
@@ -159,14 +197,14 @@ function AddForm({ edition, cardName, binders, onAdd, onBack, adding }) {
         <div className="flex gap-2">
           <button
             onClick={() => setFoil('normal')}
-            className={`flex-1 py-2 text-sm rounded-lg border transition-colors ${foil === 'normal' ? 'border-dbb-accent bg-dbb-accent/10 text-dbb-accent' : 'border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600'}`}
+            className={`flex min-h-[44px] flex-1 items-center justify-center rounded-dbb-md border text-dbb-sm transition-colors ${foil === 'normal' ? 'border-dbb-accent bg-dbb-accent/10 text-dbb-accent' : 'border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600'}`}
           >
             Non-foil
           </button>
           {hasFoil && (
             <button
               onClick={() => setFoil('foil')}
-              className={`flex-1 py-2 text-sm rounded-lg border transition-colors ${foil === 'foil' ? 'border-yellow-500 bg-yellow-500/10 text-yellow-400' : 'border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600'}`}
+              className={`flex min-h-[44px] flex-1 items-center justify-center rounded-dbb-md border text-dbb-sm transition-colors ${foil === 'foil' ? 'border-yellow-500 bg-yellow-500/10 text-yellow-400' : 'border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600'}`}
             >
               Foil
             </button>
@@ -174,7 +212,7 @@ function AddForm({ edition, cardName, binders, onAdd, onBack, adding }) {
           {hasEtched && (
             <button
               onClick={() => setFoil('etched')}
-              className={`flex-1 py-2 text-sm rounded-lg border transition-colors ${foil === 'etched' ? 'border-purple-500 bg-purple-500/10 text-purple-400' : 'border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600'}`}
+              className={`flex min-h-[44px] flex-1 items-center justify-center rounded-dbb-md border text-dbb-sm transition-colors ${foil === 'etched' ? 'border-purple-500 bg-purple-500/10 text-purple-400' : 'border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600'}`}
             >
               Etched
             </button>
@@ -188,7 +226,7 @@ function AddForm({ edition, cardName, binders, onAdd, onBack, adding }) {
         <div className="flex items-center gap-2">
           <button
             onClick={() => setQuantity(q => Math.max(1, q - 1))}
-            className="w-8 h-8 rounded border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:border-dbb-accent hover:text-gray-900 dark:hover:text-white transition-colors flex items-center justify-center text-lg"
+            className="flex h-11 w-11 items-center justify-center rounded-dbb-md border border-gray-200 text-lg transition-colors hover:border-dbb-accent hover:text-gray-900 dark:border-gray-700 dark:text-gray-400 dark:hover:text-white"
           >
             −
           </button>
@@ -198,11 +236,11 @@ function AddForm({ edition, cardName, binders, onAdd, onBack, adding }) {
             max={9999}
             value={quantity}
             onChange={e => setQuantity(Math.min(9999, Math.max(1, parseInt(e.target.value) || 1)))}
-            className="w-16 text-center bg-white dark:bg-dbb-secondary border border-gray-200 dark:border-gray-700 rounded-lg px-2 py-1.5 text-sm focus:border-dbb-accent focus:outline-none"
+            className="h-11 w-16 rounded-dbb-md border border-gray-200 bg-white text-center text-dbb-sm focus:border-dbb-accent focus:outline-none dark:border-gray-700 dark:bg-dbb-secondary"
           />
           <button
             onClick={() => setQuantity(q => Math.min(9999, q + 1))}
-            className="w-8 h-8 rounded border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:border-dbb-accent hover:text-gray-900 dark:hover:text-white transition-colors flex items-center justify-center text-lg"
+            className="flex h-11 w-11 items-center justify-center rounded-dbb-md border border-gray-200 text-lg transition-colors hover:border-dbb-accent hover:text-gray-900 dark:border-gray-700 dark:text-gray-400 dark:hover:text-white"
           >
             +
           </button>
@@ -214,14 +252,14 @@ function AddForm({ edition, cardName, binders, onAdd, onBack, adding }) {
         <button
           onClick={onBack}
           disabled={adding}
-          className="flex-1 py-2 text-sm border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 rounded-lg hover:border-gray-300 dark:hover:border-gray-600 hover:text-white transition-colors disabled:opacity-50"
+          className="flex min-h-[44px] flex-1 items-center justify-center rounded-dbb-md border border-gray-200 text-dbb-sm text-gray-500 transition-colors hover:border-gray-300 hover:text-white disabled:opacity-50 dark:border-gray-700 dark:text-gray-400 dark:hover:border-gray-600"
         >
           ← Back
         </button>
         <button
           onClick={() => onAdd({ scryfall_id: card.scryfall_id, binder_id: binderId, quantity, foil, condition })}
           disabled={adding || !binderId}
-          className="flex-1 py-2 text-sm btn-primary rounded-lg flex items-center justify-center gap-2 disabled:opacity-50"
+          className="flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-dbb-md bg-dbb-accent text-dbb-sm font-semibold text-white transition-colors hover:bg-dbb-accent-hov disabled:opacity-50"
         >
           {adding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
           Add to library
@@ -260,7 +298,7 @@ function FilterBar({ filters, setFilters, onApply }) {
             <select
               value={filters.sort}
               onChange={e => setFilters({ ...filters, sort: e.target.value })}
-              className="w-full bg-white dark:bg-dbb-secondary border border-gray-200 dark:border-gray-700 rounded-lg px-2.5 py-1.5 text-xs focus:border-dbb-accent focus:outline-none"
+              className="h-11 w-full rounded-dbb-md border border-gray-200 bg-white px-2.5 text-dbb-xs focus:border-dbb-accent focus:outline-none dark:border-gray-700 dark:bg-dbb-secondary"
             >
               {SORT_OPTIONS.map(s => (
                 <option key={s.value} value={s.value}>{s.label}</option>
@@ -276,7 +314,7 @@ function FilterBar({ filters, setFilters, onApply }) {
               placeholder="e.g. fin, dmh"
               value={filters.set}
               onChange={e => setFilters({ ...filters, set: e.target.value })}
-              className="w-full bg-white dark:bg-dbb-secondary border border-gray-200 dark:border-gray-700 rounded-lg px-2.5 py-1.5 text-xs focus:border-dbb-accent focus:outline-none"
+              className="h-11 w-full rounded-dbb-md border border-gray-200 bg-white px-2.5 text-dbb-xs focus:border-dbb-accent focus:outline-none dark:border-gray-700 dark:bg-dbb-secondary"
             />
           </div>
 
@@ -286,7 +324,7 @@ function FilterBar({ filters, setFilters, onApply }) {
             <select
               value={filters.rarity}
               onChange={e => setFilters({ ...filters, rarity: e.target.value })}
-              className="w-full bg-white dark:bg-dbb-secondary border border-gray-200 dark:border-gray-700 rounded-lg px-2.5 py-1.5 text-xs focus:border-dbb-accent focus:outline-none"
+              className="h-11 w-full rounded-dbb-md border border-gray-200 bg-white px-2.5 text-dbb-xs focus:border-dbb-accent focus:outline-none dark:border-gray-700 dark:bg-dbb-secondary"
             >
               {RARITY_OPTIONS.map(r => (
                 <option key={r.value} value={r.value}>{r.label}</option>
@@ -303,7 +341,7 @@ function FilterBar({ filters, setFilters, onApply }) {
                   key={c.value}
                   onClick={() => toggleColor(c.value)}
                   title={c.title}
-                  className={`w-7 h-7 rounded text-xs font-bold border transition-colors ${
+                  className={`flex h-11 w-11 items-center justify-center rounded-dbb-md text-dbb-xs font-bold border transition-colors ${
                     filters.colors.includes(c.value)
                       ? 'border-dbb-accent bg-dbb-accent/10 text-dbb-accent'
                       : 'border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600'
@@ -627,20 +665,22 @@ export default function AddCardModal({ binders = [], onClose, onAdded }) {
     setError(null)
   }
 
-  // ─── Close on Escape ───────────────────────────────────────────────────
+  // ─── Back navigation on Escape (when in add form) ────────────────────
+  // The focus trap hook handles Escape → onClose; this intercepts first
+  // when the user is in the edition form to go back to search instead.
   useEffect(() => {
+    if (!selectedEdition) return
     const handler = (e) => {
       if (e.key === 'Escape') {
-        if (selectedEdition) {
-          setSelectedEdition(null)
-        } else {
-          onClose()
-        }
+        e.preventDefault()
+        e.stopPropagation()
+        setSelectedEdition(null)
       }
     }
-    window.addEventListener('keydown', handler)
-    return () => window.removeEventListener('keydown', handler)
-  }, [onClose, selectedEdition])
+    // Use capture phase so this fires before the focus trap's keydown
+    document.addEventListener('keydown', handler, true)
+    return () => document.removeEventListener('keydown', handler, true)
+  }, [selectedEdition])
 
   // ─── Cleanup on unmount ────────────────────────────────────────────────
   useEffect(() => {
@@ -651,20 +691,43 @@ export default function AddCardModal({ binders = [], onClose, onAdded }) {
     }
   }, [])
 
+  const sheetRef = useRef(null)
+  const closeBtnRef = useRef(null)
+
+  useFocusTrap(sheetRef, closeBtnRef, onClose, [selectedEdition])
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70">
-      <div className="bg-white dark:bg-dbb-primary border border-gray-200 dark:border-gray-700 rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 sm:items-center sm:p-4"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
+      role="presentation"
+    >
+      {/* Mobile: full-height bottom sheet. Desktop: centered panel.
+          Solid content body; glass chrome only on header. */}
+      <div
+        ref={sheetRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={selectedEdition ? 'Add to library' : 'Search card catalog'}
+        className="relative flex h-[92vh] w-full flex-col overflow-hidden rounded-t-dbb-xl bg-white shadow-2xl dark:bg-dbb-primary sm:h-auto sm:max-h-[90vh] sm:max-w-md sm:rounded-dbb-xl"
+      >
+        {/* Header — glass chrome */}
+        <div className="dbb-glass-chrome flex shrink-0 items-center justify-between gap-3 px-4 py-3">
+          <h2 className="truncate text-dbb-lg font-semibold tracking-heading text-gray-900 dark:text-white">
             {selectedEdition ? 'Add to library' : 'Search card catalog'}
           </h2>
-          <button onClick={onClose} className="p-1 text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white rounded transition-colors">
-            <X className="w-5 h-5" />
+          <button
+            ref={closeBtnRef}
+            onClick={onClose}
+            aria-label="Close"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-black/5 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-white/10 dark:hover:text-white"
+          >
+            <X className="h-5 w-5" />
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4">
+        {/* Scrollable solid body */}
+        <div className="flex-1 overflow-y-auto overscroll-contain p-4">
           {!selectedEdition ? (
             <div className="space-y-3">
               {/* Search input — explicit submit only */}
@@ -676,14 +739,14 @@ export default function AddCardModal({ binders = [], onClose, onAdded }) {
                   placeholder="Type a card name, then press Enter or Search"
                   value={q}
                   onChange={handleInput}
-                  className="w-full bg-white dark:bg-dbb-secondary border border-gray-200 dark:border-gray-700 rounded-lg pl-9 pr-24 py-2.5 text-sm focus:border-dbb-accent focus:outline-none placeholder-gray-400 dark:placeholder-gray-600"
+                  className="h-11 w-full rounded-dbb-md border border-gray-200 bg-white pl-9 pr-24 text-dbb-sm focus:border-dbb-accent focus:outline-none placeholder-gray-400 dark:border-gray-700 dark:bg-dbb-secondary dark:placeholder-gray-600"
                 />
                 <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
                   {q && (
                     <button
                       type="button"
                       onClick={handleClear}
-                      className="px-2 py-1 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
+                      className="flex min-h-[36px] items-center px-2 text-dbb-xs text-gray-500 transition-colors hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
                     >
                       Clear
                     </button>
@@ -691,7 +754,7 @@ export default function AddCardModal({ binders = [], onClose, onAdded }) {
                   <button
                     type="submit"
                     disabled={!q.trim() || loading}
-                    className="px-2.5 py-1 text-xs btn-primary rounded flex items-center gap-1 disabled:opacity-50"
+                    className="flex min-h-[36px] items-center gap-1 rounded-dbb-md bg-dbb-accent px-2.5 text-dbb-xs text-white transition-colors hover:bg-dbb-accent-hov disabled:opacity-50"
                   >
                     {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Search className="w-3 h-3" />}
                     Search
@@ -721,7 +784,7 @@ export default function AddCardModal({ binders = [], onClose, onAdded }) {
                     <button
                       onClick={handleLoadMore}
                       disabled={loadingMore}
-                      className="w-full py-2.5 text-sm border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 rounded-lg hover:border-dbb-accent hover:text-dbb-accent transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                      className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-dbb-md border border-gray-200 text-dbb-sm text-gray-600 transition-colors hover:border-dbb-accent hover:text-dbb-accent disabled:opacity-50 dark:border-gray-700 dark:text-gray-400"
                     >
                       {loadingMore ? <Loader2 className="w-4 h-4 animate-spin" /> : <ChevronDown className="w-4 h-4" />}
                       Load more
