@@ -1,6 +1,16 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import { ChevronDown, Sparkles } from 'lucide-react'
+
+function validatePriceRange(minRaw, maxRaw) {
+  const min = minRaw === '' ? null : Number(minRaw)
+  const max = maxRaw === '' ? null : Number(maxRaw)
+  if (min !== null && min < 0) return 'Min price cannot be negative'
+  if (max !== null && max < 0) return 'Max price cannot be negative'
+  if (min !== null && max !== null && min > max) return 'Min price cannot exceed max price'
+  return null
+}
 
 const rarityOrder = ['common', 'uncommon', 'rare', 'mythic']
 const rarityLabels = {
@@ -25,6 +35,25 @@ const colorOptions = [
 ]
 
 export default function Sidebar({ filters, updateFilter, clearFilters, filterOptions }) {
+  const [minPriceInput, setMinPriceInput] = useState(filters.minPrice ?? '')
+  const [maxPriceInput, setMaxPriceInput] = useState(filters.maxPrice ?? '')
+  const priceError = validatePriceRange(minPriceInput === '' ? '' : String(minPriceInput), maxPriceInput === '' ? '' : String(maxPriceInput))
+
+  useEffect(() => {
+    setMinPriceInput(filters.minPrice ?? '')
+    setMaxPriceInput(filters.maxPrice ?? '')
+  }, [filters.minPrice, filters.maxPrice])
+
+  const handlePriceChange = (field, setLocal, rawValue) => {
+    setLocal(rawValue)
+    const nextMin = field === 'minPrice' ? rawValue : minPriceInput
+    const nextMax = field === 'maxPrice' ? rawValue : maxPriceInput
+    const error = validatePriceRange(nextMin === '' ? '' : String(nextMin), nextMax === '' ? '' : String(nextMax))
+    // Only propagate to the actual query filter when the resulting range is valid,
+    // so an in-progress invalid range never reaches the server as a silent zero-result query.
+    updateFilter(field, error || rawValue === '' ? null : parseFloat(rawValue))
+  }
+
   return (
     <div className="p-4 space-y-6">
       {/* Set Filter */}
@@ -166,17 +195,24 @@ export default function Sidebar({ filters, updateFilter, clearFilters, filterOpt
           <input
             type="number"
             placeholder="Min"
-            value={filters.minPrice || ''}
-            onChange={(e) => updateFilter('minPrice', e.target.value ? parseFloat(e.target.value) : null)}
-            className="w-full bg-white dark:bg-dbb-secondary border border-gray-200 dark:border-dbb-tertiary/50 rounded-dbb px-3 py-2 text-sm focus:border-dbb-accent focus:outline-none"
+            min="0"
+            value={minPriceInput}
+            onChange={(e) => handlePriceChange('minPrice', setMinPriceInput, e.target.value)}
+            aria-invalid={priceError ? 'true' : 'false'}
+            className={`w-full bg-white dark:bg-dbb-secondary border rounded-dbb px-3 py-2 text-sm focus:outline-none ${priceError ? 'border-red-500 focus:border-red-500' : 'border-gray-200 dark:border-dbb-tertiary/50 focus:border-dbb-accent'}`}
           />
           <input
             type="number"
             placeholder="Max"
-            value={filters.maxPrice || ''}
-            onChange={(e) => updateFilter('maxPrice', e.target.value ? parseFloat(e.target.value) : null)}
-            className="w-full bg-white dark:bg-dbb-secondary border border-gray-200 dark:border-dbb-tertiary/50 rounded-dbb px-3 py-2 text-sm focus:border-dbb-accent focus:outline-none"
+            min="0"
+            value={maxPriceInput}
+            onChange={(e) => handlePriceChange('maxPrice', setMaxPriceInput, e.target.value)}
+            aria-invalid={priceError ? 'true' : 'false'}
+            className={`w-full bg-white dark:bg-dbb-secondary border rounded-dbb px-3 py-2 text-sm focus:outline-none ${priceError ? 'border-red-500 focus:border-red-500' : 'border-gray-200 dark:border-dbb-tertiary/50 focus:border-dbb-accent'}`}
           />
+          {priceError && (
+            <p className="text-xs text-red-500" role="alert">{priceError}</p>
+          )}
         </div>
       </div>
 
