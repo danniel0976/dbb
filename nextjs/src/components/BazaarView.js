@@ -153,20 +153,32 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
   // Commits Bazaar filter state to the URL so it can be bookmarked, shared,
   // or restored via reload/Back-Forward (Phase 41 tech audit P1 #7), mirroring
   // Library's/Claim Sales' canonical parse/serialize pattern.
-  const pushUrl = useCallback((f) => {
+  const pushUrl = useCallback((f, { replace = false } = {}) => {
     const params = serializeBazaarQueryState(f)
-    router.push(`?${params}`, { scroll: false })
+    const url = `?${params}`
+    if (replace) router.replace(url, { scroll: false })
+    else router.push(url, { scroll: false })
   }, [router])
 
   const updateFilter = (key, value) => {
     const next = { ...filters, [key]: value }
     setFilters(next)
     currentFilters.current = next
-    pushUrl(next)
     clearTimeout(searchTimeout.current)
     if (key === 'search') {
-      searchTimeout.current = setTimeout(() => loadListings(next), 300)
+      // Replace (not push) the history entry per keystroke so typing a
+      // 5-char query yields one entry, not five — matching ClaimSalesBrowse
+      // and Phase 41 Feature 5. Discrete filter/sort applies still push.
+      pushUrl(next, { replace: true })
+      if (value === '') {
+        // Clearing the query reloads immediately (Feature 2); the reqGen
+        // guard in loadListings still prevents a late "bo" from reappearing.
+        loadListings(next)
+      } else {
+        searchTimeout.current = setTimeout(() => loadListings(next), 300)
+      }
     } else {
+      pushUrl(next)
       loadListings(next)
     }
   }
