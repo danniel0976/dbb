@@ -1,5 +1,7 @@
 # DBB Deployment Checklist
 
+> Current release path: use a pull request targeting `main`. GitHub Actions runs the locked regression suite and production build, Vercel creates the Preview deployment, and the production branch is deployed through Vercel's Git integration after merge. See [`ci-cd.md`](ci-cd.md) for the authoritative CI/CD and remote-settings checklist. The manual steps below are retained for first-time project bootstrap and recovery only.
+
 ## Pre-Deployment
 
 ### 1. Supabase Setup

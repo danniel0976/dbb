@@ -123,6 +123,7 @@ ManaBox CSV → Scryfall API → CardKingdom API → Supabase → Next.js → Yo
 | [`docs/QUICKSTART.md`](docs/QUICKSTART.md) | 15-minute setup guide |
 | [`docs/README.md`](docs/README.md) | Complete documentation |
 | [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | Vercel deployment checklist |
+| [`docs/ci-cd.md`](docs/ci-cd.md) | CI, pull request, and Vercel release behavior |
 | [`docs/API.md`](docs/API.md) | API integration details |
 | [`PROJECT_SUMMARY.md`](PROJECT_SUMMARY.md) | Project overview |
 

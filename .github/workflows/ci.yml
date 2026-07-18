@@ -5,6 +5,14 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build-and-test:
@@ -24,25 +32,22 @@ jobs:
         working-directory: nextjs
         run: npm ci
 
-      - name: Build
-        working-directory: nextjs
-        run: npm run build
-
-      - name: Run targeted tests
+      - name: Run targeted regression tests
         working-directory: nextjs
         run: |
-          for f in scripts/phase*-test-*.mjs; do
-            [ -f "$f" ] || continue
-            echo "Running $f..."
-            node "$f" || exit 1
+          set -euo pipefail
+          shopt -s nullglob
+          test_files=(scripts/phase*-test-*.mjs)
+          if (( ${#test_files[@]} == 0 )); then
+            echo "::error::No targeted phase regression tests found."
+            exit 1
+          fi
+          for test_file in "${test_files[@]}"; do
+            echo "Running $test_file..."
+            node "$test_file"
           done
           echo "All targeted tests passed."
 
-      - name: Run perf baseline (read-only)
+      - name: Build
         working-directory: nextjs
-        run: |
-          if [ -f scripts/perf-baseline.mjs ]; then
-            node scripts/perf-baseline.mjs --readonly 2>&1 || true
-          else
-            echo "perf-baseline.mjs not found, skipping"
-          fi
+        run: npm run build

@@ -94,6 +94,8 @@ Open [http://localhost:3000](http://localhost:3000)
 
 ## Deployment to Vercel
 
+For the current PR-first release process, GitHub Actions gates repository changes and Vercel handles Preview/Production deployments through Git integration. Read [`ci-cd.md`](ci-cd.md) before changing deployment settings. The setup below is the legacy first-time bootstrap checklist.
+
 ### 1. Push to Git
 
 ```bash
