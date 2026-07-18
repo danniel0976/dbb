@@ -17,6 +17,7 @@ import {
   buildBazaarFilterChips,
   BAZAAR_CHIP_CLEAR_PATCH,
   hasActiveBazaarFilters,
+  normalizeBazaarSort,
 } from '@/lib/bazaarSearchState'
 import { filterSheetReducer, initFilterSheetState } from '@/lib/filterSheetState'
 
@@ -25,7 +26,10 @@ const SORT_OPTIONS = [
   { value: 'price_high', label: 'Price: High → Low' },
   { value: 'price_low', label: 'Price: Low → High' },
   { value: 'name_az', label: 'Name: A–Z' },
-  { value: 'rarity', label: 'Rarity' },
+  { value: 'cmc_high', label: 'Mana value: High → Low' },
+  { value: 'cmc_low', label: 'Mana value: Low → High' },
+  { value: 'rarity_high', label: 'Rarity: High → Low' },
+  { value: 'rarity_low', label: 'Rarity: Low → High' },
 ]
 
 const INITIAL_FILTERS = EMPTY_BAZAAR_FILTERS
@@ -42,7 +46,7 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
   const [loading, setLoading] = useState(!initialData)
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState(null)
-  const [filters, setFilters] = useState(initialQueryState)
+  const [filters, setFilters] = useState({ ...initialQueryState, sortBy: normalizeBazaarSort(initialQueryState.sortBy) })
   const [filterOptions] = useState(initialFilterOptions || { sets: [], rarities: [], cardTypes: [] })
   const [selectedListing, setSelectedListing] = useState(null)
   const [prices, setPrices] = useState({})
@@ -140,6 +144,7 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
 
   // Infinite scroll
   useEffect(() => {
+    if (loading) return
     const sentinel = document.getElementById('bazaar-sentinel')
     if (!sentinel) return
     const observer = new IntersectionObserver(
@@ -148,7 +153,7 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
     )
     observer.observe(sentinel)
     return () => observer.disconnect()
-  }, [loadMore, loadingMore, hasMore])
+  }, [loadMore, loading, loadingMore, hasMore, listings.length])
 
   // Commits Bazaar filter state to the URL so it can be bookmarked, shared,
   // or restored via reload/Back-Forward (Phase 41 tech audit P1 #7), mirroring
@@ -160,17 +165,22 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
     else router.push(url, { scroll: false })
   }, [router])
 
-  const updateFilter = (key, value) => {
-    const next = { ...filters, [key]: value }
+  const updateFilter = (keyOrPatch, value) => {
+    const changedKey = typeof keyOrPatch === 'object'
+      ? Object.keys(keyOrPatch)[0]
+      : keyOrPatch
+    const next = typeof keyOrPatch === 'object'
+      ? { ...filters, ...keyOrPatch }
+      : { ...filters, [keyOrPatch]: value }
     setFilters(next)
     currentFilters.current = next
     clearTimeout(searchTimeout.current)
-    if (key === 'search') {
+    if (changedKey === 'search') {
       // Replace (not push) the history entry per keystroke so typing a
       // 5-char query yields one entry, not five — matching ClaimSalesBrowse
       // and Phase 41 Feature 5. Discrete filter/sort applies still push.
       pushUrl(next, { replace: true })
-      if (value === '') {
+      if (next.search === '') {
         // Clearing the query reloads immediately (Feature 2); the reqGen
         // guard in loadListings still prevents a late "bo" from reappearing.
         loadListings(next)
@@ -210,12 +220,26 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
   // to `filters`/the URL/a request until Apply. Closing without Apply just
   // dispatches CLOSE and the draft is discarded, leaving `filters` untouched.
   const [sheet, dispatchSheet] = useReducer(filterSheetReducer, filters, initFilterSheetState)
+  const [draftPriceValid, setDraftPriceValid] = useState(true)
   const filtersButtonRef = useRef(null)
-  const openSheet = () => dispatchSheet({ type: 'OPEN', applied: filters })
-  const closeSheet = () => dispatchSheet({ type: 'CLOSE' })
-  const updateDraftFilter = (key, value) => dispatchSheet({ type: 'EDIT', patch: { [key]: value } })
-  const clearDraftFilters = () => dispatchSheet({ type: 'REPLACE_DRAFT', draft: EMPTY_BAZAAR_FILTERS })
+  const openSheet = () => {
+    setDraftPriceValid(true)
+    dispatchSheet({ type: 'OPEN', applied: filters })
+  }
+  const closeSheet = () => {
+    setDraftPriceValid(true)
+    dispatchSheet({ type: 'CLOSE' })
+  }
+  const updateDraftFilter = (keyOrPatch, value) => dispatchSheet({
+    type: 'EDIT',
+    patch: typeof keyOrPatch === 'object' ? keyOrPatch : { [keyOrPatch]: value },
+  })
+  const clearDraftFilters = () => {
+    setDraftPriceValid(true)
+    dispatchSheet({ type: 'REPLACE_DRAFT', draft: EMPTY_BAZAAR_FILTERS })
+  }
   const applySheetFilters = () => {
+    if (!draftPriceValid) return
     const next = sheet.draft
     dispatchSheet({ type: 'APPLY' })
     setFilters(next)
@@ -422,6 +446,7 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
           onClose={closeSheet}
           onApply={applySheetFilters}
           onClearAll={clearDraftFilters}
+          applyDisabled={!draftPriceValid}
           applyLabel={draftChipCount > 0 ? `Apply filters (${draftChipCount})` : 'Apply filters'}
           triggerRef={filtersButtonRef}
         >
@@ -430,6 +455,7 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
             updateFilter={updateDraftFilter}
             clearFilters={clearDraftFilters}
             filterOptions={filterOptions}
+            onPriceValidityChange={setDraftPriceValid}
           />
         </FilterSheet>
 

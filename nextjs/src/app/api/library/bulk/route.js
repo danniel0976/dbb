@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
+import { dedupeValidIds, runSequentialBatches } from '@/lib/postgrestBatch'
 
 export async function PATCH(request) {
   const supabase = await createClient()
@@ -14,15 +15,20 @@ export async function PATCH(request) {
   }
 
   if (action === 'star' || action === 'unstar') {
-    const { error } = await supabase
+    const batchIds = dedupeValidIds(ids)
+    if (!batchIds) {
+      return NextResponse.json({ error: 'ids must contain valid UUIDs' }, { status: 400 })
+    }
+
+    const result = await runSequentialBatches(batchIds, batch => supabase
       .from('library_cards')
       .update({ starred: action === 'star' })
-      .in('id', ids)
-      .eq('user_id', user.id)
+      .in('id', batch)
+      .eq('user_id', user.id))
 
-    if (error) {
-      console.error('PATCH bulk star error:', error)
-      return NextResponse.json({ error: error.message }, { status: 500 })
+    if (result.error) {
+      console.error('PATCH bulk star error:', result.error)
+      return NextResponse.json({ error: result.error.message, processed: result.processed }, { status: 500 })
     }
     return NextResponse.json({ success: true })
   }
@@ -74,15 +80,20 @@ export async function DELETE(request) {
     return NextResponse.json({ error: 'ids required' }, { status: 400 })
   }
 
-  const { error } = await supabase
+  const batchIds = dedupeValidIds(ids)
+  if (!batchIds) {
+    return NextResponse.json({ error: 'ids must contain valid UUIDs' }, { status: 400 })
+  }
+
+  const result = await runSequentialBatches(batchIds, batch => supabase
     .from('library_cards')
     .delete()
-    .in('id', ids)
-    .eq('user_id', user.id)
+    .in('id', batch)
+    .eq('user_id', user.id))
 
-  if (error) {
-    console.error('DELETE bulk error:', error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+  if (result.error) {
+    console.error('DELETE bulk error:', result.error)
+    return NextResponse.json({ error: result.error.message, processed: result.processed }, { status: 500 })
   }
 
   return NextResponse.json({ success: true })

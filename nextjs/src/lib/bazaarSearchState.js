@@ -17,6 +17,18 @@ export const EMPTY_BAZAAR_FILTERS = {
   search: '',
 }
 
+const SORT_ALIASES = {
+  cmc: 'cmc_low',
+  rarity: 'rarity_high',
+}
+
+export function normalizeBazaarSort(sort) {
+  const canonical = SORT_ALIASES[sort] || sort
+  return ['newest', 'price_high', 'price_low', 'name_az', 'cmc_low', 'cmc_high', 'rarity_low', 'rarity_high'].includes(canonical)
+    ? canonical
+    : 'newest'
+}
+
 function getParam(sp, key) {
   if (!sp) return null
   if (typeof sp.get === 'function') return sp.get(key)
@@ -35,7 +47,7 @@ export function parseBazaarQueryState(sp) {
 
   return {
     search: getParam(sp, 'q') || '',
-    sortBy: getParam(sp, 'sort') || 'newest',
+    sortBy: normalizeBazaarSort(getParam(sp, 'sort') || 'newest'),
     setCode: getParam(sp, 'set') || null,
     rarities: raritiesStr ? raritiesStr.split(',').filter(Boolean) : [],
     colors: colorsStr ? colorsStr.split('') : [],
@@ -51,7 +63,8 @@ export function parseBazaarQueryState(sp) {
 export function serializeBazaarQueryState(filters) {
   const params = new URLSearchParams()
   if (filters.search) params.set('q', filters.search)
-  if (filters.sortBy && filters.sortBy !== 'newest') params.set('sort', filters.sortBy)
+  const sort = normalizeBazaarSort(filters.sortBy || 'newest')
+  if (sort !== 'newest') params.set('sort', sort)
   if (filters.setCode) params.set('set', filters.setCode)
   if (filters.rarities && filters.rarities.length) params.set('rarity', filters.rarities.join(','))
   if (filters.colors && filters.colors.length) params.set('colors', filters.colors.join(''))

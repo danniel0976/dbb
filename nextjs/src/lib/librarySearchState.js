@@ -17,6 +17,64 @@ export const EMPTY_LIBRARY_FILTERS = {
   binder_id: '',
 }
 
+export const LIBRARY_SORT_KEYS = [
+  'newest',
+  'name',
+  'set',
+  'cmc_low',
+  'cmc_high',
+  'rarity_low',
+  'rarity_high',
+  'price_high',
+  'price_low',
+]
+
+export const LIBRARY_SORT_OPTIONS = [
+  { value: 'newest', label: 'Newest first' },
+  { value: 'name', label: 'Name A–Z' },
+  { value: 'set', label: 'Set / Number' },
+  { value: 'cmc_low', label: 'Mana value: Low → High' },
+  { value: 'cmc_high', label: 'Mana value: High → Low' },
+  { value: 'rarity_low', label: 'Rarity: Low → High' },
+  { value: 'rarity_high', label: 'Rarity: High → Low' },
+  { value: 'price_high', label: 'Price: High → Low' },
+  { value: 'price_low', label: 'Price: Low → High' },
+]
+
+export const LIBRARY_SORT_ALIASES = {
+  cmc: 'cmc_low',
+  rarity: 'rarity_high',
+}
+
+export function normalizeLibrarySort(sort) {
+  const normalized = LIBRARY_SORT_ALIASES[sort] || sort
+  return LIBRARY_SORT_KEYS.includes(normalized) ? normalized : 'newest'
+}
+
+const CATALOG_TIE_BREAKERS = ['name', 'set_code', 'collector_number', 'scryfall_id']
+
+export function getLibrarySortOrder(sort) {
+  const normalizedSort = normalizeLibrarySort(sort)
+  const direction = {
+    cmc_low: { column: 'cmc', ascending: true },
+    cmc_high: { column: 'cmc', ascending: false },
+    rarity_low: { column: 'rarity_rank', ascending: true },
+    rarity_high: { column: 'rarity_rank', ascending: false },
+  }[normalizedSort]
+
+  if (!direction) return null
+
+  return [
+    { column: `card_index(${direction.column})`, ascending: direction.ascending, nullsFirst: false },
+    ...CATALOG_TIE_BREAKERS.map(column => ({
+      column: `card_index(${column})`,
+      ascending: true,
+      nullsFirst: false,
+    })),
+    { column: 'id', ascending: true },
+  ]
+}
+
 function getParam(sp, key) {
   if (!sp) return null
   if (typeof sp.get === 'function') return sp.get(key)
@@ -35,7 +93,7 @@ export function parseLibraryQueryState(sp) {
 
   return {
     q: getParam(sp, 'q') || '',
-    sort: getParam(sp, 'sort') || 'newest',
+    sort: normalizeLibrarySort(getParam(sp, 'sort') || 'newest'),
     filters: {
       colors,
       color_mode: getParam(sp, 'color_mode') || 'or',
@@ -55,7 +113,8 @@ export function parseLibraryQueryState(sp) {
 export function serializeLibraryQueryState(filters, q, sort) {
   const params = new URLSearchParams()
   if (q) params.set('q', q)
-  if (sort && sort !== 'newest') params.set('sort', sort)
+  const normalizedSort = normalizeLibrarySort(sort)
+  if (normalizedSort !== 'newest') params.set('sort', normalizedSort)
   if (filters.colors && filters.colors.length) params.set('colors', filters.colors.join(''))
   if (filters.colors && filters.colors.length && filters.color_mode && filters.color_mode !== 'or') {
     params.set('color_mode', filters.color_mode)
@@ -75,7 +134,7 @@ export function serializeLibraryQueryState(filters, q, sort) {
 export function toLibraryQueryFilters(parsed, binderIdOverride) {
   return {
     ...parsed.filters,
-    sort: parsed.sort,
+    sort: normalizeLibrarySort(parsed.sort),
     q: parsed.q,
     binder_id: binderIdOverride || parsed.filters.binder_id || undefined,
   }

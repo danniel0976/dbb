@@ -12,18 +12,10 @@ import CameraCapture from '@/components/CameraCapture'
 import { useToast } from '@/components/Toast'
 import { Search, SortAsc, CheckSquare, X, Star, StarOff, Trash2, FolderOpen, Filter, Tag, PlusCircle, Package } from 'lucide-react'
 import Link from 'next/link'
-import { parseLibraryQueryState, serializeLibraryQueryState } from '@/lib/librarySearchState'
+import { LIBRARY_SORT_OPTIONS, parseLibraryQueryState, serializeLibraryQueryState } from '@/lib/librarySearchState'
 import { filterSheetReducer, initFilterSheetState } from '@/lib/filterSheetState'
 
-const SORTS = [
-  { value: 'newest', label: 'Newest first' },
-  { value: 'name', label: 'Name A–Z' },
-  { value: 'set', label: 'Set / Number' },
-  { value: 'cmc', label: 'Mana value' },
-  { value: 'rarity', label: 'Rarity' },
-  { value: 'price_high', label: 'Price: High → Low' },
-  { value: 'price_low', label: 'Price: Low → High' },
-]
+const SORTS = LIBRARY_SORT_OPTIONS
 
 function hasActiveFilters(filters) {
   return (
@@ -299,6 +291,7 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
   }, [reload, fetchPrices]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
+    if (initialLoading) return
     const sentinel = sentinelRef.current
     if (!sentinel) return
     const observer = new IntersectionObserver(
@@ -307,7 +300,7 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
     )
     observer.observe(sentinel)
     return () => observer.disconnect()
-  }, [loadMore])
+  }, [loadMore, initialLoading, cards.length])
 
   // Card actions
   const handleStar = useCallback(async (libraryRow) => {
@@ -319,7 +312,10 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ starred: newStarred }),
       })
-      if (!res.ok) throw new Error()
+      if (!res.ok) {
+        await reload()
+        throw new Error()
+      }
     } catch {
       setCards(prev => prev.map(c => c.id === libraryRow.id ? { ...c, starred: libraryRow.starred } : c))
       toast('Failed to update star', 'error')
@@ -330,7 +326,10 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
     if (!confirm(`Remove ${libraryRow.card_index?.name || 'this card'} from your library?`)) return
     try {
       const res = await fetch(`/api/library/${libraryRow.id}`, { method: 'DELETE' })
-      if (!res.ok) throw new Error()
+      if (!res.ok) {
+        await reload()
+        throw new Error()
+      }
       setCards(prev => prev.filter(c => c.id !== libraryRow.id))
       setTotal(t => t - 1)
       toast('Card removed', 'success')
@@ -394,7 +393,10 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ids, action: starred ? 'star' : 'unstar' }),
       })
-      if (!res.ok) throw new Error()
+      if (!res.ok) {
+        await reload()
+        throw new Error()
+      }
       setCards(prev => prev.map(c => selectedIds.has(c.id) ? { ...c, starred } : c))
       toast(`${ids.length} card${ids.length !== 1 ? 's' : ''} ${starred ? 'starred' : 'unstarred'}`, 'success')
       clearSelection()
@@ -413,7 +415,10 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ids }),
       })
-      if (!res.ok) throw new Error()
+      if (!res.ok) {
+        await reload()
+        throw new Error()
+      }
       setCards(prev => prev.filter(c => !selectedIds.has(c.id)))
       setTotal(t => t - ids.length)
       toast(`${ids.length} card${ids.length !== 1 ? 's' : ''} deleted`, 'success')
@@ -652,8 +657,18 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
             placeholder="Search by name..."
             value={q}
             onChange={(e) => handleSearchChange(e.target.value)}
-            className="w-full bg-white dark:bg-dbb-secondary border border-gray-200 dark:border-dbb-tertiary/50 rounded-dbb pl-9 pr-4 py-2 text-sm focus:border-dbb-accent focus:outline-none placeholder-gray-400 dark:placeholder-gray-600"
+            className="w-full bg-white dark:bg-dbb-secondary border border-gray-200 dark:border-dbb-tertiary/50 rounded-dbb pl-9 pr-9 py-2 text-sm focus:border-dbb-accent focus:outline-none placeholder-gray-400 dark:placeholder-gray-600"
           />
+          {q && (
+            <button
+              onClick={() => handleSearchChange('')}
+              aria-label="Clear search"
+              title="Clear search"
+              className="absolute right-1 top-1/2 -translate-y-1/2 min-w-[32px] min-h-[32px] flex items-center justify-center text-gray-400 hover:text-red-400 transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <SortAsc className="w-4 h-4 text-gray-400 dark:text-gray-500" />

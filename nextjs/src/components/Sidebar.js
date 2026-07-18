@@ -6,6 +6,8 @@ import { ChevronDown, Sparkles } from 'lucide-react'
 function validatePriceRange(minRaw, maxRaw) {
   const min = minRaw === '' ? null : Number(minRaw)
   const max = maxRaw === '' ? null : Number(maxRaw)
+  if (minRaw !== '' && !Number.isFinite(min)) return 'Min price must be a valid number'
+  if (maxRaw !== '' && !Number.isFinite(max)) return 'Max price must be a valid number'
   if (min !== null && min < 0) return 'Min price cannot be negative'
   if (max !== null && max < 0) return 'Max price cannot be negative'
   if (min !== null && max !== null && min > max) return 'Min price cannot exceed max price'
@@ -34,10 +36,14 @@ const colorOptions = [
   { code: 'G', name: 'Green', class: 'bg-green-500 text-white' },
 ]
 
-export default function Sidebar({ filters, updateFilter, clearFilters, filterOptions }) {
+export default function Sidebar({ filters, updateFilter, clearFilters, filterOptions, onPriceValidityChange }) {
   const [minPriceInput, setMinPriceInput] = useState(filters.minPrice ?? '')
   const [maxPriceInput, setMaxPriceInput] = useState(filters.maxPrice ?? '')
   const priceError = validatePriceRange(minPriceInput === '' ? '' : String(minPriceInput), maxPriceInput === '' ? '' : String(maxPriceInput))
+
+  useEffect(() => {
+    onPriceValidityChange?.(!priceError)
+  }, [onPriceValidityChange, priceError])
 
   useEffect(() => {
     setMinPriceInput(filters.minPrice ?? '')
@@ -49,9 +55,15 @@ export default function Sidebar({ filters, updateFilter, clearFilters, filterOpt
     const nextMin = field === 'minPrice' ? rawValue : minPriceInput
     const nextMax = field === 'maxPrice' ? rawValue : maxPriceInput
     const error = validatePriceRange(nextMin === '' ? '' : String(nextMin), nextMax === '' ? '' : String(nextMax))
-    // Only propagate to the actual query filter when the resulting range is valid,
-    // so an in-progress invalid range never reaches the server as a silent zero-result query.
-    updateFilter(field, error || rawValue === '' ? null : parseFloat(rawValue))
+    // For price fields, updateFilter accepts one atomic patch:
+    // updateFilter({ minPrice, maxPrice }). Keeping both bounds together
+    // prevents the applied query from diverging from the visible inputs.
+    // Invalid drafts are local only.
+    if (error) return
+    updateFilter({
+      minPrice: nextMin === '' ? null : Number(nextMin),
+      maxPrice: nextMax === '' ? null : Number(nextMax),
+    })
   }
 
   return (

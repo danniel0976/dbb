@@ -4,14 +4,56 @@ import { createClient } from '@/lib/supabaseServer'
 const MAX_LIMIT = 40
 const DEFAULT_LIMIT = 20
 
-// Valid sort fields mapped to deterministic Postgres orderings.
-// Every ordering includes name + set_code + collector_number as tiebreakers
-// so pagination is deterministic regardless of which sort the user picks.
+// Valid sort fields mapped to deterministic Postgres orderings. The primary
+// CMC/rarity field is nullable, so explicitly put NULLs last in both
+// directions. The remaining fields are ascending tie-breakers, ending in the
+// unique Scryfall id so pagination is deterministic.
 const SORT_OPTIONS = {
-  name: ['name', 'set_code', 'collector_number'],
-  set: ['set_code', 'collector_number', 'name'],
-  cmc: ['cmc', 'name', 'set_code', 'collector_number'],
-  rarity: ['rarity', 'name', 'set_code', 'collector_number'],
+  name: [
+    { column: 'name' },
+    { column: 'set_code' },
+    { column: 'collector_number' },
+    { column: 'scryfall_id' },
+  ],
+  set: [
+    { column: 'set_code' },
+    { column: 'collector_number' },
+    { column: 'name' },
+    { column: 'scryfall_id' },
+  ],
+  cmc_low: [
+    { column: 'cmc', ascending: true, nullsFirst: false },
+    { column: 'name' },
+    { column: 'set_code' },
+    { column: 'collector_number' },
+    { column: 'scryfall_id' },
+  ],
+  cmc_high: [
+    { column: 'cmc', ascending: false, nullsFirst: false },
+    { column: 'name' },
+    { column: 'set_code' },
+    { column: 'collector_number' },
+    { column: 'scryfall_id' },
+  ],
+  rarity_low: [
+    { column: 'rarity_rank', ascending: true, nullsFirst: false },
+    { column: 'name' },
+    { column: 'set_code' },
+    { column: 'collector_number' },
+    { column: 'scryfall_id' },
+  ],
+  rarity_high: [
+    { column: 'rarity_rank', ascending: false, nullsFirst: false },
+    { column: 'name' },
+    { column: 'set_code' },
+    { column: 'collector_number' },
+    { column: 'scryfall_id' },
+  ],
+}
+
+const SORT_ALIASES = {
+  cmc: 'cmc_low',
+  rarity: 'rarity_high',
 }
 
 function applyFilters(query, { q, set_code, rarity, type, colorArr, cmcMin, cmcMax, foilOnly }) {
@@ -26,11 +68,19 @@ function applyFilters(query, { q, set_code, rarity, type, colorArr, cmcMin, cmcM
   return query
 }
 
-function applySort(query, sort) {
-  const columns = SORT_OPTIONS[sort] || SORT_OPTIONS.name
+function applySort(query, sort, { legacyRarity = false } = {}) {
+  const columns = legacyRarity && (sort === 'rarity_low' || sort === 'rarity_high')
+    ? [
+        { column: 'rarity', ascending: sort === 'rarity_low' },
+        { column: 'name' },
+        { column: 'set_code' },
+        { column: 'collector_number' },
+        { column: 'scryfall_id' },
+      ]
+    : SORT_OPTIONS[sort] || SORT_OPTIONS.name
   // Supabase .order() can be chained; each call adds an ordering column.
-  for (const col of columns) {
-    query = query.order(col)
+  for (const { column, ...options } of columns) {
+    query = query.order(column, options)
   }
   return query
 }
@@ -54,7 +104,8 @@ export async function GET(request) {
   const cmcMin = cmcMinRaw !== null && cmcMinRaw !== '' && !isNaN(parseFloat(cmcMinRaw)) ? parseFloat(cmcMinRaw) : null
   const cmcMax = cmcMaxRaw !== null && cmcMaxRaw !== '' && !isNaN(parseFloat(cmcMaxRaw)) ? parseFloat(cmcMaxRaw) : null
   const foilOnly = searchParams.get('foil_only') === '1' || searchParams.get('foil_only') === 'true'
-  const sort = (searchParams.get('sort') || 'name').trim().toLowerCase()
+  const requestedSort = (searchParams.get('sort') || 'name').trim().toLowerCase()
+  const sort = SORT_ALIASES[requestedSort] || requestedSort
   const group = searchParams.get('group') !== '0' // default: group by name
   const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10))
   const limit = Math.min(MAX_LIMIT, Math.max(1, parseInt(searchParams.get('limit') || String(DEFAULT_LIMIT), 10)))
@@ -68,7 +119,7 @@ export async function GET(request) {
   const filterArgs = { q, set_code, rarity, type, colorArr, cmcMin, cmcMax, foilOnly }
 
   // Select columns — try full set first (migration-007), fall back to basic
-  const fullSelect = 'scryfall_id, name, set_code, set_name, collector_number, rarity, colors, type_line, cmc, mana_cost, image_uris, finishes'
+  const fullSelect = 'scryfall_id, name, set_code, set_name, collector_number, rarity, rarity_rank, colors, type_line, cmc, mana_cost, image_uris, finishes'
   let query = applySort(
     applyFilters(
       supabase.from('card_index').select(fullSelect, { count: 'exact' }).range(from, to),
@@ -79,17 +130,18 @@ export async function GET(request) {
 
   let { data, error, count } = await query
 
-  // Defensive fallback: if migration-007 columns not yet applied, retry without them
-  if (error) {
+  // Defensive compatibility fallback for a pre-migration catalog schema.
+  // Do not mask unrelated query failures or drop foilOnly from the retry.
+  if (error?.code === '42703') {
     const basicSelect = 'scryfall_id, name, set_code, set_name, collector_number, rarity, colors, type_line, cmc, mana_cost'
-    // When finishes column is missing, foilOnly filter is not applicable
-    const fallbackFilters = { ...filterArgs, foilOnly: false }
+    const fallbackFilters = filterArgs
     let fbQuery = applySort(
       applyFilters(
         supabase.from('card_index').select(basicSelect, { count: 'exact' }).range(from, to),
         fallbackFilters
       ),
-      sort
+      sort,
+      { legacyRarity: true }
     )
     const fb = await fbQuery
     if (fb.error) {
@@ -99,6 +151,9 @@ export async function GET(request) {
     data = fb.data
     count = fb.count
     error = null
+  } else if (error) {
+    console.error('catalog/search error:', error)
+    return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
   const rows = data || []

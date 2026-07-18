@@ -8,12 +8,17 @@
  * Run: node scripts/phase41-test-search-sort-filter.mjs
  */
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { sellPrice } from '../src/lib/pricingCache.js'
 import {
   parseLibraryQueryState,
   serializeLibraryQueryState,
   toLibraryQueryFilters,
   EMPTY_LIBRARY_FILTERS,
+  LIBRARY_SORT_KEYS,
+  LIBRARY_SORT_OPTIONS,
+  getLibrarySortOrder,
+  normalizeLibrarySort,
 } from '../src/lib/librarySearchState.js'
 import {
   parseBazaarQueryState,
@@ -25,6 +30,15 @@ import {
 } from '../src/lib/bazaarSearchState.js'
 import { extractTopLevelTypes } from '../src/lib/listingsQueries.js'
 import { filterSheetReducer, initFilterSheetState } from '../src/lib/filterSheetState.js'
+import {
+  collectInBatches,
+  collectPagedRows,
+  dedupeValidIds,
+  runSequentialBatches,
+} from '../src/lib/postgrestBatch.js'
+
+const bazaarViewSource = readFileSync(new URL('../src/components/BazaarView.js', import.meta.url), 'utf8')
+const libraryViewSource = readFileSync(new URL('../src/components/LibraryView.js', import.meta.url), 'utf8')
 
 let passed = 0
 function check(name, fn) {
@@ -32,8 +46,34 @@ function check(name, fn) {
   passed++
   console.log(`  ok - ${name}`)
 }
+async function checkAsync(name, fn) {
+  await fn()
+  passed++
+  console.log(`  ok - ${name}`)
+}
 
 console.log('=== Phase 41: Bazaar price correctness ===')
+
+check('Bazaar discrete filter updates use the changed key and do not reference an undefined key', () => {
+  assert.ok(bazaarViewSource.includes('const changedKey ='), 'Bazaar must identify the changed filter key')
+  assert.ok(bazaarViewSource.includes("if (changedKey === 'search')"), 'Search updates must use changedKey')
+  assert.ok(!bazaarViewSource.includes("if (key === 'search')"), 'Bazaar must not reference the old undefined key')
+})
+
+check('Bazaar infinite-scroll observer reattaches after sort/filter loading replaces the sentinel', () => {
+  assert.ok(bazaarViewSource.includes('if (loading) return'), 'Observer must wait for the loaded grid to exist')
+  assert.ok(bazaarViewSource.includes('[loadMore, loading, loadingMore, hasMore, listings.length]'), 'Observer must rerun when the loaded grid/sentinel returns')
+})
+
+check('Library infinite-scroll observer reattaches after sort/filter loading replaces the sentinel', () => {
+  assert.ok(libraryViewSource.includes('if (initialLoading) return'), 'Library observer must wait for the loaded grid to exist')
+  assert.ok(libraryViewSource.includes('[loadMore, initialLoading, cards.length]'), 'Library observer must rerun when the loaded grid/sentinel returns')
+})
+
+check('Library desktop search exposes a clear-search button', () => {
+  assert.ok(libraryViewSource.includes('aria-label="Clear search"'), 'Library must expose a clear search action')
+  assert.ok(libraryViewSource.includes("handleSearchChange('')"), 'Clear search must reset the query')
+})
 
 // Fixtures straight from the product spec's acceptance criteria (Feature 4):
 // CKD $10 x 2.5 = RM25, CKD $5 x 3.0 = RM15. Price low->high must return
@@ -122,6 +162,43 @@ check('default (unfiltered, unsorted) URL parses to defaults, not stale state', 
   assert.equal(parsed.q, '')
   assert.equal(parsed.sort, 'newest')
   assert.deepEqual(parsed.filters, EMPTY_LIBRARY_FILTERS)
+})
+
+check('Library exposes canonical bidirectional CMC and rarity sort keys', () => {
+  assert.deepEqual(LIBRARY_SORT_KEYS.slice(3, 7), [
+    'cmc_low', 'cmc_high', 'rarity_low', 'rarity_high',
+  ])
+  assert.deepEqual(
+    LIBRARY_SORT_OPTIONS.filter(({ value }) => value.startsWith('cmc') || value.startsWith('rarity'))
+      .map(({ value, label }) => [value, label]),
+    [
+      ['cmc_low', 'Mana value: Low → High'],
+      ['cmc_high', 'Mana value: High → Low'],
+      ['rarity_low', 'Rarity: Low → High'],
+      ['rarity_high', 'Rarity: High → Low'],
+    ]
+  )
+})
+
+check('legacy Library sort aliases normalize to their settled intent', () => {
+  assert.equal(normalizeLibrarySort('cmc'), 'cmc_low')
+  assert.equal(normalizeLibrarySort('rarity'), 'rarity_high')
+  assert.equal(parseLibraryQueryState(new URLSearchParams('sort=rarity')).sort, 'rarity_high')
+})
+
+check('CMC and rarity order descriptors are NULLS LAST and deterministically tied', () => {
+  for (const [sort, column, ascending] of [
+    ['cmc_low', 'cmc', true],
+    ['cmc_high', 'cmc', false],
+    ['rarity_low', 'rarity_rank', true],
+    ['rarity_high', 'rarity_rank', false],
+  ]) {
+    const descriptors = getLibrarySortOrder(sort)
+    assert.equal(descriptors[0].column, `card_index(${column})`)
+    assert.equal(descriptors[0].ascending, ascending)
+    assert.equal(descriptors[0].nullsFirst, false)
+    assert.deepEqual(descriptors.at(-1), { column: 'id', ascending: true })
+  }
 })
 
 check('server prefetch (plain searchParams object) parses identically to the client URLSearchParams path', () => {
@@ -378,6 +455,48 @@ check('Clear all inside the sheet resets only the draft, and still requires Appl
   assert.deepEqual(surface.getApplied(), applied, 'Clear all in the sheet must not itself fire a request/commit')
   surface.apply()
   assert.deepEqual(surface.getApplied(), EMPTY_BAZAAR_FILTERS)
+})
+
+console.log('\n=== Phase 41: PostgREST row-cap and URL-batch hardening ===')
+
+await checkAsync('paged collection crosses exact 1,000-row boundaries without dropping rows', async () => {
+  const calls = []
+  const pages = [
+    Array.from({ length: 1000 }, (_, i) => ({ id: `a-${i}` })),
+    Array.from({ length: 1000 }, (_, i) => ({ id: `b-${i}` })),
+    [{ id: 'c-0' }],
+  ]
+  const rows = await collectPagedRows(async (from, to) => {
+    calls.push([from, to])
+    return pages.shift()
+  })
+  assert.equal(rows.length, 2001)
+  assert.deepEqual(calls, [[0, 999], [1000, 1999], [2000, 2999]])
+})
+
+await checkAsync('select-all ids deduplicate and bulk actions stay within 100-id URL batches', async () => {
+  const ids = Array.from({ length: 1800 }, (_, i) => {
+    const hex = i.toString(16).padStart(12, '0')
+    return `00000000-0000-4000-8000-${hex}`
+  })
+  const deduped = dedupeValidIds([...ids, ids[0]])
+  assert.equal(deduped.length, 1800)
+  const batches = []
+  const result = await runSequentialBatches(deduped, async batch => {
+    batches.push(batch)
+    return { error: null }
+  })
+  assert.equal(result.processed, 1800)
+  assert.equal(batches.length, 18)
+  assert.ok(batches.every(batch => batch.length <= 100))
+})
+
+await checkAsync('batched ownership/photo reads accumulate rows and stop on the first error', async () => {
+  const ids = ['00000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-000000000002']
+  const result = await collectInBatches(ids, async batch => ({ data: batch.map(id => ({ id })), error: null }), 1)
+  assert.deepEqual(result.data.map(row => row.id), ids)
+  const failed = await collectInBatches(ids, async () => ({ data: [], error: { code: 'boom' } }), 1)
+  assert.equal(failed.error.code, 'boom')
 })
 
 console.log(`\n${passed} Phase 41 checks passed`)

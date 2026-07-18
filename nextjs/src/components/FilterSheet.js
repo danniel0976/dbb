@@ -17,6 +17,7 @@ export default function FilterSheet({
   onApply,
   onClearAll,
   applyLabel,
+  applyDisabled = false,
   triggerRef,
   children,
 }) {
@@ -93,7 +94,11 @@ export default function FilterSheet({
           >
             Clear all
           </button>
-          <button onClick={onApply} className="flex-1 min-h-[44px] btn btn-primary btn-md">
+          <button
+            onClick={onApply}
+            disabled={applyDisabled}
+            className="flex-1 min-h-[44px] btn btn-primary btn-md disabled:cursor-not-allowed disabled:opacity-50"
+          >
             {applyLabel || (resultCount != null ? `Show ${resultCount} results` : 'Apply filters')}
           </button>
         </div>

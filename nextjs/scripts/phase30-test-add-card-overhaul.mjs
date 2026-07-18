@@ -114,25 +114,24 @@ test('SEARCH-7: catalog/search supports foil availability filter', () => {
   assert(src.includes("contains('finishes'"), 'Must use array contains for finishes')
 })
 
-test('SEARCH-8: catalog/search supports sort options (name, set, cmc, rarity)', () => {
+test('SEARCH-8: catalog/search supports canonical bidirectional CMC and rarity sorts', () => {
   const src = readSrc('nextjs/src/app/api/catalog/search/route.js')
   assert(src.includes('SORT_OPTIONS'), 'Must have sort options')
   assert(src.includes("'name'"), 'Must support sort by name')
   assert(src.includes("'set'"), 'Must support sort by set')
-  assert(src.includes("'cmc'"), 'Must support sort by cmc')
-  assert(src.includes("'rarity'"), 'Must support sort by rarity')
+  for (const sort of ['cmc_low', 'cmc_high', 'rarity_low', 'rarity_high']) {
+    assert(src.includes(sort), `Must support sort by ${sort}`)
+  }
+  assert(src.includes('rarity_rank'), 'Rarity sorts must use rarity_rank')
 })
 
 test('SEARCH-9: catalog/search has deterministic sort with tiebreakers', () => {
   const src = readSrc('nextjs/src/app/api/catalog/search/route.js')
-  // Every sort option must include name, set_code, and collector_number as tiebreakers
-  // so pagination is deterministic
-  const sortMatch = src.match(/SORT_OPTIONS\s*=\s*\{([\s\S]*?)\}/)
-  assert(sortMatch, 'Must find SORT_OPTIONS definition')
-  const sortDef = sortMatch[1]
-  // Each sort option should end with the full tiebreaker set
-  assert(sortDef.includes("'name', 'set_code', 'collector_number'"),
-    'Sort options must include name + set_code + collector_number tiebreakers')
+  assert(src.includes("{ column: 'name' }"), 'Sort options must include name tiebreakers')
+  assert(src.includes("{ column: 'set_code' }"), 'Sort options must include set_code tiebreakers')
+  assert(src.includes("{ column: 'collector_number' }"), 'Sort options must include collector_number tiebreakers')
+  assert(src.includes("{ column: 'scryfall_id' }"), 'Sort options must end with a unique scryfall_id tiebreaker')
+  assert(src.includes('nullsFirst: false'), 'CMC and rarity primary fields must use NULLS LAST')
 })
 
 test('SEARCH-10: catalog/search uses deterministic pagination (page + limit + range)', () => {
@@ -178,8 +177,8 @@ test('SEARCH-15: catalog/search has defensive fallback for missing migration-007
   const src = readSrc('nextjs/src/app/api/catalog/search/route.js')
   assert(src.includes('basicSelect'), 'Must have a basic select fallback')
   assert(src.includes('fallbackFilters'), 'Must have fallback filter handling')
-  // Fallback must disable foilOnly when finishes column is missing
-  assert(src.includes('foilOnly: false'), 'Fallback must disable foilOnly filter')
+  assert(src.includes("error?.code === '42703'"), 'Fallback must be limited to missing-column errors')
+  assert(!src.includes('foilOnly: false'), 'Fallback must not silently drop foilOnly')
 })
 
 test('SEARCH-16: catalog/search returns empty results when no query or filters provided', () => {
@@ -286,15 +285,16 @@ test('MODAL-8: AddCardModal has load-more pagination (no silent truncation)', ()
   assert(src.includes('append'), 'doSearch must support append mode for pagination')
 })
 
-test('MODAL-9: AddCardModal filter bar has sort, set, rarity, colors, cmc range, foil', () => {
+test('MODAL-9: AddCardModal filter bar has staged filters and explicit Apply', () => {
   const src = readSrc('nextjs/src/components/AddCardModal.js')
-  assert(src.includes('SORT_OPTIONS'), 'Must have sort options')
   assert(src.includes('RARITY_OPTIONS'), 'Must have rarity options')
   assert(src.includes('COLOR_OPTIONS'), 'Must have color options')
   assert(src.includes('cmcMin'), 'Must have cmc min input')
   assert(src.includes('cmcMax'), 'Must have cmc max input')
   assert(src.includes('foilOnly'), 'Must have foil-only checkbox')
   assert(src.includes('FilterBar'), 'Must have FilterBar component')
+  assert(src.includes('Apply filters'), 'Must have an explicit Apply filters action')
+  assert(src.includes('hasActiveFilters'), 'Must allow filter-only searches')
 })
 
 test('MODAL-10: AddCardModal cleanup aborts in-flight on unmount', () => {
