@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient as createAuthClient } from '@/lib/supabaseServer'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { requireCompleteMerchantProfile } from '@/lib/merchantProfile'
+import { collectInBatches, dedupeValidIds } from '@/lib/postgrestBatch'
 
 export const runtime = 'nodejs'
 
@@ -26,6 +27,7 @@ export async function GET(request) {
   const sort = searchParams.get('sort') || 'newest'
   const setCode = searchParams.get('set_code') || null
   const userId = searchParams.get('user_id') || null
+  const search = (searchParams.get('search') || '').trim()
 
   const sc = makeServiceClient()
 
@@ -47,6 +49,7 @@ export async function GET(request) {
 
     if (setCode) baseQuery = baseQuery.eq('set_code', setCode)
     if (userId) baseQuery = baseQuery.eq('user_id', userId)
+    if (search) baseQuery = baseQuery.ilike('title', `%${search}%`)
 
     let data, count
 
@@ -273,6 +276,10 @@ export async function POST(request) {
   }
 
   const cardIds = body.card_ids
+  const uniqueCardIds = dedupeValidIds(cardIds)
+  if (!uniqueCardIds) {
+    return NextResponse.json({ error: 'card_ids must contain valid UUIDs and at most 10,000 unique cards' }, { status: 400 })
+  }
 
   // Optional per-card quantities: { card_id: qty } map or array aligned with card_ids
   let quantityMap = {}
@@ -295,11 +302,12 @@ export async function POST(request) {
   }
 
   // Verify all cards belong to this user AND get owned quantities
-  const { data: ownedCards, error: ownErr } = await authClient
+  const ownedResult = await collectInBatches(uniqueCardIds, batch => authClient
     .from('library_cards')
     .select('id, quantity')
-    .in('id', cardIds)
-    .eq('user_id', user.id)
+    .in('id', batch)
+    .eq('user_id', user.id))
+  const { data: ownedCards, error: ownErr } = ownedResult
 
   if (ownErr) {
     return NextResponse.json({ error: 'Failed to verify card ownership' }, { status: 500 })
@@ -324,10 +332,11 @@ export async function POST(request) {
 
   // Photo gate — every card must have a card_photos row
   const sc = makeServiceClient()
-  const { data: photoRows } = await sc
+  const photoResult = await collectInBatches(uniqueCardIds, batch => sc
     .from('card_photos')
     .select('library_card_id')
-    .in('library_card_id', cardIds)
+    .in('library_card_id', batch))
+  const { data: photoRows } = photoResult
 
   const photoSet = new Set((photoRows || []).map(p => p.library_card_id))
   const missingPhotos = cardIds.filter(id => !photoSet.has(id))
@@ -341,12 +350,13 @@ export async function POST(request) {
   // Conflict check — reject cards already linked to an active claim sale or actively listed as singles
   try {
     const nowIso = new Date().toISOString()
-    const { data: conflictListings, error: conflictErr } = await sc
+    const conflictResult = await collectInBatches(uniqueCardIds, batch => sc
       .from('listings')
       .select('id, library_card_id, status, claim_sale_id, expires_at')
-      .in('library_card_id', cardIds)
+      .in('library_card_id', batch)
       .eq('status', 'active')
-      .gt('expires_at', nowIso)
+      .gt('expires_at', nowIso))
+    const { data: conflictListings, error: conflictErr } = conflictResult
 
     if (conflictErr && conflictErr.code !== UNDEF_TABLE && conflictErr.code !== UNDEF_COLUMN) {
       throw conflictErr

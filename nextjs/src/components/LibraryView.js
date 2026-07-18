@@ -1,64 +1,21 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useReducer, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import LibraryCard from '@/components/LibraryCard'
 import CardDetailModal from '@/components/CardDetailModal'
 import BinderPicker from '@/components/BinderPicker'
 import AdvancedSearchPanel, { buildFilterChips } from '@/components/AdvancedSearchPanel'
+import FilterSheet from '@/components/FilterSheet'
 import AddCardModal from '@/components/AddCardModal'
 import CameraCapture from '@/components/CameraCapture'
 import { useToast } from '@/components/Toast'
 import { Search, SortAsc, CheckSquare, X, Star, StarOff, Trash2, FolderOpen, Filter, Tag, PlusCircle, Package, ChevronDown } from 'lucide-react'
 import Link from 'next/link'
+import { LIBRARY_SORT_OPTIONS, parseLibraryQueryState, serializeLibraryQueryState } from '@/lib/librarySearchState'
+import { filterSheetReducer, initFilterSheetState } from '@/lib/filterSheetState'
 
-const SORTS = [
-  { value: 'newest', label: 'Newest first' },
-  { value: 'name', label: 'Name A–Z' },
-  { value: 'set', label: 'Set / Number' },
-  { value: 'cmc', label: 'Mana value' },
-  { value: 'rarity', label: 'Rarity' },
-  { value: 'price_high', label: 'Price: High → Low' },
-  { value: 'price_low', label: 'Price: Low → High' },
-]
-
-function parseInitialFilters(searchParams) {
-  const colorsStr = searchParams.get('colors') || ''
-  const colors = colorsStr ? colorsStr.split('') : []
-  const rarityStr = searchParams.get('rarity') || ''
-  const rarity = rarityStr ? rarityStr.split(',') : []
-  return {
-    colors: colors.length ? colors : [],
-    color_mode: searchParams.get('color_mode') || 'or',
-    type_line: searchParams.get('type_line') || '',
-    cmc_min: searchParams.get('cmc_min') || '',
-    cmc_max: searchParams.get('cmc_max') || '',
-    rarity: rarity.length ? rarity : [],
-    foil: searchParams.get('foil') || 'all',
-    starred: searchParams.get('starred') === '1',
-    set_code: searchParams.get('set') || '',
-    binder_id: searchParams.get('binder_id') || '',
-  }
-}
-
-function serializeFilters(filters, q, sort) {
-  const params = new URLSearchParams()
-  if (q) params.set('q', q)
-  if (sort && sort !== 'newest') params.set('sort', sort)
-  if (filters.colors && filters.colors.length) params.set('colors', filters.colors.join(''))
-  if (filters.colors && filters.colors.length && filters.color_mode && filters.color_mode !== 'or') {
-    params.set('color_mode', filters.color_mode)
-  }
-  if (filters.type_line) params.set('type_line', filters.type_line)
-  if (filters.cmc_min != null && filters.cmc_min !== '') params.set('cmc_min', filters.cmc_min)
-  if (filters.cmc_max != null && filters.cmc_max !== '') params.set('cmc_max', filters.cmc_max)
-  if (filters.rarity && filters.rarity.length) params.set('rarity', filters.rarity.join(','))
-  if (filters.foil && filters.foil !== 'all') params.set('foil', filters.foil)
-  if (filters.starred) params.set('starred', '1')
-  if (filters.set_code) params.set('set', filters.set_code)
-  if (filters.binder_id) params.set('binder_id', filters.binder_id)
-  return params
-}
+const SORTS = LIBRARY_SORT_OPTIONS
 
 function hasActiveFilters(filters) {
   return (
@@ -98,10 +55,11 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
   const [page, setPage] = useState(1)
   const [loadingMore, setLoadingMore] = useState(false)
   const [initialLoading, setInitialLoading] = useState(!initialData?.cards?.length)
-  const [sort, setSort] = useState('newest')
-  const [q, setQ] = useState('')
+  const initialQueryState = parseLibraryQueryState(searchParams)
+  const [sort, setSort] = useState(initialQueryState.sort)
+  const [q, setQ] = useState(initialQueryState.q)
   const [selectedCard, setSelectedCard] = useState(null)
-  const [advFilters, setAdvFilters] = useState(() => parseInitialFilters(searchParams))
+  const [advFilters, setAdvFilters] = useState(() => initialQueryState.filters)
   const [showPanel, setShowPanel] = useState(false)
   const [priceMap, setPriceMap] = useState({})
 
@@ -159,7 +117,7 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
   }, [binderId])
 
   const pushUrl = useCallback((overrides = {}) => {
-    const urlParams = serializeFilters(
+    const urlParams = serializeLibraryQueryState(
       overrides.filters ?? currentFilters.current,
       overrides.q ?? currentQ.current,
       overrides.sort ?? currentSort.current
@@ -168,6 +126,33 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
     if (binderParam) urlParams.set('binder', binderParam)
     router.push(`?${urlParams}`, { scroll: false })
   }, [router, searchParams])
+
+  // Reconstruct state from the URL on Back/Forward navigation (popstate).
+  // Our own pushUrl()/router.push() calls already keep currentQ/currentSort/
+  // currentFilters refs in sync before the URL changes, so this only fires a
+  // reload when the URL changed *without* going through our handlers.
+  const isFirstUrlSync = useRef(true)
+  useEffect(() => {
+    if (isFirstUrlSync.current) {
+      isFirstUrlSync.current = false
+      return
+    }
+    const parsed = parseLibraryQueryState(searchParams)
+    const unchanged =
+      parsed.q === currentQ.current &&
+      parsed.sort === currentSort.current &&
+      JSON.stringify(parsed.filters) === JSON.stringify(currentFilters.current)
+    if (unchanged) return
+
+    setQ(parsed.q)
+    setSort(parsed.sort)
+    setAdvFilters(parsed.filters)
+    currentQ.current = parsed.q
+    currentSort.current = parsed.sort
+    currentFilters.current = parsed.filters
+    reload({ q: parsed.q, sort: parsed.sort, filters: parsed.filters })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams])
 
   const fetchPrices = useCallback(async (cardsToPrice) => {
     if (!cardsToPrice?.length) return
@@ -306,6 +291,7 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
   }, [reload, fetchPrices]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
+    if (initialLoading) return
     const sentinel = sentinelRef.current
     if (!sentinel) return
     const observer = new IntersectionObserver(
@@ -314,7 +300,7 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
     )
     observer.observe(sentinel)
     return () => observer.disconnect()
-  }, [loadMore])
+  }, [loadMore, initialLoading, cards.length])
 
   // Card actions
   const handleStar = useCallback(async (libraryRow) => {
@@ -326,7 +312,10 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ starred: newStarred }),
       })
-      if (!res.ok) throw new Error()
+      if (!res.ok) {
+        await reload()
+        throw new Error()
+      }
     } catch {
       setCards(prev => prev.map(c => c.id === libraryRow.id ? { ...c, starred: libraryRow.starred } : c))
       toast('Failed to update star', 'error')
@@ -337,7 +326,10 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
     if (!confirm(`Remove ${libraryRow.card_index?.name || 'this card'} from your library?`)) return
     try {
       const res = await fetch(`/api/library/${libraryRow.id}`, { method: 'DELETE' })
-      if (!res.ok) throw new Error()
+      if (!res.ok) {
+        await reload()
+        throw new Error()
+      }
       setCards(prev => prev.filter(c => c.id !== libraryRow.id))
       setTotal(t => t - 1)
       toast('Card removed', 'success')
@@ -402,7 +394,10 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ids, action: starred ? 'star' : 'unstar' }),
       })
-      if (!res.ok) throw new Error()
+      if (!res.ok) {
+        await reload()
+        throw new Error()
+      }
       setCards(prev => prev.map(c => selectedIds.has(c.id) ? { ...c, starred } : c))
       toast(`${ids.length} card${ids.length !== 1 ? 's' : ''} ${starred ? 'starred' : 'unstarred'}`, 'success')
       clearSelection()
@@ -421,7 +416,10 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ids }),
       })
-      if (!res.ok) throw new Error()
+      if (!res.ok) {
+        await reload()
+        throw new Error()
+      }
       setCards(prev => prev.filter(c => !selectedIds.has(c.id)))
       setTotal(t => t - ids.length)
       toast(`${ids.length} card${ids.length !== 1 ? 's' : ''} deleted`, 'success')
@@ -535,6 +533,23 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
   const filterActive = hasActiveFilters(advFilters)
   const activeFilterCount = activeChips.length
 
+  // Mobile filter sheet — staged draft state (Phase 41 feature #1), sharing
+  // the same commit path (handleFiltersChange -> reload/URL) that the
+  // desktop inline AdvancedSearchPanel already uses. Edits inside the sheet
+  // only mutate sheet.draft; Apply is the only path that calls
+  // handleFiltersChange. Closing without Apply discards the draft.
+  const [sheet, dispatchSheet] = useReducer(filterSheetReducer, advFilters, initFilterSheetState)
+  const mobileFiltersButtonRef = useRef(null)
+  const openMobileSheet = () => dispatchSheet({ type: 'OPEN', applied: advFilters })
+  const closeMobileSheet = () => dispatchSheet({ type: 'CLOSE' })
+  const clearMobileDraft = () => dispatchSheet({ type: 'REPLACE_DRAFT', draft: { ...EMPTY_FILTERS } })
+  const applyMobileSheet = () => {
+    const next = sheet.draft
+    dispatchSheet({ type: 'APPLY' })
+    handleFiltersChange(next)
+  }
+  const draftFilterCount = buildFilterChips(sheet.draft, binders, []).length
+
   // Build skeleton grid for initial load
   const skeletonGrid = (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
@@ -581,8 +596,19 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
             placeholder="Search by name..."
             value={q}
             onChange={(e) => handleSearchChange(e.target.value)}
-            className="min-h-11 w-full rounded-[12px] border border-black/10 bg-white/80 pl-9 pr-4 text-[16px] text-gray-900 outline-none placeholder:text-gray-400 focus:border-dbb-accent dark:border-white/10 dark:bg-dbb-secondary/80 dark:text-white dark:placeholder:text-gray-600"
+            className="min-h-11 w-full rounded-[12px] border border-black/10 bg-white/80 pl-9 pr-12 text-[16px] text-gray-900 outline-none placeholder:text-gray-400 focus:border-dbb-accent dark:border-white/10 dark:bg-dbb-secondary/80 dark:text-white dark:placeholder:text-gray-600"
           />
+          {q && (
+            <button
+              type="button"
+              onClick={() => handleSearchChange('')}
+              aria-label="Clear search"
+              title="Clear search"
+              className="absolute right-1 top-1/2 flex min-h-9 min-w-9 -translate-y-1/2 items-center justify-center rounded-full text-gray-400 transition-colors hover:text-red-400"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
           </div>
           <label className="flex min-h-11 items-center gap-2 rounded-[12px] border border-black/10 bg-white/70 px-3 text-sm text-gray-600 dark:border-white/10 dark:bg-dbb-secondary/70 dark:text-gray-300">
             <SortAsc className="h-4 w-4 text-gray-400 dark:text-gray-500" />

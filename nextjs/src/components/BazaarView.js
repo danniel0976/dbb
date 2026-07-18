@@ -1,25 +1,38 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
-import { Grid, Filter, X, Search, Loader2, Layers } from 'lucide-react'
+import { useState, useEffect, useCallback, useReducer, useRef } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { Grid, Filter, X, Search, Loader2, Layers, SortAsc } from 'lucide-react'
 import Sidebar from '@/components/Sidebar'
+import FilterSheet from '@/components/FilterSheet'
 import BazaarCard from '@/components/BazaarCard'
 import BazaarDetailModal from '@/components/BazaarDetailModal'
 import LoadingSkeleton from '@/components/LoadingSkeleton'
 import ClaimSalesBrowse from '@/components/ClaimSalesBrowse'
 import { useToast } from '@/components/Toast'
+import {
+  EMPTY_BAZAAR_FILTERS,
+  parseBazaarQueryState,
+  serializeBazaarQueryState,
+  buildBazaarFilterChips,
+  BAZAAR_CHIP_CLEAR_PATCH,
+  hasActiveBazaarFilters,
+  normalizeBazaarSort,
+} from '@/lib/bazaarSearchState'
+import { filterSheetReducer, initFilterSheetState } from '@/lib/filterSheetState'
 
-const INITIAL_FILTERS = {
-  setCode: null,
-  rarities: [],
-  colors: [],
-  cardType: null,
-  minPrice: null,
-  maxPrice: null,
-  isFoil: null,
-  sortBy: 'newest',
-  search: '',
-}
+const SORT_OPTIONS = [
+  { value: 'newest', label: 'Newest' },
+  { value: 'price_high', label: 'Price: High → Low' },
+  { value: 'price_low', label: 'Price: Low → High' },
+  { value: 'name_az', label: 'Name: A–Z' },
+  { value: 'cmc_high', label: 'Mana value: High → Low' },
+  { value: 'cmc_low', label: 'Mana value: Low → High' },
+  { value: 'rarity_high', label: 'Rarity: High → Low' },
+  { value: 'rarity_low', label: 'Rarity: Low → High' },
+]
+
+const INITIAL_FILTERS = EMPTY_BAZAAR_FILTERS
 
 const SORT_LABELS = {
   newest: 'Newest',
@@ -58,6 +71,10 @@ function buildChips(filters, filterOptions) {
 }
 
 export default function BazaarView({ initialData, filterOptions: initialFilterOptions, userId }) {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const initialQueryState = useRef(parseBazaarQueryState(searchParams)).current
+
   const [listings, setListings] = useState(initialData?.listings || [])
   const [total, setTotal] = useState(initialData?.total || 0)
   const [hasMore, setHasMore] = useState(initialData?.hasMore || false)
@@ -75,6 +92,9 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
 
   const PAGE_SIZE = 24
   const searchTimeout = useRef(null)
+  const currentFilters = useRef(filters)
+  const reqGenRef = useRef(0)
+  const abortRef = useRef(null)
 
   // One price request per result set/page, instead of one request per tile.
   useEffect(() => {
@@ -117,24 +137,35 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
     if (f.colors?.length) params.set('colors', f.colors.join(','))
     if (f.cardType) params.set('cardType', f.cardType)
     if (f.isFoil !== null && f.isFoil !== undefined) params.set('isFoil', String(f.isFoil))
+    if (f.minPrice !== null && f.minPrice !== undefined && f.minPrice !== '') params.set('minPrice', String(f.minPrice))
+    if (f.maxPrice !== null && f.maxPrice !== undefined && f.maxPrice !== '') params.set('maxPrice', String(f.maxPrice))
     return params
   }, [filters])
 
   const loadListings = useCallback(async (f = filters) => {
+    const gen = ++reqGenRef.current
+    if (abortRef.current) abortRef.current.abort()
+    const controller = new AbortController()
+    abortRef.current = controller
+
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch(`/api/listings?${buildParams(f, 1)}`)
+      const res = await fetch(`/api/listings?${buildParams(f, 1)}`, { signal: controller.signal })
+      if (gen !== reqGenRef.current) return // a newer request superseded this one
       if (!res.ok) throw new Error('Failed to load listings')
       const data = await res.json()
+      if (gen !== reqGenRef.current) return
       setListings(data.listings || [])
       setTotal(data.total || 0)
       setHasMore(data.hasMore || false)
       setPage(1)
     } catch (err) {
+      if (err?.name === 'AbortError') return
+      if (gen !== reqGenRef.current) return
       setError('Failed to load bazaar listings.')
     } finally {
-      setLoading(false)
+      if (gen === reqGenRef.current) setLoading(false)
     }
   }, [filters, buildParams])
 
@@ -158,6 +189,7 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
 
   // Infinite scroll
   useEffect(() => {
+    if (loading) return
     const sentinel = document.getElementById('bazaar-sentinel')
     if (!sentinel) return
     const observer = new IntersectionObserver(
@@ -166,15 +198,42 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
     )
     observer.observe(sentinel)
     return () => observer.disconnect()
-  }, [loadMore, loadingMore, hasMore])
+  }, [loadMore, loading, loadingMore, hasMore, listings.length])
 
-  const updateFilter = (key, value) => {
-    const next = { ...filters, [key]: value }
+  // Commits Bazaar filter state to the URL so it can be bookmarked, shared,
+  // or restored via reload/Back-Forward (Phase 41 tech audit P1 #7), mirroring
+  // Library's/Claim Sales' canonical parse/serialize pattern.
+  const pushUrl = useCallback((f, { replace = false } = {}) => {
+    const params = serializeBazaarQueryState(f)
+    const url = `?${params}`
+    if (replace) router.replace(url, { scroll: false })
+    else router.push(url, { scroll: false })
+  }, [router])
+
+  const updateFilter = (keyOrPatch, value) => {
+    const changedKey = typeof keyOrPatch === 'object'
+      ? Object.keys(keyOrPatch)[0]
+      : keyOrPatch
+    const next = typeof keyOrPatch === 'object'
+      ? { ...filters, ...keyOrPatch }
+      : { ...filters, [keyOrPatch]: value }
     setFilters(next)
+    currentFilters.current = next
     clearTimeout(searchTimeout.current)
-    if (key === 'search') {
-      searchTimeout.current = setTimeout(() => loadListings(next), 300)
+    if (changedKey === 'search') {
+      // Replace (not push) the history entry per keystroke so typing a
+      // 5-char query yields one entry, not five — matching ClaimSalesBrowse
+      // and Phase 41 Feature 5. Discrete filter/sort applies still push.
+      pushUrl(next, { replace: true })
+      if (next.search === '') {
+        // Clearing the query reloads immediately (Feature 2); the reqGen
+        // guard in loadListings still prevents a late "bo" from reappearing.
+        loadListings(next)
+      } else {
+        searchTimeout.current = setTimeout(() => loadListings(next), 300)
+      }
     } else {
+      pushUrl(next)
       loadListings(next)
     }
   }
@@ -186,6 +245,8 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
 
   const clearFilters = () => {
     setFilters(INITIAL_FILTERS)
+    currentFilters.current = INITIAL_FILTERS
+    pushUrl(INITIAL_FILTERS)
     loadListings(INITIAL_FILTERS)
   }
 
@@ -193,13 +254,57 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
     applyFilters(chip.clear(filters))
   }
 
-  const hasActiveFilters = Object.entries(filters).some(([key, v]) => {
-    if (key === 'sortBy') return v !== 'newest'
-    if (key === 'search') return v !== ''
-    if (key === 'isFoil') return v !== null
+  const hasActiveFilters = Object.entries(filters).some(([filterKey, v]) => {
+    if (filterKey === 'sortBy') return v !== 'newest'
+    if (filterKey === 'search') return v !== ''
+    if (filterKey === 'isFoil') return v !== null
     if (Array.isArray(v)) return v.length > 0
     return v !== null && v !== undefined
   })
+  const clearDraftFilters = () => {
+    setDraftPriceValid(true)
+    dispatchSheet({ type: 'REPLACE_DRAFT', draft: EMPTY_BAZAAR_FILTERS })
+  }
+  const applySheetFilters = () => {
+    if (!draftPriceValid) return
+    const next = sheet.draft
+    dispatchSheet({ type: 'APPLY' })
+    setFilters(next)
+    currentFilters.current = next
+    pushUrl(next)
+    loadListings(next)
+  }
+  const draftChipCount = buildBazaarFilterChips(sheet.draft, filterOptions).length
+
+  // Reconstruct state from the URL on Back/Forward navigation, mirroring
+  // LibraryView's popstate sync so a copied/reloaded/back-navigated Bazaar
+  // URL reruns the same query rather than silently diverging.
+  const isFirstUrlSync = useRef(true)
+  useEffect(() => {
+    if (isFirstUrlSync.current) {
+      isFirstUrlSync.current = false
+      return
+    }
+    const parsed = parseBazaarQueryState(searchParams)
+    if (JSON.stringify(parsed) === JSON.stringify(currentFilters.current)) return
+    setFilters(parsed)
+    currentFilters.current = parsed
+    loadListings(parsed)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams])
+
+  // A bookmarked/reloaded URL with non-default filters must not silently
+  // show the server-prefetched unfiltered "newest 24" — reload once on
+  // mount if the parsed URL state differs from defaults.
+  const didUrlAutoFetch = useRef(false)
+  useEffect(() => {
+    if (didUrlAutoFetch.current) return
+    didUrlAutoFetch.current = true
+    if (JSON.stringify(initialQueryState) !== JSON.stringify(EMPTY_BAZAAR_FILTERS)) {
+      loadListings(initialQueryState)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const chips = buildChips(filters, filterOptions)
 

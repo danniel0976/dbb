@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabaseServer'
 import { getLibrary } from '@/lib/libraryQueries'
+import { parseLibraryQueryState, toLibraryQueryFilters } from '@/lib/librarySearchState'
 import LibraryWithRail from '@/components/LibraryWithRail'
 import DBBNav from '@/components/DBBNav'
 import { redirect } from 'next/navigation'
@@ -13,11 +14,17 @@ export default async function LibraryPage({ searchParams }) {
 
   const selectedBinderId = searchParams?.binder || null
 
+  // Prefetch using the exact same query/sort/filter state the client will
+  // initialize from (see parseLibraryQueryState) so a copied/reloaded URL
+  // renders the matching first page instead of an unfiltered one.
+  const parsedQuery = parseLibraryQueryState(searchParams)
+  const prefetchFilters = toLibraryQueryFilters(parsedQuery, selectedBinderId)
+
   // Fetch binders and prefetch the first library page in parallel.
   // Binder counts are deferred to client-side (BinderRail fetches /api/binders
   // after mount) so the server doesn't block HTML delivery on N count queries.
   const [libraryResult, { data: binderRows }] = await Promise.all([
-    getLibrary(user.id, selectedBinderId ? { binder_id: selectedBinderId } : {}, 1, 48)
+    getLibrary(user.id, prefetchFilters, 1, 48)
       .catch(() => ({ cards: [], total: 0, hasMore: false })),
     supabase.from('binders')
       .select('id, name, is_default, created_at')

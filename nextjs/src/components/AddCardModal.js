@@ -58,13 +58,6 @@ const RARITY_OPTIONS = [
   { value: 'mythic', label: 'Mythic' },
 ]
 
-const SORT_OPTIONS = [
-  { value: 'name', label: 'Name' },
-  { value: 'set', label: 'Set / Collector' },
-  { value: 'cmc', label: 'Mana value' },
-  { value: 'rarity', label: 'Rarity' },
-]
-
 const COLOR_OPTIONS = [
   { value: 'W', label: 'W', title: 'White' },
   { value: 'U', label: 'U', title: 'Blue' },
@@ -292,20 +285,6 @@ function FilterBar({ filters, setFilters, onApply }) {
 
       {expanded && (
         <div className="space-y-3 p-3 bg-gray-50 dark:bg-dbb-secondary/50 rounded-lg border border-gray-200 dark:border-gray-700/50">
-          {/* Sort */}
-          <div>
-            <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">Sort by</label>
-            <select
-              value={filters.sort}
-              onChange={e => setFilters({ ...filters, sort: e.target.value })}
-              className="h-11 w-full rounded-dbb-md border border-gray-200 bg-white px-2.5 text-dbb-xs focus:border-dbb-accent focus:outline-none dark:border-gray-700 dark:bg-dbb-secondary"
-            >
-              {SORT_OPTIONS.map(s => (
-                <option key={s.value} value={s.value}>{s.label}</option>
-              ))}
-            </select>
-          </div>
-
           {/* Set code */}
           <div>
             <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">Set code</label>
@@ -339,6 +318,7 @@ function FilterBar({ filters, setFilters, onApply }) {
               {COLOR_OPTIONS.map(c => (
                 <button
                   key={c.value}
+                  type="button"
                   onClick={() => toggleColor(c.value)}
                   title={c.title}
                   className={`flex h-11 w-11 items-center justify-center rounded-dbb-md text-dbb-xs font-bold border transition-colors ${
@@ -389,6 +369,20 @@ function FilterBar({ filters, setFilters, onApply }) {
             />
             Foil available only
           </label>
+
+          <div className="pt-1 border-t border-gray-200 dark:border-gray-700/50">
+            <p className="text-[11px] text-gray-500 dark:text-gray-400 mb-2">
+              Filter changes stay staged until you confirm them.
+            </p>
+            <button
+              type="button"
+              onClick={() => onApply()}
+              className="w-full py-2 text-xs btn-primary rounded-lg flex items-center justify-center gap-1.5"
+            >
+              <Search className="w-3.5 h-3.5" />
+              Apply filters
+            </button>
+          </div>
         </div>
       )}
     </div>
@@ -462,13 +456,23 @@ function CardGroup({ group, onSelect }) {
 }
 
 const INITIAL_FILTERS = {
-  sort: 'name',
   set: '',
   rarity: '',
   colors: [],
   cmcMin: '',
   cmcMax: '',
   foilOnly: false,
+}
+
+function hasActiveFilters(filters) {
+  return Boolean(
+    filters.set.trim() ||
+    filters.rarity ||
+    filters.colors.length ||
+    filters.cmcMin !== '' ||
+    filters.cmcMax !== '' ||
+    filters.foilOnly
+  )
 }
 
 export default function AddCardModal({ binders = [], onClose, onAdded }) {
@@ -503,7 +507,6 @@ export default function AddCardModal({ binders = [], onClose, onAdded }) {
     params.set('limit', String(DEFAULT_LIMIT))
     params.set('page', String(pageNum))
     params.set('group', '1')
-    if (searchFilters.sort && searchFilters.sort !== 'name') params.set('sort', searchFilters.sort)
     if (searchFilters.set) params.set('set', searchFilters.set.trim().toLowerCase())
     if (searchFilters.rarity) params.set('rarity', searchFilters.rarity)
     if (searchFilters.colors.length > 0) params.set('color', searchFilters.colors.join(''))
@@ -599,7 +602,7 @@ export default function AddCardModal({ binders = [], onClose, onAdded }) {
   const handleSubmit = (e) => {
     e?.preventDefault?.()
     const term = q.trim()
-    if (!term) {
+    if (!term && !hasActiveFilters(filters)) {
       setGroups([])
       setTotal(0)
       setHasMore(false)

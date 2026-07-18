@@ -8,3 +8,4 @@ failed-imports.json
 nextjs/public/ck-prices.json
 scripts/data/ck-prices.json
 supabase/backups/
+supabase/.temp/
