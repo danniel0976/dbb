@@ -47,13 +47,22 @@ test('POST /api/listings source validates quantity as positive integer', () => {
 // Test 3: GET /api/listings includes quantity in primary select (withExpiry=true)
 test('GET /api/listings includes quantity in primary bazaar browse select', () => {
   const src = readSrc('nextjs/src/app/api/listings/route.js')
-  assert(src.includes('expires_at, quantity,'), 'Bazaar browse primary select must include quantity')
+  const primarySelect = src.match(/const\s+selectCols\s*=\s*withExpiry\s*\?\s*`([\s\S]*?)`\s*:/)
+  assert(primarySelect, 'Must find the withExpiry primary select')
+  const listingsRelation = primarySelect[1].match(/listings!inner\(([^)]*)\)/)
+  assert(listingsRelation, 'Primary select must include the nested listings relation')
+  const listingColumns = listingsRelation[1].split(',').map(column => column.trim())
+  assert(listingColumns.includes('expires_at'), 'Primary listings select must include expires_at')
+  assert(listingColumns.includes('quantity'), 'Primary listings select must include quantity')
 })
 
 // Test 4: GET /api/listings/card/[scryfallId] includes quantity in primary select
 test('GET /api/listings/card/[scryfallId] includes quantity in primary select', () => {
   const src = readSrc('nextjs/src/app/api/listings/card/[scryfallId]/route.js')
-  assert(src.includes('expires_at, quantity,'), 'Card listings primary select must include quantity')
+  const primarySelect = src.match(/const\s+selectCols\s*=\s*withExpiry\s*\?\s*`([\s\S]*?)`\s*:/)
+  assert(primarySelect, 'Must find the withExpiry primary select')
+  assert(/\bexpires_at\s*,\s*quantity\b/.test(primarySelect[1]),
+    'Card listings primary select must include expires_at and quantity')
 })
 
 // Test 5: PATCH /api/listings/[id] supports quantity with validation
