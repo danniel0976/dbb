@@ -60,6 +60,12 @@ check('Bazaar discrete filter updates use the changed key and do not reference a
   assert.ok(!bazaarViewSource.includes("if (key === 'search')"), 'Bazaar must not reference the old undefined key')
 })
 
+check('Bazaar does not retain unreachable mobile-sheet references', () => {
+  for (const token of ['sheet.draft', 'dispatchSheet', 'draftPriceValid', 'setDraftPriceValid']) {
+    assert.ok(!bazaarViewSource.includes(token), `Bazaar must not reference undeclared ${token}`)
+  }
+})
+
 check('Bazaar infinite-scroll observer reattaches after sort/filter loading replaces the sentinel', () => {
   assert.ok(bazaarViewSource.includes('if (loading) return'), 'Observer must wait for the loaded grid to exist')
   assert.ok(bazaarViewSource.includes('[loadMore, loading, loadingMore, hasMore, listings.length]'), 'Observer must rerun when the loaded grid/sentinel returns')

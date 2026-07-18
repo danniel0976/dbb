@@ -1,10 +1,9 @@
 'use client'
 
-import { useState, useEffect, useCallback, useReducer, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Grid, Filter, X, Search, Loader2, Layers, SortAsc } from 'lucide-react'
 import Sidebar from '@/components/Sidebar'
-import FilterSheet from '@/components/FilterSheet'
 import BazaarCard from '@/components/BazaarCard'
 import BazaarDetailModal from '@/components/BazaarDetailModal'
 import LoadingSkeleton from '@/components/LoadingSkeleton'
@@ -14,12 +13,8 @@ import {
   EMPTY_BAZAAR_FILTERS,
   parseBazaarQueryState,
   serializeBazaarQueryState,
-  buildBazaarFilterChips,
   BAZAAR_CHIP_CLEAR_PATCH,
-  hasActiveBazaarFilters,
-  normalizeBazaarSort,
 } from '@/lib/bazaarSearchState'
-import { filterSheetReducer, initFilterSheetState } from '@/lib/filterSheetState'
 
 const SORT_OPTIONS = [
   { value: 'newest', label: 'Newest' },
@@ -90,7 +85,6 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
   const [bazaarSection, setBazaarSection] = useState('singles') // 'singles' | 'claim_sales'
   const { toast } = useToast()
 
-  const PAGE_SIZE = 24
   const searchTimeout = useRef(null)
   const currentFilters = useRef(filters)
   const reqGenRef = useRef(0)
@@ -261,21 +255,6 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
     if (Array.isArray(v)) return v.length > 0
     return v !== null && v !== undefined
   })
-  const clearDraftFilters = () => {
-    setDraftPriceValid(true)
-    dispatchSheet({ type: 'REPLACE_DRAFT', draft: EMPTY_BAZAAR_FILTERS })
-  }
-  const applySheetFilters = () => {
-    if (!draftPriceValid) return
-    const next = sheet.draft
-    dispatchSheet({ type: 'APPLY' })
-    setFilters(next)
-    currentFilters.current = next
-    pushUrl(next)
-    loadListings(next)
-  }
-  const draftChipCount = buildBazaarFilterChips(sheet.draft, filterOptions).length
-
   // Reconstruct state from the URL on Back/Forward navigation, mirroring
   // LibraryView's popstate sync so a copied/reloaded/back-navigated Bazaar
   // URL reruns the same query rather than silently diverging.
