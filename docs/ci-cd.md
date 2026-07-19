@@ -1,6 +1,6 @@
 # CI/CD
 
-DBB uses GitHub Actions for continuous integration and Vercel's Git integration for deployments. They report separate commit statuses and do not gate each other by default.
+DBB uses GitHub Actions for continuous integration and Vercel's Git integration for deployments. GitHub protects merges, while a Vercel Deployment Check gates production-domain assignment on the post-merge CI result.
 
 ## GitHub Actions
 
@@ -26,21 +26,22 @@ npm run build
 The intended release path is:
 
 1. Open a pull request targeting `main`.
-2. Wait for `build-and-test` and the Vercel Preview deployment to succeed.
+2. Wait for the required `build-and-test` and `Vercel` pull-request checks to succeed.
 3. Review the Preview deployment and merge the pull request.
-4. Vercel creates a Production deployment from the configured production branch.
-5. The push-triggered GitHub Actions run records the post-merge CI result.
+4. Vercel builds a production-target deployment from `main` while the push-triggered `build-and-test` job runs.
+5. The Vercel project check `DBB production: GitHub CI` reads that GitHub result and assigns the custom production domain only after it passes.
 
-Vercel's Git integration can deploy a `main` commit independently of the push-triggered CI result. Repository YAML alone cannot make that external production promotion wait for GitHub Actions.
+Pull-request previews are unaffected by the production-only gate. If post-merge CI fails, the new deployment remains staged without replacing the deployment on the production domain.
 
-## External settings
+## External release controls
 
-These controls live in GitHub or Vercel and must be configured there:
+These controls live outside the repository and are currently enabled:
 
-- Protect `main` and require pull requests.
-- Require the unique `build-and-test` status check, preferably with the branch up to date before merge.
-- Require the Vercel status/deployment for pull requests if Preview deployments are consistently enabled.
-- Confirm that Vercel's Production Branch is `main` and that its GitHub deployment statuses are enabled.
-- If production must wait for the post-merge GitHub Actions run, configure Vercel Deployment Checks or move deployment into an explicitly approved GitHub Actions release workflow. Either option is an external release-policy change and may require Vercel plan features or repository secrets.
+- GitHub protects `main` with required pull requests and the `build-and-test` and `Vercel` checks. Administrator bypass remains available for emergencies.
+- Vercel's Production Branch is `main`.
+- The production-only project check `DBB production: GitHub CI` reads the post-merge GitHub `build-and-test` result. Its backend action blocks `deployment-alias`, meaning it holds custom production-domain assignment, with a 900-second timeout.
+- Vercel's **Force Promote** action is the emergency bypass for the deployment gate.
+
+For rollback while a failed deployment is staged, keep the gate installed. First pin or restore a known-good deployment and verify the production domain, then delete the gate only if removal is deliberately required. Vercel's **Instant Rollback** disables automatic production-domain assignment; a deliberate clean promotion must restore it afterward.
 
 Do not add Vercel tokens or deployment credentials to the repository. Store any future release-workflow credentials as scoped GitHub Actions secrets.
