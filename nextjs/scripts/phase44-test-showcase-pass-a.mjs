@@ -4,6 +4,7 @@
  */
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
+import { buildShowcaseShelves, canCommitBazaarRequest } from '../src/lib/bazaarShowcase.js'
 
 const read = relative => readFileSync(new URL(relative, import.meta.url), 'utf8')
 const view = read('../src/components/BazaarView.js')
@@ -23,7 +24,7 @@ console.log('=== Phase 44: Showcase Pass A ===')
 check('mode predicate treats search and every facet as Results, but not sort alone', () => {
   const predicate = view.slice(
     view.indexOf('function hasSearchOrFacetPredicates'),
-    view.indexOf('function buildShowcaseShelves')
+    view.indexOf('function buildChips')
   )
   for (const token of ['filters.search.trim()', 'filters.setCode', 'filters.rarities.length', 'filters.colors.length', 'filters.cardType', 'filters.isFoil !== null', 'filters.minPrice !== null', 'filters.maxPrice !== null']) {
     assert.ok(predicate.includes(token), `mode predicate must include ${token}`)
@@ -69,6 +70,44 @@ check('Showcase uses scroll snap and Results defer offscreen card paint', () => 
   assert.ok(view.includes('snap-start'))
   assert.ok(css.includes('.bazaar-result-card'))
   assert.ok(css.includes('content-visibility: auto'))
+})
+
+check('Showcase partitions every mixed listing exactly once', () => {
+  const listings = Array.from({ length: 30 }, (_, index) => ({
+    id: `listing-${index}`,
+    library_cards: {
+      foil: index % 4 === 0 ? 'foil' : 'normal',
+      card_index: { rarity: index % 5 === 0 ? 'rare' : index % 3 === 0 ? 'uncommon' : 'common' },
+    },
+  }))
+  const shelves = buildShowcaseShelves(listings)
+  const ids = shelves.flatMap(shelf => shelf.items.map(item => item.id))
+  assert.deepEqual(ids, buildShowcaseShelves(listings).flatMap(shelf => shelf.items.map(item => item.id)))
+  assert.equal(ids.length, listings.length)
+  assert.equal(new Set(ids).size, listings.length)
+})
+
+check('stale pagination responses cannot commit after a newer generation', () => {
+  let generation = 1
+  let results = ['new-page-one']
+  let deliverOld
+  const deferredOldPage = {
+    then(onFulfilled) { deliverOld = onFulfilled },
+  }
+  deferredOldPage.then(items => {
+    if (canCommitBazaarRequest(1, generation)) results.push(...items)
+  })
+  generation = 2
+  deliverOld(['old-page-two'])
+  assert.deepEqual(results, ['new-page-one'])
+})
+
+check('desktop popover escapes rail clipping and restores focus on Escape', () => {
+  assert.ok(view.includes('<div ref={filterPopoverRef} className="relative z-20 mb-5">'))
+  assert.ok(view.includes('ref={filterTriggerRef}'))
+  assert.ok(view.includes('aria-haspopup="dialog"'))
+  assert.ok(view.includes("filterTriggerRef.current?.focus()"))
+  assert.ok(view.includes('applyLabel="Apply filters"'))
 })
 
 check('no undeclared scaffold state survives the recovery', () => {

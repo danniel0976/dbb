@@ -16,6 +16,7 @@ import {
   parseBazaarQueryState,
   serializeBazaarQueryState,
 } from '@/lib/bazaarSearchState'
+import { buildShowcaseShelves, canCommitBazaarRequest } from '@/lib/bazaarShowcase'
 
 const SORT_OPTIONS = [
   { value: 'newest', label: 'Newest' },
@@ -41,53 +42,6 @@ function hasSearchOrFacetPredicates(filters) {
     || filters.minPrice !== null
     || filters.maxPrice !== null
   )
-}
-
-function buildShowcaseShelves(listings) {
-  const rareFinds = listings.filter(({ library_cards: lc }) =>
-    ['rare', 'mythic'].includes(lc?.card_index?.rarity)
-  )
-  const foilSpotlight = listings.filter(({ library_cards: lc }) =>
-    lc?.foil === 'foil' || lc?.foil === 'etched'
-  )
-  const shelves = [
-    {
-      key: 'fresh-arrivals',
-      eyebrow: 'Fresh arrivals',
-      title: 'New to the Bazaar',
-      description: 'Recently listed singles, ready for a closer look.',
-      items: listings.slice(0, 12),
-    },
-  ]
-
-  if (rareFinds.length) {
-    shelves.push({
-      key: 'rare-finds',
-      eyebrow: 'Collector shelf',
-      title: 'Rare finds',
-      description: 'Rare and mythic cards surfaced from the current listings.',
-      items: rareFinds.slice(0, 12),
-    })
-  }
-  if (foilSpotlight.length) {
-    shelves.push({
-      key: 'foil-spotlight',
-      eyebrow: 'Light play',
-      title: 'Foil spotlight',
-      description: 'Foil and etched finishes from across the Bazaar.',
-      items: foilSpotlight.slice(0, 12),
-    })
-  }
-  if (shelves.length === 1 && listings.length > 12) {
-    shelves.push({
-      key: 'more-to-discover',
-      eyebrow: 'Keep browsing',
-      title: 'More to discover',
-      description: 'A second look through today’s available singles.',
-      items: listings.slice(12, 24),
-    })
-  }
-  return shelves
 }
 
 /** Human-readable chip labels for everything in `filters` except sort/search. */
@@ -148,7 +102,10 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
   const currentFilters = useRef(filters)
   const reqGenRef = useRef(0)
   const abortRef = useRef(null)
+  const pageAbortRef = useRef(null)
+  const pageRequestRef = useRef(0)
   const filterPopoverRef = useRef(null)
+  const filterTriggerRef = useRef(null)
   const mobileFiltersButtonRef = useRef(null)
 
   // One price request per result set/page, instead of one request per tile.
@@ -182,6 +139,7 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
     const dismiss = (event) => {
       if (event.type === 'keydown' && event.key === 'Escape') {
         setFilterPopoverOpen(false)
+        filterTriggerRef.current?.focus()
       } else if (event.type === 'pointerdown' && !filterPopoverRef.current?.contains(event.target)) {
         setFilterPopoverOpen(false)
       }
@@ -210,6 +168,9 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
   const loadListings = useCallback(async (f = filters) => {
     const gen = ++reqGenRef.current
     if (abortRef.current) abortRef.current.abort()
+    if (pageAbortRef.current) pageAbortRef.current.abort()
+    pageRequestRef.current += 1
+    setLoadingMore(false)
     const controller = new AbortController()
     abortRef.current = controller
 
@@ -217,17 +178,17 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
     setError(null)
     try {
       const res = await fetch(`/api/listings?${buildParams(f, 1)}`, { signal: controller.signal })
-      if (gen !== reqGenRef.current) return // a newer request superseded this one
+      if (!canCommitBazaarRequest(gen, reqGenRef.current)) return // a newer request superseded this one
       if (!res.ok) throw new Error('Failed to load listings')
       const data = await res.json()
-      if (gen !== reqGenRef.current) return
+      if (!canCommitBazaarRequest(gen, reqGenRef.current)) return
       setListings(data.listings || [])
       setTotal(data.total || 0)
       setHasMore(data.hasMore || false)
       setPage(1)
-    } catch (err) {
+    } catch {
       if (err?.name === 'AbortError') return
-      if (gen !== reqGenRef.current) return
+      if (!canCommitBazaarRequest(gen, reqGenRef.current)) return
       setError('Failed to load bazaar listings.')
     } finally {
       if (gen === reqGenRef.current) setLoading(false)
@@ -236,19 +197,28 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
 
   const loadMore = useCallback(async () => {
     if (loadingMore || !hasMore) return
+    const gen = reqGenRef.current
+    const requestId = ++pageRequestRef.current
+    const controller = new AbortController()
+    pageAbortRef.current = controller
     setLoadingMore(true)
     try {
       const nextPage = page + 1
-      const res = await fetch(`/api/listings?${buildParams(filters, nextPage)}`)
+      const querySnapshot = filters
+      const res = await fetch(`/api/listings?${buildParams(querySnapshot, nextPage)}`, { signal: controller.signal })
+      if (!canCommitBazaarRequest(gen, reqGenRef.current) || requestId !== pageRequestRef.current) return
       if (!res.ok) return
       const data = await res.json()
+      if (!canCommitBazaarRequest(gen, reqGenRef.current) || requestId !== pageRequestRef.current) return
       setListings(prev => [...prev, ...(data.listings || [])])
       setPage(nextPage)
       setHasMore(data.hasMore || false)
-    } catch {
+    } catch (err) {
       // silent
     } finally {
-      setLoadingMore(false)
+      if (canCommitBazaarRequest(gen, reqGenRef.current) && requestId === pageRequestRef.current) {
+        setLoadingMore(false)
+      }
     }
   }, [loadingMore, hasMore, page, filters, buildParams])
 
@@ -497,15 +467,18 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
         >
           <main className="min-w-0">
             {/* A single horizontal rail replaces the permanent desktop sidebar. */}
-            <div
-              className="relative z-20 mb-5 flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none"
-              data-bazaar-filter-rail
-            >
-              <div ref={filterPopoverRef} className="relative hidden lg:block shrink-0">
+            <div ref={filterPopoverRef} className="relative z-20 mb-5">
+              <div
+                className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none"
+                data-bazaar-filter-rail
+              >
+              <div className="relative hidden lg:block shrink-0">
                 <button
+                  ref={filterTriggerRef}
                   type="button"
                   onClick={() => setFilterPopoverOpen(open => !open)}
                   aria-expanded={filterPopoverOpen}
+                  aria-haspopup="dialog"
                   aria-controls="bazaar-desktop-filters"
                   className="flex h-10 items-center gap-2 rounded-full border border-black/[0.08] bg-white px-4 text-sm font-medium text-gray-800 shadow-dbb-sm transition-colors hover:border-dbb-accent/40 dark:border-white/[0.10] dark:bg-dbb-secondary dark:text-white"
                 >
@@ -518,21 +491,6 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
                   )}
                   <ChevronDown className={`h-3.5 w-3.5 transition-transform ${filterPopoverOpen ? 'rotate-180' : ''}`} />
                 </button>
-                {filterPopoverOpen && (
-                  <div
-                    id="bazaar-desktop-filters"
-                    role="dialog"
-                    aria-label="Bazaar filters"
-                    className="absolute left-0 top-[calc(100%+0.5rem)] z-30 max-h-[min(70vh,620px)] w-80 overflow-y-auto rounded-dbb-lg border border-black/[0.08] bg-white shadow-dbb-md dark:border-white/[0.10] dark:bg-dbb-surface-elevated"
-                  >
-                    <Sidebar
-                      filters={filters}
-                      updateFilter={updateFilter}
-                      clearFilters={clearFilters}
-                      filterOptions={filterOptions}
-                    />
-                  </div>
-                )}
               </div>
 
               <button
@@ -591,6 +549,22 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
                   {isResultsMode ? 'Results' : 'Showcase'}
                 </span>
               )}
+              </div>
+              {filterPopoverOpen && (
+                    <div
+                    id="bazaar-desktop-filters"
+                    role="dialog"
+                    aria-label="Bazaar filters"
+                    className="absolute left-0 top-[calc(100%+0.5rem)] z-30 max-h-[min(70vh,620px)] w-80 overflow-y-auto rounded-dbb-lg border border-black/[0.08] bg-white shadow-dbb-md dark:border-white/[0.10] dark:bg-dbb-surface-elevated"
+                  >
+                    <Sidebar
+                      filters={filters}
+                      updateFilter={updateFilter}
+                      clearFilters={clearFilters}
+                      filterOptions={filterOptions}
+                    />
+                    </div>
+                  )}
             </div>
 
             <FilterSheet
@@ -600,6 +574,7 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
               onClose={closeMobileFilters}
               onApply={applyMobileFilters}
               onClearAll={clearMobileFilters}
+              applyLabel="Apply filters"
               applyDisabled={!mobilePriceValid}
               triggerRef={mobileFiltersButtonRef}
             >
@@ -695,7 +670,7 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
                   </div>
                 )}
                 {!hasMore && (
-                  <div className="text-gray-600 dark:text-gray-500 text-sm">All {total} listings shown</div>
+                  <div className="text-gray-600 dark:text-gray-500 text-sm">All {listings.length} listings shown</div>
                 )}
                 {hasMore && !loadingMore && (
                   <div className="text-gray-500 dark:text-gray-500 text-sm">Scroll for more</div>
