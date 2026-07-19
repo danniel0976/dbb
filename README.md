@@ -400,3 +400,5 @@ MIT License - Feel free to use for your own MTG sales system!
 
 **Built with ❤️ for Dan's Bizarre Bazaar**  
 **Version:** 1.0.0 | **Status:** ✅ Production Ready
+
+<!-- canary: branch-protection verification 2026-07-19 (safe to remove) -->
