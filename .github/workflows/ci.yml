@@ -22,6 +22,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Canary - fail post-merge CI while marker exists
+        if: ${{ github.event_name == 'push' && hashFiles('.github/vercel-deployment-check-canary-fail') != '' }}
+        run: |
+          echo "::error::Intentional Vercel Deployment Checks canary failure."
+          exit 1
+
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
