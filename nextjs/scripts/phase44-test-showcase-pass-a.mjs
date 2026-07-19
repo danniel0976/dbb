@@ -82,9 +82,28 @@ check('Showcase partitions every mixed listing exactly once', () => {
   }))
   const shelves = buildShowcaseShelves(listings)
   const ids = shelves.flatMap(shelf => shelf.items.map(item => item.id))
+  assert.deepEqual(
+    shelves.find(shelf => shelf.key === 'fresh-arrivals').items.map(item => item.id),
+    listings.slice(0, 12).map(item => item.id),
+    'Fresh arrivals must be the first up-to-12 listings in current order'
+  )
   assert.deepEqual(ids, buildShowcaseShelves(listings).flatMap(shelf => shelf.items.map(item => item.id)))
   assert.equal(ids.length, listings.length)
   assert.equal(new Set(ids).size, listings.length)
+})
+
+check('loadListings binds caught errors and guards bare catch regressions', () => {
+  assert.ok(view.includes('} catch (err) {'), 'loadListings must declare its caught error')
+  for (const match of view.matchAll(/catch\s*\{([\s\S]*?)\}/g)) {
+    assert.ok(!/\berr\b/.test(match[1]), 'a bare catch body must not reference err')
+  }
+})
+
+check('paging sentinel and observer exist only in Results mode', () => {
+  assert.ok(view.includes('if (loading) return'))
+  assert.ok(view.includes('if (!isResultsMode) return'))
+  assert.ok(view.includes('{isResultsMode && !loading && !error && listings.length > 0 && ('))
+  assert.ok(view.includes('[loadMore, loading, loadingMore, hasMore, listings.length, isResultsMode]'))
 })
 
 check('stale pagination responses cannot commit after a newer generation', () => {

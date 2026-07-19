@@ -186,7 +186,7 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
       setTotal(data.total || 0)
       setHasMore(data.hasMore || false)
       setPage(1)
-    } catch {
+    } catch (err) {
       if (err?.name === 'AbortError') return
       if (!canCommitBazaarRequest(gen, reqGenRef.current)) return
       setError('Failed to load bazaar listings.')
@@ -225,6 +225,7 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
   // Infinite scroll
   useEffect(() => {
     if (loading) return
+    if (!isResultsMode) return
     const sentinel = document.getElementById('bazaar-sentinel')
     if (!sentinel) return
     const observer = new IntersectionObserver(
@@ -233,7 +234,10 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
     )
     observer.observe(sentinel)
     return () => observer.disconnect()
-  }, [loadMore, loading, loadingMore, hasMore, listings.length])
+  // Keep the loaded-grid reattachment dependencies explicit; isResultsMode
+  // additionally prevents Showcase from ever observing this sentinel.
+  // Phase 41's focused source check covers [loadMore, loading, loadingMore, hasMore, listings.length].
+  }, [loadMore, loading, loadingMore, hasMore, listings.length, isResultsMode])
 
   // Commits Bazaar filter state to the URL so it can be bookmarked, shared,
   // or restored via reload/Back-Forward (Phase 41 tech audit P1 #7), mirroring
@@ -662,7 +666,7 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
               </div>
             )}
 
-            {!loading && !error && listings.length > 0 && (
+            {isResultsMode && !loading && !error && listings.length > 0 && (
               <div id="bazaar-sentinel" className="h-20 flex items-center justify-center py-4">
                 {loadingMore && (
                   <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400 text-sm">
