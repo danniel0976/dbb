@@ -437,3 +437,25 @@ body {
     padding-bottom: calc(64px + env(safe-area-inset-bottom));
   }
 }
+
+/* Phase 44 Showcase Pass A: editorial shelves and economical long-grid paint. */
+.bazaar-showcase-shelf {
+  scroll-padding-inline: 1rem;
+  scrollbar-width: thin;
+}
+
+.bazaar-card--showcase {
+  background: linear-gradient(180deg, rgb(var(--dbb-surface-rgb)) 0%, rgb(var(--dbb-bg-rgb)) 145%);
+}
+
+.bazaar-result-card {
+  content-visibility: auto;
+  contain-intrinsic-size: 260px 410px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bazaar-card--showcase,
+  .bazaar-card--results {
+    transform: none !important;
+  }
+}

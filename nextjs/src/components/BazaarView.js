@@ -1,19 +1,20 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useMemo, useReducer, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Grid, Filter, X, Search, Loader2, Layers, SortAsc } from 'lucide-react'
+import { ChevronDown, Grid, Filter, X, Search, Loader2, Layers, SortAsc, Sparkles } from 'lucide-react'
 import Sidebar from '@/components/Sidebar'
 import BazaarCard from '@/components/BazaarCard'
 import BazaarDetailModal from '@/components/BazaarDetailModal'
 import LoadingSkeleton from '@/components/LoadingSkeleton'
 import ClaimSalesBrowse from '@/components/ClaimSalesBrowse'
+import FilterSheet from '@/components/FilterSheet'
 import { useToast } from '@/components/Toast'
+import { filterSheetReducer, initFilterSheetState } from '@/lib/filterSheetState'
 import {
   EMPTY_BAZAAR_FILTERS,
   parseBazaarQueryState,
   serializeBazaarQueryState,
-  BAZAAR_CHIP_CLEAR_PATCH,
 } from '@/lib/bazaarSearchState'
 
 const SORT_OPTIONS = [
@@ -29,12 +30,64 @@ const SORT_OPTIONS = [
 
 const INITIAL_FILTERS = EMPTY_BAZAAR_FILTERS
 
-const SORT_LABELS = {
-  newest: 'Newest',
-  price_high: 'Price: High → Low',
-  price_low: 'Price: Low → High',
-  name_az: 'Name: A–Z',
-  rarity: 'Rarity',
+function hasSearchOrFacetPredicates(filters) {
+  return Boolean(
+    filters.search.trim()
+    || filters.setCode
+    || filters.rarities.length
+    || filters.colors.length
+    || filters.cardType
+    || filters.isFoil !== null
+    || filters.minPrice !== null
+    || filters.maxPrice !== null
+  )
+}
+
+function buildShowcaseShelves(listings) {
+  const rareFinds = listings.filter(({ library_cards: lc }) =>
+    ['rare', 'mythic'].includes(lc?.card_index?.rarity)
+  )
+  const foilSpotlight = listings.filter(({ library_cards: lc }) =>
+    lc?.foil === 'foil' || lc?.foil === 'etched'
+  )
+  const shelves = [
+    {
+      key: 'fresh-arrivals',
+      eyebrow: 'Fresh arrivals',
+      title: 'New to the Bazaar',
+      description: 'Recently listed singles, ready for a closer look.',
+      items: listings.slice(0, 12),
+    },
+  ]
+
+  if (rareFinds.length) {
+    shelves.push({
+      key: 'rare-finds',
+      eyebrow: 'Collector shelf',
+      title: 'Rare finds',
+      description: 'Rare and mythic cards surfaced from the current listings.',
+      items: rareFinds.slice(0, 12),
+    })
+  }
+  if (foilSpotlight.length) {
+    shelves.push({
+      key: 'foil-spotlight',
+      eyebrow: 'Light play',
+      title: 'Foil spotlight',
+      description: 'Foil and etched finishes from across the Bazaar.',
+      items: foilSpotlight.slice(0, 12),
+    })
+  }
+  if (shelves.length === 1 && listings.length > 12) {
+    shelves.push({
+      key: 'more-to-discover',
+      eyebrow: 'Keep browsing',
+      title: 'More to discover',
+      description: 'A second look through today’s available singles.',
+      items: listings.slice(12, 24),
+    })
+  }
+  return shelves
 }
 
 /** Human-readable chip labels for everything in `filters` except sort/search. */
@@ -77,18 +130,26 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
   const [loading, setLoading] = useState(!initialData)
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState(null)
-  const [filterSheetOpen, setFilterSheetOpen] = useState(false)
-  const [filters, setFilters] = useState(INITIAL_FILTERS)
+  const [filters, setFilters] = useState(initialQueryState)
   const [filterOptions] = useState(initialFilterOptions || { sets: [], rarities: [], cardTypes: [] })
   const [selectedListing, setSelectedListing] = useState(null)
   const [prices, setPrices] = useState({})
   const [bazaarSection, setBazaarSection] = useState('singles') // 'singles' | 'claim_sales'
+  const [filterPopoverOpen, setFilterPopoverOpen] = useState(false)
+  const [mobileFilterState, sendMobileFilter] = useReducer(
+    filterSheetReducer,
+    initialQueryState,
+    initFilterSheetState
+  )
+  const [mobilePriceValid, setMobilePriceValid] = useState(true)
   const { toast } = useToast()
 
   const searchTimeout = useRef(null)
   const currentFilters = useRef(filters)
   const reqGenRef = useRef(0)
   const abortRef = useRef(null)
+  const filterPopoverRef = useRef(null)
+  const mobileFiltersButtonRef = useRef(null)
 
   // One price request per result set/page, instead of one request per tile.
   useEffect(() => {
@@ -115,13 +176,23 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
     return () => controller.abort()
   }, [listings])
 
-  // Lock body scroll while the mobile filter bottom sheet is open.
+  // Desktop filter popover dismisses on Escape or an outside pointer event.
   useEffect(() => {
-    if (filterSheetOpen) {
-      document.body.style.overflow = 'hidden'
-      return () => { document.body.style.overflow = '' }
+    if (!filterPopoverOpen) return
+    const dismiss = (event) => {
+      if (event.type === 'keydown' && event.key === 'Escape') {
+        setFilterPopoverOpen(false)
+      } else if (event.type === 'pointerdown' && !filterPopoverRef.current?.contains(event.target)) {
+        setFilterPopoverOpen(false)
+      }
     }
-  }, [filterSheetOpen])
+    document.addEventListener('keydown', dismiss)
+    document.addEventListener('pointerdown', dismiss)
+    return () => {
+      document.removeEventListener('keydown', dismiss)
+      document.removeEventListener('pointerdown', dismiss)
+    }
+  }, [filterPopoverOpen])
 
   const buildParams = useCallback((f = filters, p = 1) => {
     const params = new URLSearchParams({ page: String(p), sort: f.sortBy })
@@ -234,6 +305,8 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
 
   const applyFilters = (next) => {
     setFilters(next)
+    currentFilters.current = next
+    pushUrl(next)
     loadListings(next)
   }
 
@@ -248,6 +321,26 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
     applyFilters(chip.clear(filters))
   }
 
+  const openMobileFilters = () => {
+    setFilterPopoverOpen(false)
+    sendMobileFilter({ type: 'OPEN', applied: filters })
+  }
+  const closeMobileFilters = useCallback(() => sendMobileFilter({ type: 'CLOSE' }), [])
+  const editMobileFilters = (keyOrPatch, value) => {
+    const patch = typeof keyOrPatch === 'object' ? keyOrPatch : { [keyOrPatch]: value }
+    sendMobileFilter({ type: 'EDIT', patch })
+  }
+  const clearMobileFilters = () => {
+    sendMobileFilter({ type: 'REPLACE_DRAFT', draft: { ...INITIAL_FILTERS } })
+    setMobilePriceValid(true)
+  }
+  const applyMobileFilters = () => {
+    if (!mobilePriceValid) return
+    const next = mobileFilterState.draft
+    sendMobileFilter({ type: 'APPLY' })
+    applyFilters(next)
+  }
+
   const hasActiveFilters = Object.entries(filters).some(([filterKey, v]) => {
     if (filterKey === 'sortBy') return v !== 'newest'
     if (filterKey === 'search') return v !== ''
@@ -255,6 +348,7 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
     if (Array.isArray(v)) return v.length > 0
     return v !== null && v !== undefined
   })
+  const isResultsMode = hasSearchOrFacetPredicates(filters)
   // Reconstruct state from the URL on Back/Forward navigation, mirroring
   // LibraryView's popstate sync so a copied/reloaded/back-navigated Bazaar
   // URL reruns the same query rather than silently diverging.
@@ -286,6 +380,7 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
   }, [])
 
   const chips = buildChips(filters, filterOptions)
+  const showcaseShelves = useMemo(() => buildShowcaseShelves(listings), [listings])
 
   const handleSelectListing = async (listing) => {
     if (!userId) {
@@ -370,7 +465,7 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
         {/* Search — primary control */}
         {bazaarSection === 'singles' && (
           <div className="mt-4 flex items-center gap-2">
-            <div className="relative flex-1 max-w-xl">
+            <div className="relative w-full max-w-2xl">
               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <input
                 type="text"
@@ -389,14 +484,6 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
                 </button>
               )}
             </div>
-            <button
-              onClick={() => setFilterSheetOpen(true)}
-              className="lg:hidden flex items-center justify-center gap-1.5 h-11 px-4 rounded-full border border-gray-200 dark:border-dbb-tertiary/50 bg-white dark:bg-dbb-secondary text-sm font-medium shadow-dbb-sm active:scale-[0.97] transition-transform"
-            >
-              <Filter className="w-4 h-4" />
-              Filters
-              {hasActiveFilters && <span className="w-1.5 h-1.5 rounded-full bg-dbb-accent" />}
-            </button>
           </div>
         )}
       </div>
@@ -404,41 +491,40 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
       {bazaarSection === 'claim_sales' ? (
         <ClaimSalesBrowse userId={userId} />
       ) : (
-        <div className="container mx-auto px-4 pb-8">
-          <div className="lg:flex lg:items-start lg:gap-6">
-            {/* Filter panel — Desktop: contained floating panel inside the page
-                flow, not pinned to the browser edge. */}
-            <aside className="hidden lg:block w-64 shrink-0 sticky top-[76px] rounded-dbb-lg bg-white dark:bg-dbb-secondary shadow-dbb-sm border border-black/[0.04] dark:border-white/[0.06] max-h-[calc(100vh-96px)] overflow-y-auto">
-              <Sidebar
-                filters={filters}
-                updateFilter={updateFilter}
-                clearFilters={clearFilters}
-                filterOptions={filterOptions}
-              />
-            </aside>
-
-            {/* Filter bottom sheet — Mobile (replaces the left drawer) */}
-            {filterSheetOpen && (
-              <div className="lg:hidden fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label="Filters">
-                <div
-                  className="absolute inset-0 bg-black/50"
-                  onClick={() => setFilterSheetOpen(false)}
-                />
-                <div className="absolute left-0 right-0 bottom-0 max-h-[85vh] rounded-t-dbb-xl dbb-glass-sheet shadow-dbb-md flex flex-col">
-                  <div className="shrink-0 flex items-center justify-center pt-2 pb-1">
-                    <span className="w-9 h-1 rounded-full bg-gray-300 dark:bg-gray-600" />
-                  </div>
-                  <div className="shrink-0 px-4 pb-3 flex items-center justify-between border-b border-black/5 dark:border-white/10">
-                    <h2 className="text-dbb-lg font-semibold text-gray-900 dark:text-white">Filters</h2>
-                    <button
-                      onClick={() => setFilterSheetOpen(false)}
-                      className="p-2 -mr-2 hover:bg-black/5 dark:hover:bg-white/10 rounded-full"
-                      aria-label="Close filters"
-                    >
-                      <X className="w-5 h-5" />
-                    </button>
-                  </div>
-                  <div className="flex-1 overflow-y-auto">
+        <div
+          className="container mx-auto px-4 pb-8"
+          data-bazaar-mode={isResultsMode ? 'results' : 'showcase'}
+        >
+          <main className="min-w-0">
+            {/* A single horizontal rail replaces the permanent desktop sidebar. */}
+            <div
+              className="relative z-20 mb-5 flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none"
+              data-bazaar-filter-rail
+            >
+              <div ref={filterPopoverRef} className="relative hidden lg:block shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setFilterPopoverOpen(open => !open)}
+                  aria-expanded={filterPopoverOpen}
+                  aria-controls="bazaar-desktop-filters"
+                  className="flex h-10 items-center gap-2 rounded-full border border-black/[0.08] bg-white px-4 text-sm font-medium text-gray-800 shadow-dbb-sm transition-colors hover:border-dbb-accent/40 dark:border-white/[0.10] dark:bg-dbb-secondary dark:text-white"
+                >
+                  <Filter className="h-4 w-4" />
+                  Filters
+                  {chips.length > 0 && (
+                    <span className="rounded-full bg-dbb-accent px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                      {chips.length}
+                    </span>
+                  )}
+                  <ChevronDown className={`h-3.5 w-3.5 transition-transform ${filterPopoverOpen ? 'rotate-180' : ''}`} />
+                </button>
+                {filterPopoverOpen && (
+                  <div
+                    id="bazaar-desktop-filters"
+                    role="dialog"
+                    aria-label="Bazaar filters"
+                    className="absolute left-0 top-[calc(100%+0.5rem)] z-30 max-h-[min(70vh,620px)] w-80 overflow-y-auto rounded-dbb-lg border border-black/[0.08] bg-white shadow-dbb-md dark:border-white/[0.10] dark:bg-dbb-surface-elevated"
+                  >
                     <Sidebar
                       filters={filters}
                       updateFilter={updateFilter}
@@ -446,115 +532,177 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
                       filterOptions={filterOptions}
                     />
                   </div>
-                  <div className="shrink-0 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] border-t border-black/5 dark:border-white/10">
-                    <button
-                      onClick={() => setFilterSheetOpen(false)}
-                      className="w-full btn btn-primary btn-lg"
-                    >
-                      Show {total} result{total !== 1 ? 's' : ''}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Main content */}
-            <main className="flex-1 min-w-0 mt-4 lg:mt-0">
-              {/* Active filter chips — one horizontally-scrollable row */}
-              {chips.length > 0 && (
-                <div className="flex items-center gap-2 mb-3 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none">
-                  {chips.map(chip => (
-                    <button
-                      key={chip.key}
-                      onClick={() => removeChip(chip)}
-                      className="shrink-0 flex items-center gap-1 pl-3 pr-2 h-8 rounded-full bg-dbb-accent/10 text-dbb-accent text-xs font-medium hover:bg-dbb-accent/15 transition-colors"
-                    >
-                      {chip.label}
-                      <X className="w-3 h-3" />
-                    </button>
-                  ))}
-                  <button
-                    onClick={clearFilters}
-                    className="shrink-0 text-xs text-gray-500 dark:text-gray-400 hover:text-dbb-accent transition-colors underline underline-offset-2"
-                  >
-                    Clear all
-                  </button>
-                </div>
-              )}
-
-              {/* Result toolbar — sort control lives here, directly above the grid */}
-              <div className="flex items-center justify-between mb-4">
-                <select
-                  value={filters.sortBy}
-                  onChange={(e) => updateFilter('sortBy', e.target.value)}
-                  aria-label="Sort by"
-                  className="bg-white dark:bg-dbb-secondary border border-gray-200 dark:border-dbb-tertiary/50 rounded-dbb px-3 py-1.5 text-sm focus:border-dbb-accent focus:outline-none"
-                >
-                  {Object.entries(SORT_LABELS).map(([value, label]) => (
-                    <option key={value} value={value}>{label}</option>
-                  ))}
-                </select>
-                {hasMore && !loading && (
-                  <p className="text-xs text-gray-500">Scroll for more</p>
                 )}
               </div>
 
-              {loading ? (
-                <LoadingSkeleton count={12} />
-              ) : error ? (
-                <div className="text-center py-12">
-                  <p className="text-red-600 dark:text-red-400 mb-4">{error}</p>
-                  <button onClick={() => loadListings()} className="btn btn-primary btn-md">
-                    Try Again
+              <button
+                ref={mobileFiltersButtonRef}
+                type="button"
+                onClick={openMobileFilters}
+                aria-haspopup="dialog"
+                className="flex h-10 shrink-0 items-center gap-2 rounded-full border border-black/[0.08] bg-white px-4 text-sm font-medium shadow-dbb-sm lg:hidden dark:border-white/[0.10] dark:bg-dbb-secondary"
+              >
+                <Filter className="h-4 w-4" />
+                Filters
+                {chips.length > 0 && <span className="h-1.5 w-1.5 rounded-full bg-dbb-accent" />}
+              </button>
+
+              <label className="relative flex h-10 shrink-0 items-center gap-2 rounded-full border border-black/[0.08] bg-white pl-4 pr-3 text-sm shadow-dbb-sm dark:border-white/[0.10] dark:bg-dbb-secondary">
+                <SortAsc className="h-4 w-4 text-gray-500" />
+                <span className="sr-only">Sort listings</span>
+                <select
+                  value={filters.sortBy}
+                  onChange={(e) => updateFilter('sortBy', e.target.value)}
+                  aria-label="Sort listings"
+                  className="appearance-none bg-transparent pr-5 text-sm font-medium outline-none"
+                >
+                  {SORT_OPTIONS.map(({ value, label }) => (
+                    <option key={value} value={value}>{label}</option>
+                  ))}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-3 h-3.5 w-3.5 text-gray-500" />
+              </label>
+
+              {chips.map(chip => (
+                <button
+                  key={chip.key}
+                  type="button"
+                  onClick={() => removeChip(chip)}
+                  aria-label={`Remove ${chip.label} filter`}
+                  className="flex h-10 shrink-0 items-center gap-1.5 rounded-full bg-dbb-accent/10 pl-4 pr-3 text-xs font-medium text-dbb-accent transition-colors hover:bg-dbb-accent/15"
+                >
+                  {chip.label}
+                  <X className="h-3 w-3" />
+                </button>
+              ))}
+              {chips.length > 0 && (
+                <button
+                  type="button"
+                  onClick={clearFilters}
+                  className="h-10 shrink-0 px-2 text-xs text-gray-500 underline underline-offset-2 hover:text-dbb-accent dark:text-gray-400"
+                >
+                  Clear all
+                </button>
+              )}
+
+              {!loading && (
+                <span className="ml-auto hidden shrink-0 items-center gap-1.5 text-xs font-medium uppercase tracking-[0.14em] text-gray-500 sm:flex dark:text-gray-400">
+                  {isResultsMode ? <Grid className="h-3.5 w-3.5" /> : <Sparkles className="h-3.5 w-3.5" />}
+                  {isResultsMode ? 'Results' : 'Showcase'}
+                </span>
+              )}
+            </div>
+
+            <FilterSheet
+              open={mobileFilterState.open}
+              title="Bazaar filters"
+              resultCount={total}
+              onClose={closeMobileFilters}
+              onApply={applyMobileFilters}
+              onClearAll={clearMobileFilters}
+              applyDisabled={!mobilePriceValid}
+              triggerRef={mobileFiltersButtonRef}
+            >
+              <Sidebar
+                filters={mobileFilterState.draft}
+                updateFilter={editMobileFilters}
+                clearFilters={clearMobileFilters}
+                filterOptions={filterOptions}
+                onPriceValidityChange={setMobilePriceValid}
+              />
+            </FilterSheet>
+
+            {loading ? (
+              <LoadingSkeleton count={12} />
+            ) : error ? (
+              <div className="text-center py-12">
+                <p className="text-red-600 dark:text-red-400 mb-4">{error}</p>
+                <button onClick={() => loadListings()} className="btn btn-primary btn-md">
+                  Try Again
+                </button>
+              </div>
+            ) : listings.length === 0 ? (
+              <div className="text-center py-16">
+                <Grid className="w-16 h-16 mx-auto mb-4 text-gray-600" />
+                <h2 className="text-xl font-semibold mb-2">
+                  {hasActiveFilters ? 'No listings match your filters' : 'No cards on the bazaar yet'}
+                </h2>
+                <p className="text-gray-500 dark:text-gray-400 mb-4">
+                  {hasActiveFilters
+                    ? 'Try adjusting your filters or clearing them.'
+                    : 'List yours from your library to get started.'}
+                </p>
+                {hasActiveFilters ? (
+                  <button onClick={clearFilters} className="btn btn-primary btn-md">
+                    Clear All Filters
                   </button>
-                </div>
-              ) : listings.length === 0 ? (
-                <div className="text-center py-16">
-                  <Grid className="w-16 h-16 mx-auto mb-4 text-gray-600" />
-                  <h2 className="text-xl font-semibold mb-2">
-                    {hasActiveFilters ? 'No listings match your filters' : 'No cards on the bazaar yet'}
-                  </h2>
-                  <p className="text-gray-500 dark:text-gray-400 mb-4">
-                    {hasActiveFilters
-                      ? 'Try adjusting your filters or clearing them.'
-                      : 'List yours from your library to get started.'}
-                  </p>
-                  {hasActiveFilters ? (
-                    <button onClick={clearFilters} className="btn btn-primary btn-md">
-                      Clear All Filters
-                    </button>
-                  ) : (
-                    <a href="/library" className="btn btn-primary btn-md inline-block">
-                      Go to your library →
-                    </a>
-                  )}
-                </div>
-              ) : (
-                <>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 min-[900px]:grid-cols-4 min-[1440px]:grid-cols-5 gap-3 sm:gap-4 lg:gap-5">
-                    {listings.map(listing => (
+                ) : (
+                  <a href="/library" className="btn btn-primary btn-md inline-block">
+                    Go to your library →
+                  </a>
+                )}
+              </div>
+            ) : isResultsMode ? (
+              <section aria-labelledby="bazaar-results-heading" data-bazaar-results>
+                <h2 id="bazaar-results-heading" className="sr-only">Bazaar results</h2>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 min-[900px]:grid-cols-4 lg:gap-5 min-[1440px]:grid-cols-5">
+                  {listings.map(listing => (
+                    <div key={listing.id} className="bazaar-result-card">
                       <BazaarCard
-                        key={listing.id}
                         listing={listing}
                         priceData={prices[`${listing.library_cards?.scryfall_id}:${listing.library_cards?.foil || 'normal'}`]}
                         onClick={() => setSelectedListing(listing)}
                       />
-                    ))}
+                    </div>
+                  ))}
+                </div>
+              </section>
+            ) : (
+              <div className="space-y-10 sm:space-y-12" data-bazaar-showcase>
+                {showcaseShelves.map(shelf => (
+                  <section key={shelf.key} aria-labelledby={`showcase-${shelf.key}`}>
+                    <div className="mb-4 max-w-2xl">
+                      <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-dbb-accent">
+                        {shelf.eyebrow}
+                      </p>
+                      <h2 id={`showcase-${shelf.key}`} className="text-dbb-xl font-semibold tracking-heading text-gray-900 sm:text-dbb-2xl dark:text-white">
+                        {shelf.title}
+                      </h2>
+                      <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{shelf.description}</p>
+                    </div>
+                    <div className="bazaar-showcase-shelf -mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-5 sm:gap-5">
+                      {shelf.items.map(listing => (
+                        <div key={listing.id} className="w-[72vw] max-w-[280px] shrink-0 snap-start sm:w-[250px]">
+                          <BazaarCard
+                            listing={listing}
+                            variant="showcase"
+                            priceData={prices[`${listing.library_cards?.scryfall_id}:${listing.library_cards?.foil || 'normal'}`]}
+                            onClick={() => setSelectedListing(listing)}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                ))}
+              </div>
+            )}
+
+            {!loading && !error && listings.length > 0 && (
+              <div id="bazaar-sentinel" className="h-20 flex items-center justify-center py-4">
+                {loadingMore && (
+                  <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400 text-sm">
+                    <Loader2 className="w-4 h-4 animate-spin" /> Loading more...
                   </div>
-                  <div id="bazaar-sentinel" className="h-20 flex items-center justify-center py-4">
-                    {loadingMore && (
-                      <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400 text-sm">
-                        <Loader2 className="w-4 h-4 animate-spin" /> Loading more...
-                      </div>
-                    )}
-                    {!hasMore && listings.length > 0 && (
-                      <div className="text-gray-600 dark:text-gray-500 text-sm">All {total} listings shown</div>
-                    )}
-                  </div>
-                </>
-              )}
-            </main>
-          </div>
+                )}
+                {!hasMore && (
+                  <div className="text-gray-600 dark:text-gray-500 text-sm">All {total} listings shown</div>
+                )}
+                {hasMore && !loadingMore && (
+                  <div className="text-gray-500 dark:text-gray-500 text-sm">Scroll for more</div>
+                )}
+              </div>
+            )}
+          </main>
         </div>
       )}
 

@@ -3,8 +3,8 @@
 // Shared mobile bottom filter sheet (Phase 41 in-scope feature #1). Renders
 // a title/close row, a scrollable body (the surface's existing filter
 // controls, bound to *staged* draft state by the caller), and a sticky
-// footer with "Clear all" + Apply. Desktop keeps its existing sidebar/panel
-// — this component is only mounted/shown at mobile widths by its callers.
+// footer with "Clear all" + Apply. Desktop surfaces filters in anchored
+// popovers; this component is only mounted/shown at mobile widths by callers.
 
 import { useEffect, useRef } from 'react'
 import { X } from 'lucide-react'

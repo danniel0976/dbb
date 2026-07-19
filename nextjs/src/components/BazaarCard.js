@@ -15,10 +15,10 @@ const RARITY_DOT = {
   common: 'bg-gray-400 dark:bg-gray-500',
 }
 
-export default function BazaarCard({ listing, onClick, priceData }) {
+export default function BazaarCard({ listing, onClick, priceData, variant = 'results' }) {
   const lc = listing.library_cards
   const ci = lc?.card_index
-  const storedImage = ci?.image_uris?.normal || ci?.image_uris?.small || null
+  const storedImage = ci?.image_uris?.small || ci?.image_uris?.normal || null
   const [imageUrl, setImageUrl] = useState(storedImage)
   const [imgLoaded, setImgLoaded] = useState(false)
 
@@ -38,7 +38,10 @@ export default function BazaarCard({ listing, onClick, priceData }) {
       .then(r => r.ok ? r.json() : null)
       .then(data => {
         if (!data) return
-        const url = data.image_uris?.normal || data.card_faces?.[0]?.image_uris?.normal
+        const url = data.image_uris?.small
+          || data.card_faces?.[0]?.image_uris?.small
+          || data.image_uris?.normal
+          || data.card_faces?.[0]?.image_uris?.normal
         if (url) {
           sessionStorage.setItem(cacheKey, url)
           setImageUrl(url)
@@ -58,14 +61,14 @@ export default function BazaarCard({ listing, onClick, priceData }) {
 
   return (
     <div
-      className="group relative bg-white dark:bg-dbb-secondary rounded-dbb-lg overflow-hidden shadow-dbb-sm hover:shadow-dbb-md transition-shadow duration-200 cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-dbb-accent"
+      className={`group relative overflow-hidden rounded-dbb-lg border border-black/[0.05] bg-white shadow-dbb-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-dbb-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-dbb-accent dark:border-white/[0.07] dark:bg-dbb-secondary ${variant === 'showcase' ? 'bazaar-card--showcase' : 'bazaar-card--results'}`}
       onClick={onClick}
       role="button"
       tabIndex={0}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onClick?.() }}
     >
       {/* Artwork — ~74% of tile height, native card aspect ratio preserved
-          (never cropped/stretched: object-contain, not object-cover). */}
+          (never cropped/stretched: object-contain preserves the full card). */}
       <div className="relative aspect-[5/7] bg-gray-100 dark:bg-dbb-primary rounded-t-dbb-lg overflow-hidden">
         {!imgLoaded && !imageUrl && (
           <div className="w-full h-full card-skeleton" />
