@@ -3,7 +3,8 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useState, useEffect, useRef } from 'react'
-import { Library, Store, Package, ShoppingCart, User, ChevronDown, Upload, LogOut } from 'lucide-react'
+import { Library, Store, Package, ShoppingCart, User, ChevronDown, Upload, LogOut, Sun, Moon } from 'lucide-react'
+import { useTheme } from '@/components/ThemeProvider'
 
 // Primary destinations — desktop top bar + mobile bottom tab bar.
 // Import intentionally lives off this list; it's reachable from Library's
@@ -159,6 +160,44 @@ function TopBarLink({ href, label, icon: Icon, active }) {
   )
 }
 
+function ThemeToggle() {
+  const { theme, setTheme } = useTheme()
+  const [isDark, setIsDark] = useState(false)
+
+  useEffect(() => {
+    // Determine current effective theme
+    const root = document.documentElement
+    const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+    const effectiveDark = theme === 'dark' || (theme === 'system' && systemDark)
+    setIsDark(effectiveDark)
+
+    const mq = window.matchMedia('(prefers-color-scheme: dark)')
+    const handler = () => {
+      if (theme === 'system') {
+        setIsDark(mq.matches)
+      }
+    }
+    mq.addEventListener('change', handler)
+    return () => mq.removeEventListener('change', handler)
+  }, [theme])
+
+  const toggleTheme = () => {
+    const newTheme = isDark ? 'light' : 'dark'
+    setTheme(newTheme)
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={toggleTheme}
+      aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+      className="flex items-center justify-center w-11 h-11 rounded-full text-gray-600 dark:text-gray-400 hover:bg-black/[0.04] dark:hover:bg-white/[0.06] transition-colors"
+    >
+      {isDark ? <Sun size={20} /> : <Moon size={20} />}
+    </button>
+  )
+}
+
 function TabBarLink({ href, label, icon: Icon, active, badge }) {
   return (
     <Link
@@ -212,6 +251,7 @@ export default function DBBNav({ userEmail, extra }) {
           </div>
           <div className="flex items-center gap-2">
             {extra}
+            <ThemeToggle />
             {userEmail && (
               <Link
                 href="/cart"

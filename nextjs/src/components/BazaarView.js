@@ -644,19 +644,31 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
                 {showcaseShelves.map(shelf => {
                   const isMobile = typeof window !== 'undefined' && window.innerWidth < 640
                   const shouldUseGridOnMobile = shelf.items.length <= 4
+                  const hasOverflow = shelf.items.length > (isMobile && shouldUseGridOnMobile ? 4 : 5)
                   return (
                     <section key={shelf.key} aria-labelledby={`showcase-${shelf.key}`}>
-                      <div className="mb-4 max-w-2xl">
-                        <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-dbb-accent">
-                          {shelf.eyebrow}
-                        </p>
-                        <h2 id={`showcase-${shelf.key}`} className="text-dbb-xl font-semibold tracking-heading text-gray-900 sm:text-dbb-2xl dark:text-white">
-                          {shelf.title}
-                        </h2>
-                        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{shelf.description}</p>
+                      <div className="mb-4 flex items-end justify-between gap-4 max-w-2xl">
+                        <div className="flex-1">
+                          <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-dbb-accent">
+                            {shelf.eyebrow}
+                          </p>
+                          <h2 id={`showcase-${shelf.key}`} className="text-dbb-xl font-semibold tracking-heading text-gray-900 sm:text-dbb-2xl dark:text-white">
+                            {shelf.title}
+                          </h2>
+                          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{shelf.description}</p>
+                        </div>
+                        {hasOverflow && (
+                          <button
+                            type="button"
+                            className="shrink-0 text-xs font-medium text-dbb-accent hover:text-dbb-accent/80 transition-colors whitespace-nowrap"
+                            aria-label={`See all ${shelf.title}`}
+                          >
+                            See all →
+                          </button>
+                        )}
                       </div>
                       {isMobile && shouldUseGridOnMobile ? (
-                        <div className="grid grid-cols-2 gap-3 sm:hidden">
+                        <div className="grid grid-cols-2 gap-3 sm:hidden relative">
                           {shelf.items.map(listing => (
                             <div key={listing.id}>
                               <BazaarCard
@@ -669,7 +681,7 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
                           ))}
                         </div>
                       ) : (
-                        <div className="bazaar-showcase-shelf scroll-fade-both -mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-5 sm:gap-5">
+                        <div className="bazaar-showcase-shelf -mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-5 sm:gap-5 relative">
                           {shelf.items.map(listing => (
                             <div key={listing.id} className="w-[72vw] max-w-[280px] shrink-0 snap-start sm:w-[250px]">
                               <BazaarCard
@@ -680,6 +692,13 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
                               />
                             </div>
                           ))}
+                          {/* Subtle right-edge gradient shadow hinting at more content */}
+                          <div
+                            className="pointer-events-none absolute top-0 bottom-5 right-0 w-8"
+                            style={{
+                              background: 'linear-gradient(to left, var(--dbb-bg) 0%, transparent 100%)'
+                            }}
+                          />
                         </div>
                       )}
                     </section>

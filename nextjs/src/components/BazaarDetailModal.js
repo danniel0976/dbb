@@ -85,13 +85,21 @@ function ConditionProof({ listingId, onClose }) {
               </button>
             </div>
           ) : (
-            <div className="flex items-center gap-2 py-6 text-dbb-xs text-gray-500 justify-center">
-              <Camera className="h-4 w-4" /> No condition photo available
+            <div className="flex flex-col items-center gap-3 py-8">
+              <Camera className="h-8 w-8 text-gray-400" />
+              <p className="text-dbb-sm font-medium text-gray-900 dark:text-white">
+                No condition photo available
+              </p>
+              <p className="text-center text-dbb-xs text-gray-500 dark:text-gray-600 max-w-[260px]">
+                This listing doesn't have a condition photo. The seller hasn't uploaded one yet.
+              </p>
             </div>
           )}
-          <p className="mt-2 text-center text-dbb-xs text-gray-500 dark:text-gray-600">
-            Seller's real-life card photo — condition evidence for this listing.
-          </p>
+          {!loading && (
+            <p className="mt-3 text-center text-dbb-xs text-gray-500 dark:text-gray-600">
+              Seller's real-life card photo — condition evidence for this listing.
+            </p>
+          )}
         </div>
       </div>
 
@@ -288,8 +296,15 @@ function MobileDragSheet({ open, onClose, children, sheetRef, dragState, setDrag
     }
     
     // Disable transition during drag for immediate response
+    // Also disable transitions on ALL children to prevent flicker
     if (sheetRef.current) {
       sheetRef.current.style.transition = 'none'
+      // Disable child transitions during drag
+      const allChildren = sheetRef.current.querySelectorAll('*')
+      allChildren.forEach(child => {
+        child.style.setProperty('transition', 'none', 'important')
+        child.style.setProperty('will-change', 'transform')
+      })
     }
   }
 
@@ -320,8 +335,14 @@ function MobileDragSheet({ open, onClose, children, sheetRef, dragState, setDrag
     const toY = shouldDismiss ? sheetHeight.current : 0
     
     // Re-enable transition for smooth snap
+    // Also re-enable child transitions
     if (sheetRef.current) {
       sheetRef.current.style.transition = 'transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)'
+      const allChildren = sheetRef.current.querySelectorAll('*')
+      allChildren.forEach(child => {
+        child.style.removeProperty('transition')
+        child.style.removeProperty('will-change')
+      })
     }
     
     if (shouldDismiss) {
@@ -635,44 +656,38 @@ export default function BazaarDetailModal({ listing, onClose, onSelectListing, u
                         }`}
                       >
                         <div className="flex flex-col gap-2">
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="flex min-w-0 flex-1 items-center gap-2">
-                              <User className="h-3.5 w-3.5 flex-shrink-0 text-gray-500" />
-                              <button
-                                onClick={() => setSellerPopupId(s.id)}
-                                className="max-w-[120px] truncate text-left text-dbb-sm text-gray-600 transition-colors hover:text-dbb-accent dark:text-gray-300"
-                                title="View seller profile"
-                              >
-                                {s.seller_name || 'Seller'}
-                              </button>
-                              <span className="flex-shrink-0 rounded border border-gray-300 px-1 py-0.5 text-dbb-xs text-gray-500 dark:border-gray-600 dark:text-gray-400">
-                                {slc?.condition || 'NM'}
+                          {/* Row 1: Seller name + metadata */}
+                          <div className="flex items-center flex-wrap gap-2">
+                            <User className="h-3.5 w-3.5 flex-shrink-0 text-gray-500" />
+                            <button
+                              onClick={() => setSellerPopupId(s.id)}
+                              className="truncate text-left text-dbb-sm text-gray-600 transition-colors hover:text-dbb-accent dark:text-gray-300"
+                              title="View seller profile"
+                            >
+                              {s.seller_name || 'Seller'}
+                            </button>
+                            <span className="flex-shrink-0 rounded border border-gray-300 px-1 py-0.5 text-dbb-xs text-gray-500 dark:border-gray-600 dark:text-gray-400">
+                              {slc?.condition || 'NM'}
+                            </span>
+                            {foilBadge && (
+                              <span className={`flex-shrink-0 rounded border px-1 py-0.5 text-dbb-xs ${foilBadge.cls}`}>
+                                {foilBadge.label}
                               </span>
-                              {foilBadge && (
-                                <span className={`flex-shrink-0 rounded border px-1 py-0.5 text-dbb-xs ${foilBadge.cls}`}>
-                                  {foilBadge.label}
-                                </span>
-                              )}
-                              {s.quantity > 1 && (
-                                <span className="flex-shrink-0 text-dbb-xs text-gray-500 dark:text-gray-400">
-                                  {s.quantity}×
-                                </span>
-                              )}
-                            </div>
-                            <div className="text-right">
+                            )}
+                            {s.quantity > 1 && (
+                              <span className="flex-shrink-0 text-dbb-xs text-gray-500 dark:text-gray-400">
+                                {s.quantity}×
+                              </span>
+                            )}
+                          </div>
+                          {/* Row 2: Price + Select button */}
+                          <div className="flex items-center justify-between gap-2 pt-1">
+                            <div className="text-right mr-2">
                               <div className="text-dbb-sm font-semibold text-dbb-accent">
                                 {myr != null ? `RM ${myr.toFixed(2)}` : '—'}
                               </div>
                               <div className="text-dbb-xs text-gray-500 dark:text-gray-600">×{s.multiplier}</div>
                             </div>
-                          </div>
-                          <div className="flex items-center justify-between gap-2 pt-1">
-                            <button
-                              onClick={() => setProofListingId(s.id)}
-                              className="flex min-h-[44px] flex-1 items-center justify-center gap-1.5 rounded-dbb-md border border-gray-200 px-3 text-dbb-sm text-gray-600 transition-colors hover:border-dbb-accent hover:text-dbb-accent dark:border-gray-700 dark:text-gray-300"
-                            >
-                              <Camera className="h-3.5 w-3.5" /> View card condition
-                            </button>
                             <button
                               onClick={() => {
                                 setSelectedListingId(s.id)
@@ -691,6 +706,13 @@ export default function BazaarDetailModal({ listing, onClose, onSelectListing, u
                               )}
                             </button>
                           </div>
+                          {/* Row 3: Condition proof button (full width) */}
+                          <button
+                            onClick={() => setProofListingId(s.id)}
+                            className="flex min-h-[44px] w-full items-center justify-center gap-1.5 rounded-dbb-md border border-gray-200 px-3 text-dbb-sm text-gray-600 transition-colors hover:border-dbb-accent hover:text-dbb-accent dark:border-gray-700 dark:text-gray-300"
+                          >
+                            <Camera className="h-3.5 w-3.5" /> View card condition
+                          </button>
                         </div>
                         {(s.created_at || s.expires_at) && (
                           <p className="mt-1 pl-0.5 text-dbb-xs text-gray-500 dark:text-gray-600">
