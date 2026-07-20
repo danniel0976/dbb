@@ -9,7 +9,8 @@
     "lint": "next lint",
     "perf": "node scripts/perf-baseline.mjs",
     "regression": "node scripts/regression-suite.mjs",
-    "import-collection": "node scripts/import-collection.js"
+    "import-collection": "node scripts/import-collection.js",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.0",
@@ -18,14 +19,15 @@
     "csv-parse": "^5.5.0",
     "dotenv": "^16.3.0",
     "idb-keyval": "^6.3.0",
+    "jpeg-js": "^0.4.4",
     "lucide-react": "^0.294.0",
     "next": "14.0.4",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "tesseract.js": "^5.1.1",
-    "jpeg-js": "^0.4.4"
+    "tesseract.js": "^5.1.1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
     "@types/node": "^20.10.0",
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
