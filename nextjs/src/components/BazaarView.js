@@ -222,6 +222,10 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
     }
   }, [loadingMore, hasMore, page, filters, buildParams])
 
+  // Declared before the infinite-scroll effect below: its dependency array is
+  // evaluated at render time, so this const must be initialized first.
+  const isResultsMode = hasSearchOrFacetPredicates(filters)
+
   // Infinite scroll
   useEffect(() => {
     if (loading) return
@@ -322,7 +326,6 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
     if (Array.isArray(v)) return v.length > 0
     return v !== null && v !== undefined
   })
-  const isResultsMode = hasSearchOrFacetPredicates(filters)
   // Reconstruct state from the URL on Back/Forward navigation, mirroring
   // LibraryView's popstate sync so a copied/reloaded/back-navigated Bazaar
   // URL reruns the same query rather than silently diverging.
