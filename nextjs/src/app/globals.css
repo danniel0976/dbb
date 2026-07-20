@@ -2,13 +2,14 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ── CSS Variables: Design Tokens v3 (DBB Glass Mono — Pass 1) ── */
+/* ── CSS Variables: Design Tokens v3 (DBB Glass Mono — Pass 2 Visual Overhaul) ── */
 :root {
-  /* Light mode (default) — RGB channels for Tailwind opacity support */
+  /* Light mode (default) — RGB channels for Tailwind opacity support
+     TRUE WHITE surfaces, not beige. Elevation via grays, not warm tones. */
   --dbb-accent-rgb: 255 59 48;       /* iOS system red */
   --dbb-accent-hov-rgb: 224 40 30;   /* darkened accent for hover */
-  --dbb-surface-rgb: 255 255 255;    /* white */
-  --dbb-bg-rgb: 245 245 247;         /* page bg */
+  --dbb-surface-rgb: 255 255 255;    /* true white */
+  --dbb-bg-rgb: 255 255 255;         /* true white page bg */
   --dbb-text-rgb: 29 29 31;          /* primary text */
   --dbb-text-secondary-rgb: 110 110 115;
   --dbb-border-rgb: 0 0 0;           /* hairline border, used with low alpha */
@@ -19,13 +20,13 @@
   --dbb-accent-hov: #E0281E;
   --dbb-surface: #FFFFFF;
   --dbb-surface-elevated: #FFFFFF;
-  --dbb-bg: #F5F5F7;
+  --dbb-bg: #FFFFFF;                 /* true white, not beige */
   --dbb-text: #1D1D1F;
   --dbb-text-secondary: #6E6E73;
   --dbb-border: rgba(0, 0, 0, 0.08);
   --dbb-price: #05772D;
   --dbb-scrollbar-thumb: #94a3b8;
-  --dbb-scrollbar-track: #e2e8f0;
+  --dbb-scrollbar-track: #f5f5f7;    /* subtle track contrast */
   --dbb-scrollbar-thumb-hover: #64748b;
 
   /* Radius scale */
@@ -60,11 +61,11 @@
 }
 
 .dark {
-  /* Dark mode */
+  /* Dark mode — TRUE NEAR-BLACK surfaces, not warm-tinted */
   --dbb-accent-rgb: 255 69 58;       /* iOS system red — dark */
   --dbb-accent-hov-rgb: 224 40 30;
   --dbb-surface-rgb: 28 28 30;       /* surface */
-  --dbb-bg-rgb: 10 10 12;            /* true-black-adjacent page bg */
+  --dbb-bg-rgb: 8 8 10;              /* true near-black page bg */
   --dbb-text-rgb: 245 245 247;
   --dbb-text-secondary-rgb: 152 152 157;
   --dbb-border-rgb: 255 255 255;     /* hairline border, used with low alpha */
@@ -74,13 +75,13 @@
   --dbb-accent-hov: #E0281E;
   --dbb-surface: #1C1C1E;
   --dbb-surface-elevated: #2C2C2E;
-  --dbb-bg: #0A0A0C;
+  --dbb-bg: #08080A;                 /* true near-black */
   --dbb-text: #F5F5F7;
   --dbb-text-secondary: #98989D;
   --dbb-border: rgba(255, 255, 255, 0.10);
   --dbb-price: #22C55E;
   --dbb-scrollbar-thumb: #FF453A;
-  --dbb-scrollbar-track: #0A0A0C;
+  --dbb-scrollbar-track: #08080A;
   --dbb-scrollbar-thumb-hover: #E0281E;
 
   /* Shadows — near-invisible in dark mode; hierarchy via surface tone */
@@ -139,14 +140,49 @@ body {
   background: var(--dbb-scrollbar-thumb-hover);
 }
 
-/* Card hover effects — TCGPlayer-style elevation */
+/* ── Scroll-edge fade for horizontal shelves (DBB Glass Mono — Pass 2) ──
+   Applied to scrollable containers to show content continues beyond edge.
+   Use .scroll-fade-left, .scroll-fade-right, or both. */
+.scroll-fade-left {
+  mask-image: linear-gradient(to right, transparent 0%, black 16px);
+  -webkit-mask-image: linear-gradient(to right, transparent 0%, black 16px);
+}
+.scroll-fade-right {
+  mask-image: linear-gradient(to left, transparent 0%, black 16px);
+  -webkit-mask-image: linear-gradient(to left, transparent 0%, black 16px);
+}
+.scroll-fade-both {
+  mask-image: linear-gradient(to right, transparent 0%, black 16px, black calc(100% - 16px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, transparent 0%, black 16px, black calc(100% - 16px), transparent 100%);
+}
+
+/* ── Spring press feedback (DBB Glass Mono — Pass 2) ──
+   Natural motion on interactions using cubic-bezier spring curve. */
+.spring-press {
+  transition: transform 0.15s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.15s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.spring-press:active {
+  transform: scale(0.97);
+}
+@media (prefers-reduced-motion: reduce) {
+  .spring-press,
+  .spring-press:active {
+    transform: none;
+  }
+}
+
+/* Card hover effects — replaced with spring press (DBB Glass Mono) */
 .card-hover {
   transition: box-shadow 0.18s ease-out, transform 0.18s ease-out;
 }
 
+.card-hover {
+  transition: box-shadow 0.18s cubic-bezier(0.2, 0.8, 0.2, 1), transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
 .card-hover:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 12px 32px 2px rgba(0,0,0,0.12), 0 4px 8px rgba(0,0,0,0.08);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
 }
 
 /* Rarity glow effects */

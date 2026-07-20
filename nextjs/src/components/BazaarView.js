@@ -641,31 +641,50 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
               </section>
             ) : (
               <div className="space-y-10 sm:space-y-12" data-bazaar-showcase>
-                {showcaseShelves.map(shelf => (
-                  <section key={shelf.key} aria-labelledby={`showcase-${shelf.key}`}>
-                    <div className="mb-4 max-w-2xl">
-                      <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-dbb-accent">
-                        {shelf.eyebrow}
-                      </p>
-                      <h2 id={`showcase-${shelf.key}`} className="text-dbb-xl font-semibold tracking-heading text-gray-900 sm:text-dbb-2xl dark:text-white">
-                        {shelf.title}
-                      </h2>
-                      <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{shelf.description}</p>
-                    </div>
-                    <div className="bazaar-showcase-shelf -mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-5 sm:gap-5">
-                      {shelf.items.map(listing => (
-                        <div key={listing.id} className="w-[72vw] max-w-[280px] shrink-0 snap-start sm:w-[250px]">
-                          <BazaarCard
-                            listing={listing}
-                            variant="showcase"
-                            priceData={prices[`${listing.library_cards?.scryfall_id}:${listing.library_cards?.foil || 'normal'}`]}
-                            onClick={() => setSelectedListing(listing)}
-                          />
+                {showcaseShelves.map(shelf => {
+                  const isMobile = typeof window !== 'undefined' && window.innerWidth < 640
+                  const shouldUseGridOnMobile = shelf.items.length <= 4
+                  return (
+                    <section key={shelf.key} aria-labelledby={`showcase-${shelf.key}`}>
+                      <div className="mb-4 max-w-2xl">
+                        <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-dbb-accent">
+                          {shelf.eyebrow}
+                        </p>
+                        <h2 id={`showcase-${shelf.key}`} className="text-dbb-xl font-semibold tracking-heading text-gray-900 sm:text-dbb-2xl dark:text-white">
+                          {shelf.title}
+                        </h2>
+                        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{shelf.description}</p>
+                      </div>
+                      {isMobile && shouldUseGridOnMobile ? (
+                        <div className="grid grid-cols-2 gap-3 sm:hidden">
+                          {shelf.items.map(listing => (
+                            <div key={listing.id}>
+                              <BazaarCard
+                                listing={listing}
+                                variant="showcase"
+                                priceData={prices[`${listing.library_cards?.scryfall_id}:${listing.library_cards?.foil || 'normal'}`]}
+                                onClick={() => setSelectedListing(listing)}
+                              />
+                            </div>
+                          ))}
                         </div>
-                      ))}
-                    </div>
-                  </section>
-                ))}
+                      ) : (
+                        <div className="bazaar-showcase-shelf scroll-fade-both -mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-5 sm:gap-5">
+                          {shelf.items.map(listing => (
+                            <div key={listing.id} className="w-[72vw] max-w-[280px] shrink-0 snap-start sm:w-[250px]">
+                              <BazaarCard
+                                listing={listing}
+                                variant="showcase"
+                                priceData={prices[`${listing.library_cards?.scryfall_id}:${listing.library_cards?.foil || 'normal'}`]}
+                                onClick={() => setSelectedListing(listing)}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </section>
+                  )
+                })}
               </div>
             )}
 

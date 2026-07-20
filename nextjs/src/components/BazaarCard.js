@@ -61,7 +61,7 @@ export default function BazaarCard({ listing, onClick, priceData, variant = 'res
 
   return (
     <div
-      className={`group relative overflow-hidden rounded-dbb-lg border border-black/[0.05] bg-white shadow-dbb-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-dbb-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-dbb-accent dark:border-white/[0.07] dark:bg-dbb-secondary ${variant === 'showcase' ? 'bazaar-card--showcase' : 'bazaar-card--results'}`}
+      className={`group relative overflow-hidden rounded-dbb-lg bg-white shadow-dbb-sm spring-press focus-visible:outline focus-visible:outline-2 focus-visible:outline-dbb-accent dark:bg-dbb-secondary ${variant === 'showcase' ? 'bazaar-card--showcase' : 'bazaar-card--results'}`}
       onClick={onClick}
       role="button"
       tabIndex={0}

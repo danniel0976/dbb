@@ -634,49 +634,61 @@ export default function BazaarDetailModal({ listing, onClose, onSelectListing, u
                             : 'border-gray-200 bg-white dark:border-gray-700 dark:bg-dbb-secondary hover:border-gray-300 dark:hover:border-gray-600'
                         }`}
                       >
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex min-w-0 flex-1 items-center gap-2">
-                            <User className="h-3.5 w-3.5 flex-shrink-0 text-gray-500" />
-                            <button
-                              onClick={() => setSellerPopupId(s.id)}
-                              className="max-w-[120px] truncate text-left text-dbb-sm text-gray-600 transition-colors hover:text-dbb-accent dark:text-gray-300"
-                              title="View seller profile"
-                            >
-                              {s.seller_name || 'Seller'}
-                            </button>
-                            <span className="flex-shrink-0 rounded border border-gray-300 px-1 py-0.5 text-dbb-xs text-gray-500 dark:border-gray-600 dark:text-gray-400">
-                              {slc?.condition || 'NM'}
-                            </span>
-                            {foilBadge && (
-                              <span className={`flex-shrink-0 rounded border px-1 py-0.5 text-dbb-xs ${foilBadge.cls}`}>
-                                {foilBadge.label}
+                        <div className="flex flex-col gap-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex min-w-0 flex-1 items-center gap-2">
+                              <User className="h-3.5 w-3.5 flex-shrink-0 text-gray-500" />
+                              <button
+                                onClick={() => setSellerPopupId(s.id)}
+                                className="max-w-[120px] truncate text-left text-dbb-sm text-gray-600 transition-colors hover:text-dbb-accent dark:text-gray-300"
+                                title="View seller profile"
+                              >
+                                {s.seller_name || 'Seller'}
+                              </button>
+                              <span className="flex-shrink-0 rounded border border-gray-300 px-1 py-0.5 text-dbb-xs text-gray-500 dark:border-gray-600 dark:text-gray-400">
+                                {slc?.condition || 'NM'}
                               </span>
-                            )}
-                            {s.quantity > 1 && (
-                              <span className="flex-shrink-0 text-dbb-xs text-gray-500 dark:text-gray-400">
-                                {s.quantity}×
-                              </span>
-                            )}
-                          </div>
-                          <div className="flex flex-shrink-0 items-center gap-2">
+                              {foilBadge && (
+                                <span className={`flex-shrink-0 rounded border px-1 py-0.5 text-dbb-xs ${foilBadge.cls}`}>
+                                  {foilBadge.label}
+                                </span>
+                              )}
+                              {s.quantity > 1 && (
+                                <span className="flex-shrink-0 text-dbb-xs text-gray-500 dark:text-gray-400">
+                                  {s.quantity}×
+                                </span>
+                              )}
+                            </div>
                             <div className="text-right">
                               <div className="text-dbb-sm font-semibold text-dbb-accent">
                                 {myr != null ? `RM ${myr.toFixed(2)}` : '—'}
                               </div>
                               <div className="text-dbb-xs text-gray-500 dark:text-gray-600">×{s.multiplier}</div>
                             </div>
+                          </div>
+                          <div className="flex items-center justify-between gap-2 pt-1">
+                            <button
+                              onClick={() => setProofListingId(s.id)}
+                              className="flex min-h-[44px] flex-1 items-center justify-center gap-1.5 rounded-dbb-md border border-gray-200 px-3 text-dbb-sm text-gray-600 transition-colors hover:border-dbb-accent hover:text-dbb-accent dark:border-gray-700 dark:text-gray-300"
+                            >
+                              <Camera className="h-3.5 w-3.5" /> View card condition
+                            </button>
                             <button
                               onClick={() => {
                                 setSelectedListingId(s.id)
                                 onSelectListing(s)
                               }}
-                              className={`flex min-h-[44px] flex-shrink-0 items-center rounded-dbb-md px-3 text-dbb-sm font-medium transition-colors ${
+                              className={`flex min-h-[44px] flex-shrink-0 items-center justify-center px-4 text-dbb-sm font-medium transition-colors ${
                                 isSelected
                                   ? 'bg-dbb-accent text-white'
                                   : 'bg-gray-100 text-gray-600 hover:bg-dbb-accent hover:text-white dark:bg-dbb-secondary dark:text-gray-300'
                               }`}
                             >
-                              {isSelected ? 'Selected' : 'Select'}
+                              {isSelected ? (
+                                <span className="flex items-center gap-1.5">✓ Selected</span>
+                              ) : (
+                                'Select'
+                              )}
                             </button>
                           </div>
                         </div>
@@ -687,12 +699,6 @@ export default function BazaarDetailModal({ listing, onClose, onSelectListing, u
                             {s.expires_at && `expires ${relativeTime(s.expires_at, true)}`}
                           </p>
                         )}
-                        <button
-                          onClick={() => setProofListingId(s.id)}
-                          className="mt-2 flex min-h-[44px] items-center gap-1.5 rounded-dbb-md border border-gray-200 px-3 text-dbb-sm text-gray-600 transition-colors hover:border-dbb-accent hover:text-dbb-accent dark:border-gray-700 dark:text-gray-300"
-                        >
-                          <Camera className="h-3.5 w-3.5" /> View card condition
-                        </button>
                       </div>
                     )
                   })}
