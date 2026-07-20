@@ -16,7 +16,7 @@ import {
   parseBazaarQueryState,
   serializeBazaarQueryState,
 } from '@/lib/bazaarSearchState'
-import { buildShowcaseShelves, canCommitBazaarRequest } from '@/lib/bazaarShowcase'
+import { canCommitBazaarRequest, buildShowcaseShelves } from '@/lib/bazaarShowcase'
 
 const SORT_OPTIONS = [
   { value: 'newest', label: 'Newest' },
@@ -72,7 +72,7 @@ function buildChips(filters, filterOptions) {
   return chips
 }
 
-export default function BazaarView({ initialData, filterOptions: initialFilterOptions, userId }) {
+export default function BazaarView({ initialData, filterOptions: initialFilterOptions, userId, hotListings = [], latestListings = [] }) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const initialQueryState = useRef(parseBazaarQueryState(searchParams)).current
@@ -393,93 +393,120 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
 
   return (
     <div className="min-h-screen">
-      {/* Page title region */}
-      <div className="container mx-auto px-4 pt-6 pb-3">
-        <div className="flex items-baseline gap-3 flex-wrap">
-          <h1 className="text-dbb-xl sm:text-dbb-2xl font-bold tracking-heading text-gray-900 dark:text-white">Bazaar</h1>
-          {bazaarSection === 'singles' && !loading && (
-            <span className="text-dbb-sm text-gray-500 dark:text-gray-400">
-              {total} listing{total !== 1 ? 's' : ''}
-            </span>
-          )}
-        </div>
-
-        {/* Singles / Claim Sales segmented control */}
-        <div
-          role="tablist"
-          aria-label="Bazaar section"
-          className="relative inline-flex mt-4 p-1 h-11 rounded-full bg-gray-100 dark:bg-dbb-secondary"
-        >
-          <div
-            aria-hidden="true"
-            className="absolute top-1 bottom-1 w-[calc(50%-4px)] rounded-full bg-white dark:bg-dbb-surface-elevated shadow-dbb-sm transition-transform duration-200 ease-out"
-            style={{ transform: bazaarSection === 'claim_sales' ? 'translateX(calc(100% + 8px))' : 'translateX(0)' }}
-          />
-          <button
-            role="tab"
-            aria-selected={bazaarSection === 'singles'}
-            onClick={() => setBazaarSection('singles')}
-            className={`relative z-10 flex items-center gap-1.5 px-4 h-full rounded-full text-sm font-medium transition-colors ${
-              bazaarSection === 'singles' ? 'text-gray-900 dark:text-white' : 'text-gray-500 dark:text-gray-400'
-            }`}
-          >
-            <Grid className="w-3.5 h-3.5" />
-            Singles
-          </button>
-          <button
-            role="tab"
-            aria-selected={bazaarSection === 'claim_sales'}
-            onClick={() => setBazaarSection('claim_sales')}
-            className={`relative z-10 flex items-center gap-1.5 px-4 h-full rounded-full text-sm font-medium transition-colors ${
-              bazaarSection === 'claim_sales' ? 'text-gray-900 dark:text-white' : 'text-gray-500 dark:text-gray-400'
-            }`}
-          >
-            <Layers className="w-3.5 h-3.5" />
-            Claim Sales
-          </button>
-        </div>
-
-        {/* Search — primary control */}
-        {bazaarSection === 'singles' && (
-          <div className="mt-4 flex items-center gap-2">
-            <div className="relative w-full max-w-2xl">
-              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Search cards..."
-                value={filters.search}
-                onChange={(e) => updateFilter('search', e.target.value)}
-                className="w-full h-11 sm:h-12 bg-white dark:bg-dbb-secondary border border-gray-200 dark:border-dbb-tertiary/50 rounded-full pl-10 pr-9 text-dbb-sm focus:border-dbb-accent focus:outline-none placeholder-gray-400 dark:placeholder-gray-500 shadow-dbb-sm"
-              />
-              {filters.search && (
-                <button
-                  onClick={() => updateFilter('search', '')}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-dbb-accent transition-colors"
-                  aria-label="Clear search"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </div>
-          </div>
-        )}
-      </div>
-
       {bazaarSection === 'claim_sales' ? (
         <ClaimSalesBrowse userId={userId} />
       ) : (
-        <div
-          className="container mx-auto px-4 pb-8"
-          data-bazaar-mode={isResultsMode ? 'results' : 'showcase'}
-        >
-          <main className="min-w-0">
-            {/* A single horizontal rail replaces the permanent desktop sidebar. */}
-            <div ref={filterPopoverRef} className="relative z-20 mb-5">
+        <div className="container mx-auto px-4 pb-8" data-bazaar-mode={isResultsMode ? 'results' : 'showcase'}>
+          {/* Page title */}
+          <div className="pt-6 pb-3">
+            <div className="flex items-baseline gap-3 flex-wrap">
+              <h1 className="text-dbb-xl sm:text-dbb-2xl font-bold tracking-heading text-gray-900">Bazaar</h1>
+              {!loading && (
+                <span className="text-dbb-sm text-gray-500">
+                  {total} listing{total !== 1 ? 's' : ''}
+                </span>
+              )}
+            </div>
+
+            {/* Singles / Claim Sales segmented control */}
+            <div
+              role="tablist"
+              aria-label="Bazaar section"
+              className="relative inline-flex mt-4 p-1 h-11 rounded-full bg-gray-100"
+            >
               <div
-                className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none"
-                data-bazaar-filter-rail
+                aria-hidden="true"
+                className="absolute top-1 bottom-1 w-[calc(50%-4px)] rounded-full bg-white shadow-dbb-sm transition-transform duration-200 ease-out"
+                style={{ transform: bazaarSection === 'claim_sales' ? 'translateX(calc(100% + 8px))' : 'translateX(0)' }}
+              />
+              <button
+                role="tab"
+                aria-selected={bazaarSection === 'singles'}
+                onClick={() => setBazaarSection('singles')}
+                className={`relative z-10 flex items-center gap-1.5 px-4 h-full rounded-full text-sm font-medium transition-colors ${
+                  bazaarSection === 'singles' ? 'text-gray-900' : 'text-gray-500'
+                }`}
               >
-              <div className="relative hidden lg:block shrink-0">
+                <Grid className="w-3.5 h-3.5" />
+                Singles
+              </button>
+              <button
+                role="tab"
+                aria-selected={bazaarSection === 'claim_sales'}
+                onClick={() => setBazaarSection('claim_sales')}
+                className={`relative z-10 flex items-center gap-1.5 px-4 h-full rounded-full text-sm font-medium transition-colors ${
+                  bazaarSection === 'claim_sales' ? 'text-gray-900' : 'text-gray-500'
+                }`}
+              >
+                <Layers className="w-3.5 h-3.5" />
+                Claim Sales
+              </button>
+            </div>
+          </div>
+
+          {/* HERO SECTION — Two showcase rows */}
+          {!isResultsMode && !loading && (
+            <section className="space-y-8 sm:space-y-10 mt-6" data-bazaar-showcase>
+              {/* Row 1: Hot Selling */}
+              {hotListings.length > 0 && (
+                <ShowcaseRow 
+                  title="Hot Selling" 
+                  subtitle="Most popular cards by seller count"
+                  listings={hotListings}
+                  prices={prices}
+                  onSelect={setSelectedListing}
+                />
+              )}
+              
+              {/* Row 2: Latest */}
+              {latestListings.length > 0 && (
+                <ShowcaseRow 
+                  title="Latest" 
+                  subtitle="Newest arrivals to the Bazaar"
+                  listings={latestListings}
+                  prices={prices}
+                  onSelect={setSelectedListing}
+                />
+              )}
+            </section>
+          )}
+
+          {/* Fallback showcase shelves when no hero data but in showcase mode */}
+          {!isResultsMode && !loading && hotListings.length === 0 && latestListings.length === 0 && showcaseShelves.length > 0 && (
+            <section className="space-y-10 sm:space-y-12 mt-6" data-bazaar-showcase>
+              {showcaseShelves.map(shelf => (
+                <ShowcaseSection key={shelf.key} shelf={shelf} prices={prices} onSelect={setSelectedListing} />
+              ))}
+            </section>
+          )}
+
+          {/* SEARCH + FILTER BAR — Liquid Glass partition */}
+          <div ref={filterPopoverRef} className="relative z-20 mb-5">
+            <div className="sticky top-14 sm:top-[60px] z-30 -mx-4 px-4 py-3 dbb-glass-partition" style={{ backdropFilter: 'blur(24px) saturate(180%)' }}>
+              <div data-bazaar-filter-rail className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+              {/* Search input */}
+              <div className="relative flex-1 max-w-xl">
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search cards..."
+                  value={filters.search}
+                  onChange={(e) => updateFilter('search', e.target.value)}
+                  className="w-full h-11 bg-white rounded-full pl-10 pr-9 text-dbb-sm focus:outline-none focus:ring-2 focus:ring-dbb-accent/20 placeholder-gray-400 shadow-dbb-sm"
+                />
+                {filters.search && (
+                  <button
+                    onClick={() => updateFilter('search', '')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-dbb-accent transition-colors"
+                    aria-label="Clear search"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+
+              {/* Filter button */}
+              <div className="relative">
                 <button
                   ref={filterTriggerRef}
                   type="button"
@@ -487,7 +514,7 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
                   aria-expanded={filterPopoverOpen}
                   aria-haspopup="dialog"
                   aria-controls="bazaar-desktop-filters"
-                  className="flex h-10 items-center gap-2 rounded-full border border-black/[0.08] bg-white px-4 text-sm font-medium text-gray-800 shadow-dbb-sm transition-colors hover:border-dbb-accent/40 dark:border-white/[0.10] dark:bg-dbb-secondary dark:text-white"
+                  className="flex h-11 items-center gap-2 rounded-full border border-black/[0.08] bg-white px-4 text-sm font-medium text-gray-800 shadow-dbb-sm transition-colors hover:border-dbb-accent/40 lg:hidden dark:border-white/[0.10] dark:bg-dbb-secondary dark:text-white"
                 >
                   <Filter className="h-4 w-4" />
                   Filters
@@ -498,21 +525,21 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
                   )}
                   <ChevronDown className={`h-3.5 w-3.5 transition-transform ${filterPopoverOpen ? 'rotate-180' : ''}`} />
                 </button>
+                <button
+                  ref={mobileFiltersButtonRef}
+                  type="button"
+                  onClick={openMobileFilters}
+                  aria-haspopup="dialog"
+                  className="hidden lg:flex h-11 shrink-0 items-center gap-2 rounded-full border border-black/[0.08] bg-white px-4 text-sm font-medium shadow-dbb-sm dark:border-white/[0.10] dark:bg-dbb-secondary dark:text-white"
+                >
+                  <Filter className="h-4 w-4" />
+                  Filters
+                  {chips.length > 0 && <span className="h-1.5 w-1.5 rounded-full bg-dbb-accent" />}
+                </button>
               </div>
 
-              <button
-                ref={mobileFiltersButtonRef}
-                type="button"
-                onClick={openMobileFilters}
-                aria-haspopup="dialog"
-                className="flex h-10 shrink-0 items-center gap-2 rounded-full border border-black/[0.08] bg-white px-4 text-sm font-medium shadow-dbb-sm lg:hidden dark:border-white/[0.10] dark:bg-dbb-secondary"
-              >
-                <Filter className="h-4 w-4" />
-                Filters
-                {chips.length > 0 && <span className="h-1.5 w-1.5 rounded-full bg-dbb-accent" />}
-              </button>
-
-              <label className="relative flex h-10 shrink-0 items-center gap-2 rounded-full border border-black/[0.08] bg-white pl-4 pr-3 text-sm shadow-dbb-sm dark:border-white/[0.10] dark:bg-dbb-secondary">
+              {/* Sort dropdown */}
+              <label className="relative flex h-11 shrink-0 items-center gap-2 rounded-full border border-black/[0.08] bg-white pl-4 pr-3 text-sm shadow-dbb-sm dark:border-white/[0.10] dark:bg-dbb-secondary">
                 <SortAsc className="h-4 w-4 text-gray-500" />
                 <span className="sr-only">Sort listings</span>
                 <select
@@ -528,201 +555,138 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
                 <ChevronDown className="pointer-events-none absolute right-3 h-3.5 w-3.5 text-gray-500" />
               </label>
 
-              {chips.map(chip => (
-                <button
-                  key={chip.key}
-                  type="button"
-                  onClick={() => removeChip(chip)}
-                  aria-label={`Remove ${chip.label} filter`}
-                  className="flex h-10 shrink-0 items-center gap-1.5 rounded-full bg-dbb-accent/10 pl-4 pr-3 text-xs font-medium text-dbb-accent transition-colors hover:bg-dbb-accent/15"
-                >
-                  {chip.label}
-                  <X className="h-3 w-3" />
-                </button>
-              ))}
-              {chips.length > 0 && (
-                <button
-                  type="button"
-                  onClick={clearFilters}
-                  className="h-10 shrink-0 px-2 text-xs text-gray-500 underline underline-offset-2 hover:text-dbb-accent dark:text-gray-400"
-                >
-                  Clear all
-                </button>
-              )}
-
-              {!loading && (
-                <span className="ml-auto hidden shrink-0 items-center gap-1.5 text-xs font-medium uppercase tracking-[0.14em] text-gray-500 sm:flex dark:text-gray-400">
-                  {isResultsMode ? <Grid className="h-3.5 w-3.5" /> : <Sparkles className="h-3.5 w-3.5" />}
-                  {isResultsMode ? 'Results' : 'Showcase'}
-                </span>
-              )}
-              </div>
-              {filterPopoverOpen && (
-                    <div
-                    id="bazaar-desktop-filters"
-                    role="dialog"
-                    aria-label="Bazaar filters"
-                    className="absolute left-0 top-[calc(100%+0.5rem)] z-30 max-h-[min(70vh,620px)] w-80 overflow-y-auto rounded-dbb-lg border border-black/[0.08] bg-white shadow-dbb-md dark:border-white/[0.10] dark:bg-dbb-surface-elevated"
+              {/* Filter chips */}
+              <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none flex-1">
+                {chips.map(chip => (
+                  <button
+                    key={chip.key}
+                    type="button"
+                    onClick={() => removeChip(chip)}
+                    aria-label={`Remove ${chip.label} filter`}
+                    className="flex h-8 shrink-0 items-center gap-1.5 rounded-full bg-dbb-accent/10 pl-3 pr-2.5 text-xs font-medium text-dbb-accent transition-colors hover:bg-dbb-accent/15 spring-press"
                   >
-                    <Sidebar
-                      filters={filters}
-                      updateFilter={updateFilter}
-                      clearFilters={clearFilters}
-                      filterOptions={filterOptions}
-                    />
-                    </div>
-                  )}
-            </div>
-
-            <FilterSheet
-              open={mobileFilterState.open}
-              title="Bazaar filters"
-              resultCount={total}
-              onClose={closeMobileFilters}
-              onApply={applyMobileFilters}
-              onClearAll={clearMobileFilters}
-              applyLabel="Apply filters"
-              applyDisabled={!mobilePriceValid}
-              triggerRef={mobileFiltersButtonRef}
-            >
-              <Sidebar
-                filters={mobileFilterState.draft}
-                updateFilter={editMobileFilters}
-                clearFilters={clearMobileFilters}
-                filterOptions={filterOptions}
-                onPriceValidityChange={setMobilePriceValid}
-              />
-            </FilterSheet>
-
-            {loading ? (
-              <LoadingSkeleton count={12} />
-            ) : error ? (
-              <div className="text-center py-12">
-                <p className="text-red-600 dark:text-red-400 mb-4">{error}</p>
-                <button onClick={() => loadListings()} className="btn btn-primary btn-md">
-                  Try Again
-                </button>
-              </div>
-            ) : listings.length === 0 ? (
-              <div className="text-center py-16">
-                <Grid className="w-16 h-16 mx-auto mb-4 text-gray-600" />
-                <h2 className="text-xl font-semibold mb-2">
-                  {hasActiveFilters ? 'No listings match your filters' : 'No cards on the bazaar yet'}
-                </h2>
-                <p className="text-gray-500 dark:text-gray-400 mb-4">
-                  {hasActiveFilters
-                    ? 'Try adjusting your filters or clearing them.'
-                    : 'List yours from your library to get started.'}
-                </p>
-                {hasActiveFilters ? (
-                  <button onClick={clearFilters} className="btn btn-primary btn-md">
-                    Clear All Filters
+                    {chip.label}
+                    <X className="h-3 w-3" />
                   </button>
-                ) : (
-                  <a href="/library" className="btn btn-primary btn-md inline-block">
-                    Go to your library →
-                  </a>
+                ))}
+                {chips.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={clearFilters}
+                    className="h-8 shrink-0 px-2 text-xs text-gray-500 underline underline-offset-2 hover:text-dbb-accent"
+                  >
+                    Clear all
+                  </button>
                 )}
               </div>
-            ) : isResultsMode ? (
+              </div>
+            </div>
+
+            {/* Desktop filter popover */}
+            {filterPopoverOpen && (
+              <div
+                ref={filterPopoverRef}
+                id="bazaar-desktop-filters"
+                role="dialog"
+                aria-label="Bazaar filters"
+                className="absolute left-0 top-[calc(100%+0.5rem)] z-30 max-h-[min(70vh,620px)] w-80 overflow-y-auto rounded-dbb-lg border border-black/[0.08] bg-white shadow-dbb-md dark:border-white/[0.10] dark:bg-dbb-surface-elevated"
+              >
+                <Sidebar
+                  filters={filters}
+                  updateFilter={updateFilter}
+                  clearFilters={clearFilters}
+                  filterOptions={filterOptions}
+                />
+              </div>
+            )}
+          </div>
+
+          <FilterSheet
+            open={mobileFilterState.open}
+            title="Bazaar filters"
+            resultCount={total}
+            onClose={closeMobileFilters}
+            onApply={applyMobileFilters}
+            onClearAll={clearMobileFilters}
+            applyLabel="Apply filters"
+            applyDisabled={!mobilePriceValid}
+            triggerRef={mobileFiltersButtonRef}
+          >
+            <Sidebar
+              filters={mobileFilterState.draft}
+              updateFilter={editMobileFilters}
+              clearFilters={clearMobileFilters}
+              filterOptions={filterOptions}
+              onPriceValidityChange={setMobilePriceValid}
+            />
+          </FilterSheet>
+
+          {/* MAIN GRID */}
+          {loading ? (
+            <LoadingSkeleton count={12} />
+          ) : error ? (
+            <div className="text-center py-12">
+              <p className="text-red-600 mb-4">{error}</p>
+              <button onClick={() => loadListings()} className="btn btn-primary btn-md">
+                Try Again
+              </button>
+            </div>
+          ) : listings.length === 0 ? (
+            <div className="text-center py-16">
+              <Grid className="w-16 h-16 mx-auto mb-4 text-gray-600" />
+              <h2 className="text-xl font-semibold mb-2">
+                {hasActiveFilters ? 'No listings match your filters' : 'No cards on the bazaar yet'}
+              </h2>
+              <p className="text-gray-500 mb-4">
+                {hasActiveFilters
+                  ? 'Try adjusting your filters or clearing them.'
+                  : 'List yours from your library to get started.'}
+              </p>
+              {hasActiveFilters ? (
+                <button onClick={clearFilters} className="btn btn-primary btn-md">
+                  Clear All Filters
+                </button>
+              ) : (
+                <a href="/library" className="btn btn-primary btn-md inline-block">
+                  Go to your library →
+                </a>
+              )}
+            </div>
+          ) : (
+            <>
               <section aria-labelledby="bazaar-results-heading" data-bazaar-results>
                 <h2 id="bazaar-results-heading" className="sr-only">Bazaar results</h2>
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 min-[900px]:grid-cols-4 lg:gap-5 min-[1440px]:grid-cols-5">
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 min-[900px]:grid-cols-4 lg:gap-5 min-[1440px]:grid-cols-5 mt-6">
                   {listings.map(listing => (
                     <div key={listing.id} className="bazaar-result-card">
                       <BazaarCard
                         listing={listing}
                         priceData={prices[`${listing.library_cards?.scryfall_id}:${listing.library_cards?.foil || 'normal'}`]}
                         onClick={() => setSelectedListing(listing)}
+                        variant="results"
                       />
                     </div>
                   ))}
                 </div>
               </section>
-            ) : (
-              <div className="space-y-10 sm:space-y-12" data-bazaar-showcase>
-                {showcaseShelves.map(shelf => {
-                  const isMobile = typeof window !== 'undefined' && window.innerWidth < 640
-                  const shouldUseGridOnMobile = shelf.items.length <= 4
-                  const hasOverflow = shelf.items.length > (isMobile && shouldUseGridOnMobile ? 4 : 5)
-                  return (
-                    <section key={shelf.key} aria-labelledby={`showcase-${shelf.key}`}>
-                      <div className="mb-4 flex items-end justify-between gap-4 max-w-2xl">
-                        <div className="flex-1">
-                          <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-dbb-accent">
-                            {shelf.eyebrow}
-                          </p>
-                          <h2 id={`showcase-${shelf.key}`} className="text-dbb-xl font-semibold tracking-heading text-gray-900 sm:text-dbb-2xl dark:text-white">
-                            {shelf.title}
-                          </h2>
-                          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{shelf.description}</p>
-                        </div>
-                        {hasOverflow && (
-                          <button
-                            type="button"
-                            className="shrink-0 text-xs font-medium text-dbb-accent hover:text-dbb-accent/80 transition-colors whitespace-nowrap"
-                            aria-label={`See all ${shelf.title}`}
-                          >
-                            See all →
-                          </button>
-                        )}
-                      </div>
-                      {isMobile && shouldUseGridOnMobile ? (
-                        <div className="grid grid-cols-2 gap-3 sm:hidden relative">
-                          {shelf.items.map(listing => (
-                            <div key={listing.id}>
-                              <BazaarCard
-                                listing={listing}
-                                variant="showcase"
-                                priceData={prices[`${listing.library_cards?.scryfall_id}:${listing.library_cards?.foil || 'normal'}`]}
-                                onClick={() => setSelectedListing(listing)}
-                              />
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="bazaar-showcase-shelf -mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-5 sm:gap-5 relative">
-                          {shelf.items.map(listing => (
-                            <div key={listing.id} className="w-[72vw] max-w-[280px] shrink-0 snap-start sm:w-[250px]">
-                              <BazaarCard
-                                listing={listing}
-                                variant="showcase"
-                                priceData={prices[`${listing.library_cards?.scryfall_id}:${listing.library_cards?.foil || 'normal'}`]}
-                                onClick={() => setSelectedListing(listing)}
-                              />
-                            </div>
-                          ))}
-                          {/* Subtle right-edge gradient shadow hinting at more content */}
-                          <div
-                            className="pointer-events-none absolute top-0 bottom-5 right-0 w-8"
-                            style={{
-                              background: 'linear-gradient(to left, var(--dbb-bg) 0%, transparent 100%)'
-                            }}
-                          />
-                        </div>
-                      )}
-                    </section>
-                  )
-                })}
-              </div>
-            )}
 
-            {isResultsMode && !loading && !error && listings.length > 0 && (
-              <div id="bazaar-sentinel" className="h-20 flex items-center justify-center py-4">
-                {loadingMore && (
-                  <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400 text-sm">
-                    <Loader2 className="w-4 h-4 animate-spin" /> Loading more...
-                  </div>
-                )}
-                {!hasMore && (
-                  <div className="text-gray-600 dark:text-gray-500 text-sm">All {listings.length} listings shown</div>
-                )}
-                {hasMore && !loadingMore && (
-                  <div className="text-gray-500 dark:text-gray-500 text-sm">Scroll for more</div>
-                )}
-              </div>
-            )}
-          </main>
+              {isResultsMode && !loading && !error && listings.length > 0 && (
+                <div id="bazaar-sentinel" className="h-20 flex items-center justify-center py-4">
+                  {loadingMore && (
+                    <div className="flex items-center gap-2 text-gray-500 text-sm">
+                      <Loader2 className="w-4 h-4 animate-spin" /> Loading more...
+                    </div>
+                  )}
+                  {!hasMore && (
+                    <div className="text-gray-600 text-sm">All {listings.length} listings shown</div>
+                  )}
+                  {hasMore && !loadingMore && (
+                    <div className="text-gray-500 text-sm">Scroll for more</div>
+                  )}
+                </div>
+              )}
+            </>
+          )}
         </div>
       )}
 
@@ -735,5 +699,115 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
         />
       )}
     </div>
+  )
+}
+
+// Showcase Row Component — displays 5 cards on desktop, 2 on mobile
+function ShowcaseRow({ title, subtitle, listings, prices, onSelect }) {
+  return (
+    <section aria-labelledby={`showcase-${title.toLowerCase().replace(/\s+/g, '-')}`}>
+      <div className="mb-4">
+        <h2 
+          id={`showcase-${title.toLowerCase().replace(/\s+/g, '-')}`} 
+          className="text-dbb-lg sm:text-dbb-xl font-semibold tracking-heading text-gray-900"
+        >
+          {title}
+        </h2>
+        {subtitle && (
+          <p className="mt-0.5 text-sm text-gray-500">{subtitle}</p>
+        )}
+      </div>
+      
+      {/* Desktop: 5 cards in a row */}
+      <div className="hidden sm:grid grid-cols-5 gap-4 lg:gap-5">
+        {listings.map(listing => (
+          <BazaarCard
+            key={listing.id}
+            listing={listing}
+            variant="showcase"
+            priceData={prices[`${listing.library_cards?.scryfall_id}:${listing.library_cards?.foil || 'normal'}`]}
+            onClick={() => onSelect(listing)}
+          />
+        ))}
+      </div>
+      
+      {/* Mobile: 2 cards side by side */}
+      <div className="sm:hidden grid grid-cols-2 gap-3">
+        {listings.map(listing => (
+          <BazaarCard
+            key={listing.id}
+            listing={listing}
+            variant="showcase"
+            priceData={prices[`${listing.library_cards?.scryfall_id}:${listing.library_cards?.foil || 'normal'}`]}
+            onClick={() => onSelect(listing)}
+          />
+        ))}
+      </div>
+    </section>
+  )
+}
+
+// Showcase Section Component — renders legacy shelf structure from buildShowcaseShelves
+function ShowcaseSection({ shelf, prices, onSelect }) {
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 640
+  const shouldUseGridOnMobile = shelf.items.length <= 4
+  const hasOverflow = shelf.items.length > (isMobile && shouldUseGridOnMobile ? 4 : 5)
+  
+  return (
+    <section key={shelf.key} aria-labelledby={`showcase-${shelf.key}`}>
+      <div className="mb-4 flex items-end justify-between gap-4 max-w-2xl">
+        <div className="flex-1">
+          <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-dbb-accent">
+            {shelf.eyebrow}
+          </p>
+          <h2 id={`showcase-${shelf.key}`} className="text-dbb-xl font-semibold tracking-heading text-gray-900 sm:text-dbb-2xl">
+            {shelf.title}
+          </h2>
+          <p className="mt-1 text-sm text-gray-500">{shelf.description}</p>
+        </div>
+        {hasOverflow && (
+          <button
+            type="button"
+            className="shrink-0 text-xs font-medium text-dbb-accent hover:text-dbb-accent/80 transition-colors whitespace-nowrap"
+            aria-label={`See all ${shelf.title}`}
+          >
+            See all →
+          </button>
+        )}
+      </div>
+      {isMobile && shouldUseGridOnMobile ? (
+        <div className="grid grid-cols-2 gap-3 sm:hidden relative">
+          {shelf.items.map(listing => (
+            <div key={listing.id}>
+              <BazaarCard
+                listing={listing}
+                variant="showcase"
+                priceData={prices[`${listing.library_cards?.scryfall_id}:${listing.library_cards?.foil || 'normal'}`]}
+                onClick={() => onSelect(listing)}
+              />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="bazaar-showcase-shelf -mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-5 sm:gap-5 relative">
+          {shelf.items.map(listing => (
+            <div key={listing.id} className="w-[72vw] max-w-[280px] shrink-0 snap-start sm:w-[250px]">
+              <BazaarCard
+                listing={listing}
+                variant="showcase"
+                priceData={prices[`${listing.library_cards?.scryfall_id}:${listing.library_cards?.foil || 'normal'}`]}
+                onClick={() => onSelect(listing)}
+              />
+            </div>
+          ))}
+          <div
+            className="pointer-events-none absolute top-0 bottom-5 right-0 w-8"
+            style={{
+              background: 'linear-gradient(to left, var(--dbb-bg) 0%, transparent 100%)'
+            }}
+          />
+        </div>
+      )}
+    </section>
   )
 }

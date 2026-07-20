@@ -3,8 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useState, useEffect, useRef } from 'react'
-import { Library, Store, Package, ShoppingCart, User, ChevronDown, Upload, LogOut, Sun, Moon } from 'lucide-react'
-import { useTheme } from '@/components/ThemeProvider'
+import { Library, Store, Package, ShoppingCart, User, ChevronDown, Upload, LogOut } from 'lucide-react'
 
 // Primary destinations — desktop top bar + mobile bottom tab bar.
 // Import intentionally lives off this list; it's reachable from Library's
@@ -98,7 +97,7 @@ function AccountMenu({ userEmail }) {
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label="Account menu"
-        className="flex items-center gap-1 rounded-full pl-1 pr-2 py-1 min-h-[44px] hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
+        className="flex items-center gap-1 rounded-full pl-1 pr-2 py-1 min-h-[44px] hover:bg-black/5 transition-colors"
       >
         <span className="flex items-center justify-center w-8 h-8 rounded-full bg-dbb-accent/15 text-dbb-accent text-sm font-semibold">
           {initial}
@@ -109,23 +108,23 @@ function AccountMenu({ userEmail }) {
       {open && (
         <div
           role="menu"
-          className="absolute right-0 mt-2 w-56 rounded-dbb-md shadow-dbb-md overflow-hidden dbb-glass-sheet border border-black/5 dark:border-white/10 z-50"
+          className="absolute right-0 mt-2 w-56 rounded-dbb-md shadow-dbb-md overflow-hidden dbb-glass-sheet border border-black/5 z-50"
         >
-          <div className="px-4 py-3 border-b border-black/5 dark:border-white/10">
-            <p className="text-xs text-gray-500 dark:text-gray-400">Signed in as</p>
-            <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{userEmail}</p>
+          <div className="px-4 py-3 border-b border-black/5">
+            <p className="text-xs text-gray-500">Signed in as</p>
+            <p className="text-sm font-medium text-gray-900 truncate">{userEmail}</p>
           </div>
           <Link
             href="/profile"
             role="menuitem"
-            className="flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+            className="flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-black/5 transition-colors"
           >
             <User size={16} /> Profile
           </Link>
           <Link
             href="/import"
             role="menuitem"
-            className="flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+            className="flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-black/5 transition-colors"
           >
             <Upload size={16} /> Import
           </Link>
@@ -133,7 +132,7 @@ function AccountMenu({ userEmail }) {
             <button
               type="submit"
               role="menuitem"
-              className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-dbb-accent hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+              className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-dbb-accent hover:bg-black/5 transition-colors"
             >
               <LogOut size={16} /> Sign out
             </button>
@@ -150,51 +149,13 @@ function TopBarLink({ href, label, icon: Icon, active }) {
       href={href}
       className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm transition-colors ${
         active
-          ? 'font-semibold text-gray-900 dark:text-white bg-black/[0.06] dark:bg-white/[0.10]'
-          : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-black/[0.04] dark:hover:bg-white/[0.06]'
+          ? 'font-semibold text-gray-900 bg-black/[0.06]'
+          : 'text-gray-600 hover:text-gray-900 hover:bg-black/[0.04]'
       }`}
     >
       <Icon size={16} strokeWidth={active ? 2.25 : 2} />
       {label}
     </Link>
-  )
-}
-
-function ThemeToggle() {
-  const { theme, setTheme } = useTheme()
-  const [isDark, setIsDark] = useState(false)
-
-  useEffect(() => {
-    // Determine current effective theme
-    const root = document.documentElement
-    const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-    const effectiveDark = theme === 'dark' || (theme === 'system' && systemDark)
-    setIsDark(effectiveDark)
-
-    const mq = window.matchMedia('(prefers-color-scheme: dark)')
-    const handler = () => {
-      if (theme === 'system') {
-        setIsDark(mq.matches)
-      }
-    }
-    mq.addEventListener('change', handler)
-    return () => mq.removeEventListener('change', handler)
-  }, [theme])
-
-  const toggleTheme = () => {
-    const newTheme = isDark ? 'light' : 'dark'
-    setTheme(newTheme)
-  }
-
-  return (
-    <button
-      type="button"
-      onClick={toggleTheme}
-      aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
-      className="flex items-center justify-center w-11 h-11 rounded-full text-gray-600 dark:text-gray-400 hover:bg-black/[0.04] dark:hover:bg-white/[0.06] transition-colors"
-    >
-      {isDark ? <Sun size={20} /> : <Moon size={20} />}
-    </button>
   )
 }
 
@@ -209,11 +170,11 @@ function TabBarLink({ href, label, icon: Icon, active, badge }) {
         <Icon
           size={24}
           strokeWidth={active ? 2.25 : 1.75}
-          className={active ? 'text-dbb-accent' : 'text-gray-500 dark:text-gray-400'}
+          className={active ? 'text-dbb-accent' : 'text-gray-500'}
         />
         {badge}
       </span>
-      <span className={`text-[10px] leading-none ${active ? 'font-semibold text-dbb-accent' : 'text-gray-500 dark:text-gray-400'}`}>
+      <span className={`text-[10px] leading-none ${active ? 'font-semibold text-dbb-accent' : 'text-gray-500'}`}>
         {label}
       </span>
     </Link>
@@ -239,9 +200,9 @@ export default function DBBNav({ userEmail, extra }) {
       <header className="sticky top-0 z-40 dbb-glass-chrome">
         <div className="container mx-auto px-4 h-14 sm:h-[60px] flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Link href="/library" className="text-lg font-bold text-gray-900 dark:text-white hover:text-dbb-accent transition-colors tracking-heading">
+            <Link href="/library" className="text-lg font-bold text-gray-900 hover:text-dbb-accent transition-colors tracking-heading">
               <span className="font-display text-xl">DBB</span>
-              <span className="ml-1.5 text-sm font-medium text-gray-500 dark:text-gray-400 hidden lg:inline">Dan's Bizarre Bazaar</span>
+              <span className="ml-1.5 text-sm font-medium text-gray-500 hidden lg:inline">Dan's Bizarre Bazaar</span>
             </Link>
             <nav className="hidden sm:flex items-center gap-1">
               {PRIMARY_LINKS.map(({ href, label, icon }) => (
@@ -251,15 +212,14 @@ export default function DBBNav({ userEmail, extra }) {
           </div>
           <div className="flex items-center gap-2">
             {extra}
-            <ThemeToggle />
             {userEmail && (
               <Link
                 href="/cart"
                 aria-label="Cart"
                 className={`relative flex items-center justify-center w-10 h-10 rounded-full transition-colors ${
                   isActive('/cart')
-                    ? 'bg-black/[0.06] dark:bg-white/[0.10] text-gray-900 dark:text-white'
-                    : 'text-gray-600 dark:text-gray-400 hover:bg-black/[0.04] dark:hover:bg-white/[0.06]'
+                    ? 'bg-black/[0.06] text-gray-900'
+                    : 'text-gray-600 hover:bg-black/[0.04]'
                 }`}
               >
                 <ShoppingCart size={20} />

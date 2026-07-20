@@ -2,31 +2,30 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ── CSS Variables: Design Tokens v3 (DBB Glass Mono — Pass 2 Visual Overhaul) ── */
+/* ── CSS Variables: Apple Liquid Glass Design Language ── */
 :root {
-  /* Light mode (default) — RGB channels for Tailwind opacity support
-     TRUE WHITE surfaces, not beige. Elevation via grays, not warm tones. */
-  --dbb-accent-rgb: 255 59 48;       /* iOS system red */
+  /* Light mode ONLY — true white surfaces, elevation via subtle grays */
+  --dbb-accent-rgb: 255 59 48;       /* iOS system red #FF3B30 */
   --dbb-accent-hov-rgb: 224 40 30;   /* darkened accent for hover */
   --dbb-surface-rgb: 255 255 255;    /* true white */
   --dbb-bg-rgb: 255 255 255;         /* true white page bg */
   --dbb-text-rgb: 29 29 31;          /* primary text */
   --dbb-text-secondary-rgb: 110 110 115;
   --dbb-border-rgb: 0 0 0;           /* hairline border, used with low alpha */
-  --dbb-price-rgb: 5 119 45;         /* price green — domain-semantic, unchanged */
+  --dbb-price-rgb: 255 59 48;        /* red accent for prices (domain change) */
 
-  /* Non-RGB vars for scrollbar and other direct uses */
+  /* Non-RGB vars for direct uses */
   --dbb-accent: #FF3B30;
   --dbb-accent-hov: #E0281E;
   --dbb-surface: #FFFFFF;
   --dbb-surface-elevated: #FFFFFF;
-  --dbb-bg: #FFFFFF;                 /* true white, not beige */
+  --dbb-bg: #FFFFFF;
   --dbb-text: #1D1D1F;
   --dbb-text-secondary: #6E6E73;
   --dbb-border: rgba(0, 0, 0, 0.08);
-  --dbb-price: #05772D;
+  --dbb-price: #FF3B30;              /* red accent */
   --dbb-scrollbar-thumb: #94a3b8;
-  --dbb-scrollbar-track: #f5f5f7;    /* subtle track contrast */
+  --dbb-scrollbar-track: #f5f5f7;
   --dbb-scrollbar-thumb-hover: #64748b;
 
   /* Radius scale */
@@ -48,45 +47,14 @@
   --font-size-xl: 28px;
   --font-size-2xl: 34px;
 
-  /* Glass materials (tokens only — not yet applied to components, see Pass 2) */
-  --glass-chrome-blur: 20px;
-  --glass-chrome-bg-light: rgba(245, 245, 247, 0.72);
-  --glass-chrome-bg-dark: rgba(28, 28, 30, 0.65);
+  /* Liquid Glass materials — real translucency with backdrop-filter */
+  /* Chrome (nav, search bar, inspector header): blur(24px) saturate(180%) */
+  --glass-chrome-blur: 24px;
+  --glass-chrome-bg: rgba(255, 255, 255, 0.72);
   --glass-sheet-blur: 24px;
-  --glass-sheet-bg-light: rgba(255, 255, 255, 0.80);
-  --glass-sheet-bg-dark: rgba(28, 28, 30, 0.78);
-  --glass-highlight-light: rgba(255, 255, 255, 0.6);
-  --glass-highlight-dark: rgba(255, 255, 255, 0.25);
+  --glass-sheet-bg: rgba(255, 255, 255, 0.80);
+  --glass-partition-bg: rgba(255, 255, 255, 0.72);
   --glass-scrim: rgba(0, 0, 0, 0.35);
-}
-
-.dark {
-  /* Dark mode — TRUE NEAR-BLACK surfaces, not warm-tinted */
-  --dbb-accent-rgb: 255 69 58;       /* iOS system red — dark */
-  --dbb-accent-hov-rgb: 224 40 30;
-  --dbb-surface-rgb: 28 28 30;       /* surface */
-  --dbb-bg-rgb: 8 8 10;              /* true near-black page bg */
-  --dbb-text-rgb: 245 245 247;
-  --dbb-text-secondary-rgb: 152 152 157;
-  --dbb-border-rgb: 255 255 255;     /* hairline border, used with low alpha */
-  --dbb-price-rgb: 34 197 94;        /* green-500 — domain-semantic, unchanged */
-
-  --dbb-accent: #FF453A;
-  --dbb-accent-hov: #E0281E;
-  --dbb-surface: #1C1C1E;
-  --dbb-surface-elevated: #2C2C2E;
-  --dbb-bg: #08080A;                 /* true near-black */
-  --dbb-text: #F5F5F7;
-  --dbb-text-secondary: #98989D;
-  --dbb-border: rgba(255, 255, 255, 0.10);
-  --dbb-price: #22C55E;
-  --dbb-scrollbar-thumb: #FF453A;
-  --dbb-scrollbar-track: #08080A;
-  --dbb-scrollbar-thumb-hover: #E0281E;
-
-  /* Shadows — near-invisible in dark mode; hierarchy via surface tone */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.5);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -98,20 +66,14 @@
   }
 }
 
-/* ── Light mode (default) ── */
+/* ── Light mode body ── */
 body {
   color: var(--dbb-text);
   background-color: var(--dbb-bg);
   min-height: 100vh;
 }
 
-/* ── Dark mode body ── */
-.dark body {
-  color: var(--dbb-text);
-  background: var(--dbb-bg);
-}
-
-/* Custom scrollbar — light */
+/* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -120,15 +82,8 @@ body {
 ::-webkit-scrollbar-track {
   background: var(--dbb-scrollbar-track);
 }
-.dark ::-webkit-scrollbar-track {
-  background: var(--dbb-scrollbar-track);
-}
 
 ::-webkit-scrollbar-thumb {
-  background: var(--dbb-scrollbar-thumb);
-  border-radius: 4px;
-}
-.dark ::-webkit-scrollbar-thumb {
   background: var(--dbb-scrollbar-thumb);
   border-radius: 4px;
 }
@@ -136,30 +91,11 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: var(--dbb-scrollbar-thumb-hover);
 }
-.dark ::-webkit-scrollbar-thumb:hover {
-  background: var(--dbb-scrollbar-thumb-hover);
-}
 
-/* ── Scroll-edge fade for horizontal shelves (DBB Glass Mono — Pass 2) ──
-   Applied to scrollable containers to show content continues beyond edge.
-   Use .scroll-fade-left, .scroll-fade-right, or both. */
-.scroll-fade-left {
-  mask-image: linear-gradient(to right, transparent 0%, black 16px);
-  -webkit-mask-image: linear-gradient(to right, transparent 0%, black 16px);
-}
-.scroll-fade-right {
-  mask-image: linear-gradient(to left, transparent 0%, black 16px);
-  -webkit-mask-image: linear-gradient(to left, transparent 0%, black 16px);
-}
-.scroll-fade-both {
-  mask-image: linear-gradient(to right, transparent 0%, black 16px, black calc(100% - 16px), transparent 100%);
-  -webkit-mask-image: linear-gradient(to right, transparent 0%, black 16px, black calc(100% - 16px), transparent 100%);
-}
-
-/* ── Spring press feedback (DBB Glass Mono — Pass 2) ──
-   Natural motion on interactions using cubic-bezier spring curve. */
+/* ── Spring press feedback (Apple Response principle) ──
+   Feedback on pointer-down, not release. Scale(0.97) with 100ms ease-out. */
 .spring-press {
-  transition: transform 0.15s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.15s cubic-bezier(0.2, 0.8, 0.2, 1);
+  transition: transform 100ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 .spring-press:active {
   transform: scale(0.97);
@@ -171,21 +107,239 @@ body {
   }
 }
 
-/* Card hover effects — replaced with spring press (DBB Glass Mono) */
-.card-hover {
-  transition: box-shadow 0.18s ease-out, transform 0.18s ease-out;
+/* ── Continuous, interruptible motion ──
+   CSS transitions with cubic-bezier(0.2, 0.8, 0.2, 1) for non-gesture animations. */
+.fluid-motion {
+  transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
-.card-hover {
-  transition: box-shadow 0.18s cubic-bezier(0.2, 0.8, 0.2, 1), transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);
+/* Skeleton/shimmer loading */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    #e2e8f0 0%,
+    #f1f5f9 50%,
+    #e2e8f0 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
 }
 
-.card-hover:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-md);
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
 }
 
-/* Rarity glow effects */
+/* Card image skeleton */
+.card-skeleton {
+  background: linear-gradient(
+    135deg,
+    #e2e8f0 0%,
+    #f1f5f9 40%,
+    #e2e8f0 80%
+  );
+  background-size: 200% 200%;
+  animation: shimmer 1.5s infinite;
+}
+
+/* Toast notifications */
+.toast {
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+/* ── Button system — Apple Liquid Glass ── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: var(--r-sm);
+  font-weight: 600;
+  transition: background-color 200ms cubic-bezier(0.2, 0.8, 0.2, 1), border-color 200ms cubic-bezier(0.2, 0.8, 0.2, 1), color 200ms cubic-bezier(0.2, 0.8, 0.2, 1), transform 100ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  cursor: pointer;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  border: none;
+}
+
+.btn:active {
+  transform: scale(0.97);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn:active {
+    transform: none;
+  }
+}
+
+.btn-lg { padding: 0.75rem 1rem; }
+.btn-md { padding: 0.5rem 1rem; }
+.btn-sm { padding: 0.5rem 0.75rem; }
+
+/* btn-primary: red accent */
+.btn-primary {
+  background-color: var(--dbb-accent);
+  color: white;
+}
+.btn-primary:hover {
+  background-color: var(--dbb-accent-hov);
+}
+
+/* btn-secondary: monochrome surface */
+.btn-secondary {
+  background-color: var(--dbb-bg);
+  color: var(--dbb-text);
+  border: 1px solid var(--dbb-border);
+}
+.btn-secondary:hover {
+  background-color: rgb(var(--dbb-border-rgb) / 0.06);
+}
+
+/* btn-outline: accent outline */
+.btn-outline {
+  background-color: transparent;
+  color: var(--dbb-accent);
+  border: 1.5px solid var(--dbb-accent);
+}
+.btn-outline:hover {
+  background-color: var(--dbb-accent);
+  color: white;
+}
+
+.btn-danger {
+  background-color: transparent;
+  color: var(--dbb-accent);
+  border: 1px solid var(--dbb-accent);
+}
+.btn-danger:hover {
+  background-color: var(--dbb-accent);
+  color: white;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Price display — red accent per design language */
+.price-red {
+  color: var(--dbb-price);
+  font-weight: 600;
+}
+
+/* ── Liquid Glass Chrome (nav, search bar, inspector header) ──
+   Real translucency with backdrop-filter: blur(24px) saturate(180%).
+   Content scrolls *underneath* the glass, creating depth. */
+.dbb-glass-chrome {
+  background: var(--glass-chrome-bg);
+  -webkit-backdrop-filter: blur(var(--glass-chrome-blur)) saturate(180%);
+  backdrop-filter: blur(var(--glass-chrome-blur)) saturate(180%);
+  position: relative;
+}
+
+/* Scroll-edge fade for chrome bottom edge */
+.dbb-glass-chrome::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -8px;
+  height: 8px;
+  background: linear-gradient(to bottom, rgb(var(--dbb-border-rgb) / 0.06), transparent);
+  pointer-events: none;
+}
+
+/* Bottom tab bar fades upward into content instead of downward */
+.dbb-glass-chrome--edge-top::after {
+  top: -8px;
+  bottom: auto;
+  background: linear-gradient(to top, rgb(var(--dbb-border-rgb) / 0.06), transparent);
+}
+
+@supports not (backdrop-filter: blur(1px)) {
+  .dbb-glass-chrome {
+    background: var(--dbb-surface);
+  }
+}
+
+/* Floating glass sheet — account menu dropdown, condition proof modal */
+.dbb-glass-sheet {
+  background: var(--glass-sheet-bg);
+  -webkit-backdrop-filter: blur(var(--glass-sheet-blur)) saturate(180%);
+  backdrop-filter: blur(var(--glass-sheet-blur)) saturate(180%);
+}
+
+@supports not (backdrop-filter: blur(1px)) {
+  .dbb-glass-sheet {
+    background: var(--dbb-surface);
+  }
+}
+
+/* Search/Filter partition bar — glass treatment between hero and grid */
+.dbb-glass-partition {
+  background: var(--glass-partition-bg);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  backdrop-filter: blur(24px) saturate(180%);
+  border-bottom: 1px solid rgb(var(--dbb-border-rgb) / 0.06);
+}
+
+@supports not (backdrop-filter: blur(1px)) {
+  .dbb-glass-partition {
+    background: var(--dbb-surface);
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .dbb-glass-chrome,
+  .dbb-glass-sheet,
+  .dbb-glass-partition {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    background: var(--dbb-surface);
+  }
+}
+
+/* Reserve space for the fixed mobile bottom tab bar */
+@media (max-width: 639px) {
+  body.dbb-has-tabbar {
+    padding-bottom: calc(64px + env(safe-area-inset-bottom));
+  }
+}
+
+/* Phase 44 Showcase Pass A: editorial shelves and economical long-grid paint. */
+.bazaar-showcase-shelf {
+  scroll-padding-inline: 1rem;
+  scrollbar-width: thin;
+}
+
+.bazaar-card--showcase {
+  background: linear-gradient(180deg, rgb(var(--dbb-surface-rgb)) 0%, rgb(var(--dbb-bg-rgb)) 145%);
+}
+
+.bazaar-result-card {
+  content-visibility: auto;
+  contain-intrinsic-size: 260px 410px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bazaar-card--showcase,
+  .bazaar-card--results {
+    transform: none !important;
+  }
+}
+
+/* Rarity colors */
 .rarity-common { border-color: #8c8c8c; }
 .rarity-uncommon { border-color: #c0c0c0; }
 .rarity-rare { border-color: #f4d03f; box-shadow: 0 0 10px rgba(244, 208, 63, 0.2); }
@@ -213,285 +367,4 @@ body {
 /* Sidebar transitions */
 .sidebar-transition {
   transition: transform 0.3s ease-in-out;
-}
-
-/* Skeleton/shimmer loading — light mode */
-.skeleton {
-  background: linear-gradient(
-    90deg,
-    #e2e8f0 0%,
-    #f1f5f9 50%,
-    #e2e8f0 100%
-  );
-  background-size: 200% 100%;
-  animation: shimmer 1.5s infinite;
-}
-.dark .skeleton {
-  background: linear-gradient(
-    90deg,
-    #1e293b 0%,
-    #334155 50%,
-    #1e293b 100%
-  );
-  background-size: 200% 100%;
-}
-
-@keyframes shimmer {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
-}
-
-/* Card image skeleton — light mode */
-.card-skeleton {
-  background: linear-gradient(
-    135deg,
-    #e2e8f0 0%,
-    #f1f5f9 40%,
-    #e2e8f0 80%
-  );
-  background-size: 200% 200%;
-  animation: shimmer 1.5s infinite;
-}
-.dark .card-skeleton {
-  background: linear-gradient(
-    135deg,
-    #1e293b 0%,
-    #283548 40%,
-    #1e293b 80%
-  );
-  background-size: 200% 200%;
-}
-
-/* Toast notifications */
-.toast {
-  animation: slideIn 0.3s ease-out;
-}
-
-@keyframes slideIn {
-  from {
-    transform: translateX(100%);
-    opacity: 0;
-  }
-  to {
-    transform: translateX(0);
-    opacity: 1;
-  }
-}
-
-/* Foil card shimmer */
-.foil-card {
-  position: relative;
-}
-.foil-card::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(
-    135deg,
-    transparent 30%,
-    rgba(180, 120, 255, 0.10) 45%,
-    rgba(100, 200, 255, 0.10) 55%,
-    transparent 70%
-  );
-  background-size: 200% 200%;
-  animation: foil-shine 4s infinite linear;
-  pointer-events: none;
-  border-radius: inherit;
-}
-@keyframes foil-shine {
-  0% { background-position: 200% 200%; }
-  100% { background-position: -200% -200%; }
-}
-
-/* ── Button system v3 (DBB Glass Mono — Pass 1) ── */
-.btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  border-radius: var(--r-sm);
-  font-weight: 600;
-  transition: background-color 200ms ease-out, border-color 200ms ease-out, color 200ms ease-out, transform 100ms ease-out;
-  cursor: pointer;
-  font-size: 0.875rem;
-  line-height: 1.25rem;
-  border: none;
-}
-
-.btn:active {
-  transform: scale(0.97);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .btn:active {
-    transform: none;
-  }
-}
-
-.btn-lg { padding: 0.75rem 1rem; }
-.btn-md { padding: 0.5rem 1rem; }
-.btn-sm { padding: 0.5rem 0.75rem; }
-
-/* btn-primary: accent via CSS variable — auto light/dark */
-.btn-primary {
-  background-color: var(--dbb-accent);
-  color: white;
-}
-.btn-primary:hover {
-  background-color: var(--dbb-accent-hov);
-}
-
-/* btn-mint retired in favor of the single accent (DBB Glass Mono) — kept as an
-   alias so any lingering usages still render sanely until Pass 2 removes them. */
-.btn-mint {
-  background-color: var(--dbb-accent);
-  color: white;
-}
-.btn-mint:hover {
-  background-color: var(--dbb-accent-hov);
-}
-
-/* btn-secondary: monochrome surface, light mode default, dark mode override */
-.btn-secondary {
-  background-color: var(--dbb-bg);
-  color: var(--dbb-text);
-  border: 1px solid var(--dbb-border);
-}
-.btn-secondary:hover {
-  background-color: rgb(var(--dbb-border-rgb) / 0.06);
-}
-.dark .btn-secondary {
-  background-color: var(--dbb-surface-elevated);
-  color: var(--dbb-text);
-  border: 1px solid var(--dbb-border);
-}
-.dark .btn-secondary:hover {
-  background-color: rgb(var(--dbb-border-rgb) / 0.14);
-}
-
-/* btn-outline: accent outline via CSS variable — auto light/dark */
-.btn-outline {
-  background-color: transparent;
-  color: var(--dbb-accent);
-  border: 1.5px solid var(--dbb-accent);
-}
-.btn-outline:hover {
-  background-color: var(--dbb-accent);
-  color: white;
-}
-
-.btn-danger {
-  background-color: transparent;
-  color: var(--dbb-accent);
-  border: 1px solid var(--dbb-accent);
-}
-.btn-danger:hover {
-  background-color: var(--dbb-accent);
-  color: white;
-}
-
-.btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-/* Price display — green per TCGPlayer convention, auto light/dark */
-.price-green {
-  color: var(--dbb-price);
-  font-weight: 600;
-}
-
-/* ── Glass chrome (DBB Glass Mono — Pass 2) ──
-   Applied to the top bar and mobile bottom tab bar. Uses a scroll-edge fade
-   (soft gradient mask on the trailing edge) instead of a hard border line. */
-.dbb-glass-chrome {
-  background: var(--glass-chrome-bg-light);
-  -webkit-backdrop-filter: blur(var(--glass-chrome-blur));
-  backdrop-filter: blur(var(--glass-chrome-blur));
-  position: relative;
-}
-.dark .dbb-glass-chrome {
-  background: var(--glass-chrome-bg-dark);
-}
-.dbb-glass-chrome::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: -8px;
-  height: 8px;
-  background: linear-gradient(to bottom, rgb(var(--dbb-border-rgb) / 0.06), transparent);
-  pointer-events: none;
-}
-/* Bottom tab bar fades upward into content instead of downward */
-.dbb-glass-chrome--edge-top::after {
-  top: -8px;
-  bottom: auto;
-  background: linear-gradient(to top, rgb(var(--dbb-border-rgb) / 0.06), transparent);
-}
-
-@supports not (backdrop-filter: blur(1px)) {
-  .dbb-glass-chrome {
-    background: var(--dbb-surface);
-  }
-  .dark .dbb-glass-chrome {
-    background: var(--dbb-surface);
-  }
-}
-
-/* Floating glass sheet — account menu dropdown, bottom sheets */
-.dbb-glass-sheet {
-  background: var(--glass-sheet-bg-light);
-  -webkit-backdrop-filter: blur(var(--glass-sheet-blur));
-  backdrop-filter: blur(var(--glass-sheet-blur));
-}
-.dark .dbb-glass-sheet {
-  background: var(--glass-sheet-bg-dark);
-}
-@supports not (backdrop-filter: blur(1px)) {
-  .dbb-glass-sheet {
-    background: var(--dbb-surface);
-  }
-  .dark .dbb-glass-sheet {
-    background: var(--dbb-surface);
-  }
-}
-
-@media (prefers-reduced-transparency: reduce) {
-  .dbb-glass-chrome,
-  .dbb-glass-sheet {
-    -webkit-backdrop-filter: none;
-    backdrop-filter: none;
-    background: var(--dbb-surface);
-  }
-}
-
-/* Reserve space for the fixed mobile bottom tab bar so page content is never
-   obscured beneath it (see DBBNav.js). */
-@media (max-width: 639px) {
-  body.dbb-has-tabbar {
-    padding-bottom: calc(64px + env(safe-area-inset-bottom));
-  }
-}
-
-/* Phase 44 Showcase Pass A: editorial shelves and economical long-grid paint. */
-.bazaar-showcase-shelf {
-  scroll-padding-inline: 1rem;
-  scrollbar-width: thin;
-}
-
-.bazaar-card--showcase {
-  background: linear-gradient(180deg, rgb(var(--dbb-surface-rgb)) 0%, rgb(var(--dbb-bg-rgb)) 145%);
-}
-
-.bazaar-result-card {
-  content-visibility: auto;
-  contain-intrinsic-size: 260px 410px;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .bazaar-card--showcase,
-  .bazaar-card--results {
-    transform: none !important;
-  }
 }
