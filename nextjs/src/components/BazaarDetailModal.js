@@ -346,7 +346,7 @@ export default function BazaarDetailModal({ listing, onClose, onSelectListing, u
         />
         
         {/* Inspector panel */}
-        <div className="absolute top-0 right-0 h-full w-[480px] max-w-[90vw] bg-white shadow-2xl flex flex-col">
+        <div data-testid="bazaar-detail-panel" className="absolute top-0 right-0 h-full w-[480px] max-w-[90vw] bg-white shadow-2xl flex flex-col">
           {/* Header — glass chrome */}
           <div className="dbb-glass-chrome flex shrink-0 items-center justify-between gap-3 px-4 py-3">
             <h2 className="truncate text-dbb-lg font-semibold tracking-heading text-gray-900">{cardName}</h2>
@@ -550,7 +550,7 @@ export default function BazaarDetailModal({ listing, onClose, onSelectListing, u
       </div>
 
       {/* Mobile: full-screen overlay (≤1023px) */}
-      <div className="lg:hidden fixed inset-0 z-50 bg-white overflow-y-auto">
+      <div data-testid="bazaar-detail-sheet" className="lg:hidden fixed inset-0 z-50 bg-white overflow-y-auto">
         {/* Header — glass chrome */}
         <div className="sticky top-0 dbb-glass-chrome flex items-center justify-between gap-3 px-4 py-3">
           <h2 className="truncate text-dbb-lg font-semibold tracking-heading text-gray-900">{cardName}</h2>

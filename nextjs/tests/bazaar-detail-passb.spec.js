@@ -29,10 +29,10 @@ test.describe('Bazaar Detail Interaction (Pass B)', () => {
     await expect(page.locator('h1')).toContainText('Bazaar');
     
     // Wait for listings to load (look for card elements)
-    await page.waitForSelector('[data-bazaar-mode]', { timeout: 10000 });
-    
+    await page.waitForSelector('[data-bazaar-results]', { timeout: 10000 });
+
     // Find and click the first card to open detail
-    const cards = page.locator('[data-bazaar-mode] .grid [role="button"], [data-bazaar-mode] .bazaar-showcase-shelf [role="button"]');
+    const cards = page.locator('[data-bazaar-results] [role="button"]');
     const firstCard = cards.first();
     
     // Wait for at least one card to be clickable
@@ -48,10 +48,10 @@ test.describe('Bazaar Detail Interaction (Pass B)', () => {
     // Wait for detail to appear
     if (isDesktop) {
       // Desktop: right-side inspector panel
-      await expect(page.locator('aside[role="dialog"], .fixed.right-0[role="dialog"], div.fixed.right-0')).toBeVisible({ timeout: 5000 });
+      await expect(page.locator('[data-testid="bazaar-detail-panel"]')).toBeVisible({ timeout: 5000 });
     } else {
-      // Mobile: bottom sheet
-      await expect(page.locator('[role="dialog"][aria-modal="true"].bottom-0, div[aria-label="Card details"]')).toBeVisible({ timeout: 5000 });
+      // Mobile: full-screen sheet
+      await expect(page.locator('[data-testid="bazaar-detail-sheet"]')).toBeVisible({ timeout: 5000 });
     }
     
     // Close the detail (click close button or backdrop)
@@ -72,7 +72,7 @@ test.describe('Bazaar Detail Interaction (Pass B)', () => {
     await page.setViewportSize({ width: 1280, height: 720 });
     
     await page.goto('/bazaar', { waitUntil: 'networkidle' });
-    await page.waitForSelector('[data-bazaar-mode]', { timeout: 10000 });
+    await page.waitForSelector('[data-bazaar-results]', { timeout: 10000 });
     
     // Scroll down a bit
     const initialScrollY = await page.evaluate(() => window.scrollY);
@@ -81,9 +81,9 @@ test.describe('Bazaar Detail Interaction (Pass B)', () => {
     expect(scrolledY).toBeGreaterThan(0);
     
     // Open card detail
-    const firstCard = page.locator('[data-bazaar-mode] .grid [role="button"]').first();
+    const firstCard = page.locator('[data-bazaar-results] [role="button"]').first();
     await firstCard.click();
-    await page.waitForSelector('.fixed.right-0[role="dialog"]', { timeout: 5000 });
+    await page.waitForSelector('[data-testid="bazaar-detail-panel"]', { timeout: 5000 });
     
     // Close detail
     await page.keyboard.press('Escape');
@@ -101,15 +101,15 @@ test.describe('Bazaar Detail Interaction (Pass B)', () => {
     await page.setViewportSize({ width: 375, height: 667 });
     
     await page.goto('/bazaar', { waitUntil: 'networkidle' });
-    await page.waitForSelector('[data-bazaar-mode]', { timeout: 10000 });
+    await page.waitForSelector('[data-bazaar-results]', { timeout: 10000 });
     
     // Open card detail
-    const firstCard = page.locator('[data-bazaar-mode] [role="button"]').first();
+    const firstCard = page.locator('[data-bazaar-results] [role="button"]').first();
     await firstCard.click();
-    await page.waitForSelector('[aria-label="Card details"]', { timeout: 5000 });
-    
+    await page.waitForSelector('[data-testid="bazaar-detail-sheet"]', { timeout: 5000 });
+
     // Get sheet element
-    const sheet = page.locator('[aria-label="Card details"]');
+    const sheet = page.locator('[data-testid="bazaar-detail-sheet"]');
     const initialBox = await sheet.boundingBox();
     
     // Drag downward (dismiss gesture)

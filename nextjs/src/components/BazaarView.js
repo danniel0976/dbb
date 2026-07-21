@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo, useReducer, useRef } from 'react'
+import { useState, useEffect, useCallback, useReducer, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { ChevronDown, Grid, Filter, X, Search, Loader2, Layers, SortAsc, Sparkles } from 'lucide-react'
 import Sidebar from '@/components/Sidebar'
@@ -16,7 +16,7 @@ import {
   parseBazaarQueryState,
   serializeBazaarQueryState,
 } from '@/lib/bazaarSearchState'
-import { canCommitBazaarRequest, buildShowcaseShelves } from '@/lib/bazaarShowcase'
+import { canCommitBazaarRequest } from '@/lib/bazaarShowcase'
 
 const SORT_OPTIONS = [
   { value: 'newest', label: 'Newest' },
@@ -30,19 +30,6 @@ const SORT_OPTIONS = [
 ]
 
 const INITIAL_FILTERS = EMPTY_BAZAAR_FILTERS
-
-function hasSearchOrFacetPredicates(filters) {
-  return Boolean(
-    filters.search.trim()
-    || filters.setCode
-    || filters.rarities.length
-    || filters.colors.length
-    || filters.cardType
-    || filters.isFoil !== null
-    || filters.minPrice !== null
-    || filters.maxPrice !== null
-  )
-}
 
 /** Human-readable chip labels for everything in `filters` except sort/search. */
 function buildChips(filters, filterOptions) {
@@ -72,7 +59,7 @@ function buildChips(filters, filterOptions) {
   return chips
 }
 
-export default function BazaarView({ initialData, filterOptions: initialFilterOptions, userId, hotListings = [], latestListings = [] }) {
+export default function BazaarView({ initialData, filterOptions: initialFilterOptions, userId }) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const initialQueryState = useRef(parseBazaarQueryState(searchParams)).current
@@ -222,14 +209,10 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
     }
   }, [loadingMore, hasMore, page, filters, buildParams])
 
-  // Declared before the infinite-scroll effect below: its dependency array is
-  // evaluated at render time, so this const must be initialized first.
-  const isResultsMode = hasSearchOrFacetPredicates(filters)
-
-  // Infinite scroll
+  // Infinite scroll — Bazaar is grid-only now, so this always applies once
+  // listings have loaded (Phase 44 Pass A dropped the Showcase/Results split).
   useEffect(() => {
     if (loading) return
-    if (!isResultsMode) return
     const sentinel = document.getElementById('bazaar-sentinel')
     if (!sentinel) return
     const observer = new IntersectionObserver(
@@ -238,10 +221,7 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
     )
     observer.observe(sentinel)
     return () => observer.disconnect()
-  // Keep the loaded-grid reattachment dependencies explicit; isResultsMode
-  // additionally prevents Showcase from ever observing this sentinel.
-  // Phase 41's focused source check covers [loadMore, loading, loadingMore, hasMore, listings.length].
-  }, [loadMore, loading, loadingMore, hasMore, listings.length, isResultsMode])
+  }, [loadMore, loading, loadingMore, hasMore, listings.length])
 
   // Commits Bazaar filter state to the URL so it can be bookmarked, shared,
   // or restored via reload/Back-Forward (Phase 41 tech audit P1 #7), mirroring
@@ -357,7 +337,6 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
   }, [])
 
   const chips = buildChips(filters, filterOptions)
-  const showcaseShelves = useMemo(() => buildShowcaseShelves(listings), [listings])
 
   const handleSelectListing = async (listing) => {
     if (!userId) {
@@ -396,7 +375,7 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
       {bazaarSection === 'claim_sales' ? (
         <ClaimSalesBrowse userId={userId} />
       ) : (
-        <div className="container mx-auto px-4 pb-8" data-bazaar-mode={isResultsMode ? 'results' : 'showcase'}>
+        <div className="container mx-auto px-4 pb-8">
           {/* Page title */}
           <div className="pt-6 pb-3">
             <div className="flex items-baseline gap-3 flex-wrap">
@@ -443,42 +422,6 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
               </button>
             </div>
           </div>
-
-          {/* HERO SECTION — Two showcase rows */}
-          {!isResultsMode && !loading && (
-            <section className="space-y-8 sm:space-y-10 mt-6" data-bazaar-showcase>
-              {/* Row 1: Hot Selling */}
-              {hotListings.length > 0 && (
-                <ShowcaseRow 
-                  title="Hot Selling" 
-                  subtitle="Most popular cards by seller count"
-                  listings={hotListings}
-                  prices={prices}
-                  onSelect={setSelectedListing}
-                />
-              )}
-              
-              {/* Row 2: Latest */}
-              {latestListings.length > 0 && (
-                <ShowcaseRow 
-                  title="Latest" 
-                  subtitle="Newest arrivals to the Bazaar"
-                  listings={latestListings}
-                  prices={prices}
-                  onSelect={setSelectedListing}
-                />
-              )}
-            </section>
-          )}
-
-          {/* Fallback showcase shelves when no hero data but in showcase mode */}
-          {!isResultsMode && !loading && hotListings.length === 0 && latestListings.length === 0 && showcaseShelves.length > 0 && (
-            <section className="space-y-10 sm:space-y-12 mt-6" data-bazaar-showcase>
-              {showcaseShelves.map(shelf => (
-                <ShowcaseSection key={shelf.key} shelf={shelf} prices={prices} onSelect={setSelectedListing} />
-              ))}
-            </section>
-          )}
 
           {/* SEARCH + FILTER BAR — Liquid Glass partition */}
           <div ref={filterPopoverRef} className="relative z-20 mb-5">
@@ -670,21 +613,19 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
                 </div>
               </section>
 
-              {isResultsMode && !loading && !error && listings.length > 0 && (
-                <div id="bazaar-sentinel" className="h-20 flex items-center justify-center py-4">
-                  {loadingMore && (
-                    <div className="flex items-center gap-2 text-gray-500 text-sm">
-                      <Loader2 className="w-4 h-4 animate-spin" /> Loading more...
-                    </div>
-                  )}
-                  {!hasMore && (
-                    <div className="text-gray-600 text-sm">All {listings.length} listings shown</div>
-                  )}
-                  {hasMore && !loadingMore && (
-                    <div className="text-gray-500 text-sm">Scroll for more</div>
-                  )}
-                </div>
-              )}
+              <div id="bazaar-sentinel" className="h-20 flex items-center justify-center py-4">
+                {loadingMore && (
+                  <div className="flex items-center gap-2 text-gray-500 text-sm">
+                    <Loader2 className="w-4 h-4 animate-spin" /> Loading more...
+                  </div>
+                )}
+                {!hasMore && (
+                  <div className="text-gray-600 text-sm">All {listings.length} listings shown</div>
+                )}
+                {hasMore && !loadingMore && (
+                  <div className="text-gray-500 text-sm">Scroll for more</div>
+                )}
+              </div>
             </>
           )}
         </div>
@@ -699,115 +640,5 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
         />
       )}
     </div>
-  )
-}
-
-// Showcase Row Component — displays 5 cards on desktop, 2 on mobile
-function ShowcaseRow({ title, subtitle, listings, prices, onSelect }) {
-  return (
-    <section aria-labelledby={`showcase-${title.toLowerCase().replace(/\s+/g, '-')}`}>
-      <div className="mb-4">
-        <h2 
-          id={`showcase-${title.toLowerCase().replace(/\s+/g, '-')}`} 
-          className="text-dbb-lg sm:text-dbb-xl font-semibold tracking-heading text-gray-900"
-        >
-          {title}
-        </h2>
-        {subtitle && (
-          <p className="mt-0.5 text-sm text-gray-500">{subtitle}</p>
-        )}
-      </div>
-      
-      {/* Desktop: 5 cards in a row */}
-      <div className="hidden sm:grid grid-cols-5 gap-4 lg:gap-5">
-        {listings.map(listing => (
-          <BazaarCard
-            key={listing.id}
-            listing={listing}
-            variant="showcase"
-            priceData={prices[`${listing.library_cards?.scryfall_id}:${listing.library_cards?.foil || 'normal'}`]}
-            onClick={() => onSelect(listing)}
-          />
-        ))}
-      </div>
-      
-      {/* Mobile: 2 cards side by side */}
-      <div className="sm:hidden grid grid-cols-2 gap-3">
-        {listings.map(listing => (
-          <BazaarCard
-            key={listing.id}
-            listing={listing}
-            variant="showcase"
-            priceData={prices[`${listing.library_cards?.scryfall_id}:${listing.library_cards?.foil || 'normal'}`]}
-            onClick={() => onSelect(listing)}
-          />
-        ))}
-      </div>
-    </section>
-  )
-}
-
-// Showcase Section Component — renders legacy shelf structure from buildShowcaseShelves
-function ShowcaseSection({ shelf, prices, onSelect }) {
-  const isMobile = typeof window !== 'undefined' && window.innerWidth < 640
-  const shouldUseGridOnMobile = shelf.items.length <= 4
-  const hasOverflow = shelf.items.length > (isMobile && shouldUseGridOnMobile ? 4 : 5)
-  
-  return (
-    <section key={shelf.key} aria-labelledby={`showcase-${shelf.key}`}>
-      <div className="mb-4 flex items-end justify-between gap-4 max-w-2xl">
-        <div className="flex-1">
-          <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-dbb-accent">
-            {shelf.eyebrow}
-          </p>
-          <h2 id={`showcase-${shelf.key}`} className="text-dbb-xl font-semibold tracking-heading text-gray-900 sm:text-dbb-2xl">
-            {shelf.title}
-          </h2>
-          <p className="mt-1 text-sm text-gray-500">{shelf.description}</p>
-        </div>
-        {hasOverflow && (
-          <button
-            type="button"
-            className="shrink-0 text-xs font-medium text-dbb-accent hover:text-dbb-accent/80 transition-colors whitespace-nowrap"
-            aria-label={`See all ${shelf.title}`}
-          >
-            See all →
-          </button>
-        )}
-      </div>
-      {isMobile && shouldUseGridOnMobile ? (
-        <div className="grid grid-cols-2 gap-3 sm:hidden relative">
-          {shelf.items.map(listing => (
-            <div key={listing.id}>
-              <BazaarCard
-                listing={listing}
-                variant="showcase"
-                priceData={prices[`${listing.library_cards?.scryfall_id}:${listing.library_cards?.foil || 'normal'}`]}
-                onClick={() => onSelect(listing)}
-              />
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="bazaar-showcase-shelf -mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-5 sm:gap-5 relative">
-          {shelf.items.map(listing => (
-            <div key={listing.id} className="w-[72vw] max-w-[280px] shrink-0 snap-start sm:w-[250px]">
-              <BazaarCard
-                listing={listing}
-                variant="showcase"
-                priceData={prices[`${listing.library_cards?.scryfall_id}:${listing.library_cards?.foil || 'normal'}`]}
-                onClick={() => onSelect(listing)}
-              />
-            </div>
-          ))}
-          <div
-            className="pointer-events-none absolute top-0 bottom-5 right-0 w-8"
-            style={{
-              background: 'linear-gradient(to left, var(--dbb-bg) 0%, transparent 100%)'
-            }}
-          />
-        </div>
-      )}
-    </section>
   )
 }

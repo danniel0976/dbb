@@ -1,9 +1,19 @@
 /**
  * Phase 44 Showcase Pass A focused source/regression guard.
+ *
+ * Superseded scope (this revision): Dan moved the Hot Selling / Latest
+ * showcase off Bazaar entirely onto a new Home page (`/`). Bazaar (`/bazaar`)
+ * is grid-only again — no Showcase/Results mode split. The checks below
+ * were rewritten to match that: they guard against the showcase mode
+ * machinery creeping back into BazaarView, and confirm the extracted
+ * ShowcaseRow/heroListings/HomeView pieces exist and are wired correctly.
+ * The original per-tile, filter-rail, mobile-sheet, and pagination-guard
+ * checks are unaffected by the move and are kept as-is.
+ *
  * Run: node scripts/phase44-test-showcase-pass-a.mjs
  */
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { readFileSync, existsSync } from 'node:fs'
 import { buildShowcaseShelves, canCommitBazaarRequest } from '../src/lib/bazaarShowcase.js'
 
 const read = relative => readFileSync(new URL(relative, import.meta.url), 'utf8')
@@ -11,6 +21,12 @@ const view = read('../src/components/BazaarView.js')
 const card = read('../src/components/BazaarCard.js')
 const sheet = read('../src/components/FilterSheet.js')
 const css = read('../src/app/globals.css')
+const bazaarPage = read('../src/app/bazaar/page.js')
+const homePage = read('../src/app/page.js')
+const homeView = read('../src/components/HomeView.js')
+const showcaseRow = read('../src/components/ShowcaseRow.js')
+const heroListingsLib = read('../src/lib/heroListings.js')
+const dbbNav = read('../src/components/DBBNav.js')
 
 let passed = 0
 function check(name, fn) {
@@ -19,26 +35,34 @@ function check(name, fn) {
   console.log(`  ok - ${name}`)
 }
 
-console.log('=== Phase 44: Showcase Pass A ===')
+console.log('=== Phase 44: Showcase Pass A (moved to Home) ===')
 
-check('mode predicate treats search and every facet as Results, but not sort alone', () => {
-  const predicate = view.slice(
-    view.indexOf('function hasSearchOrFacetPredicates'),
-    view.indexOf('function buildChips')
-  )
-  for (const token of ['filters.search.trim()', 'filters.setCode', 'filters.rarities.length', 'filters.colors.length', 'filters.cardType', 'filters.isFoil !== null', 'filters.minPrice !== null', 'filters.maxPrice !== null']) {
-    assert.ok(predicate.includes(token), `mode predicate must include ${token}`)
+check('Bazaar no longer has a Showcase/Results mode split', () => {
+  for (const token of [
+    'isResultsMode', 'hasSearchOrFacetPredicates', 'data-bazaar-mode', 'data-bazaar-showcase',
+    'hotListings', 'latestListings', 'showcaseShelves', 'buildShowcaseShelves',
+    'ShowcaseRow', 'ShowcaseSection', 'HERO SECTION',
+  ]) {
+    assert.ok(!view.includes(token), `BazaarView must not reference removed showcase token ${token}`)
   }
-  assert.ok(!predicate.includes('sortBy'), 'sort alone must preserve Showcase mode')
-  assert.ok(view.includes('const isResultsMode = hasSearchOrFacetPredicates(filters)'))
 })
 
-check('Singles renders explicit Showcase and Results mode markers', () => {
-  assert.ok(view.includes("data-bazaar-mode={isResultsMode ? 'results' : 'showcase'}"))
-  assert.ok(view.includes('data-bazaar-showcase'))
+check('Bazaar grid renders unconditionally and is the only results surface', () => {
   assert.ok(view.includes('data-bazaar-results'))
-  assert.ok(view.includes('showcaseShelves.map'))
   assert.ok(view.includes('listings.map'))
+  assert.ok(view.includes("grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 min-[900px]:grid-cols-4 lg:gap-5 min-[1440px]:grid-cols-5"))
+})
+
+check('infinite-scroll sentinel/observer are unconditional (no mode gate)', () => {
+  assert.ok(view.includes("document.getElementById('bazaar-sentinel')"))
+  assert.ok(view.includes('id="bazaar-sentinel"'))
+  assert.ok(!/if \(!isResultsMode\) return/.test(view))
+})
+
+check('bazaar/page.js no longer fetches or passes hero listings', () => {
+  for (const token of ['hotListings', 'latestListings', 'HERO_COUNT', 'getHeroListings']) {
+    assert.ok(!bazaarPage.includes(token), `bazaar/page.js must not reference ${token}`)
+  }
 })
 
 check('permanent desktop sidebar is replaced by a horizontal rail and anchored popover', () => {
@@ -65,14 +89,12 @@ check('tiles keep pricing visible, request small art first, and never crop art',
   assert.ok(!card.includes('object-cover'))
 })
 
-check('Showcase uses scroll snap and Results defer offscreen card paint', () => {
-  assert.ok(view.includes('snap-x snap-mandatory'))
-  assert.ok(view.includes('snap-start'))
+check('Results grid defers offscreen card paint', () => {
   assert.ok(css.includes('.bazaar-result-card'))
   assert.ok(css.includes('content-visibility: auto'))
 })
 
-check('Showcase partitions every mixed listing exactly once', () => {
+check('bazaarShowcase.js helpers still partition/guard correctly (used by Home + pagination)', () => {
   const listings = Array.from({ length: 30 }, (_, index) => ({
     id: `listing-${index}`,
     library_cards: {
@@ -87,7 +109,6 @@ check('Showcase partitions every mixed listing exactly once', () => {
     listings.slice(0, 12).map(item => item.id),
     'Fresh arrivals must be the first up-to-12 listings in current order'
   )
-  assert.deepEqual(ids, buildShowcaseShelves(listings).flatMap(shelf => shelf.items.map(item => item.id)))
   assert.equal(ids.length, listings.length)
   assert.equal(new Set(ids).size, listings.length)
 })
@@ -97,13 +118,6 @@ check('loadListings binds caught errors and guards bare catch regressions', () =
   for (const match of view.matchAll(/catch\s*\{([\s\S]*?)\}/g)) {
     assert.ok(!/\berr\b/.test(match[1]), 'a bare catch body must not reference err')
   }
-})
-
-check('paging sentinel and observer exist only in Results mode', () => {
-  assert.ok(view.includes('if (loading) return'))
-  assert.ok(view.includes('if (!isResultsMode) return'))
-  assert.ok(view.includes('{isResultsMode && !loading && !error && listings.length > 0 && ('))
-  assert.ok(view.includes('[loadMore, loading, loadingMore, hasMore, listings.length, isResultsMode]'))
 })
 
 check('stale pagination responses cannot commit after a newer generation', () => {
@@ -133,6 +147,39 @@ check('no undeclared scaffold state survives the recovery', () => {
   for (const token of ['filterSheetOpen', 'setFilterSheetOpen', 'SORT_LABELS', 'sheet.draft', 'dispatchSheet', 'draftPriceValid', 'setDraftPriceValid']) {
     assert.ok(!view.includes(token), `Bazaar must not reference undeclared scaffold token ${token}`)
   }
+})
+
+check('Home page (/) redirects guests to /login and renders HomeView for signed-in users', () => {
+  assert.ok(homePage.includes("if (!user) redirect('/login')"))
+  assert.ok(homePage.includes('getHeroListings'))
+  assert.ok(homePage.includes('<HomeView'))
+  assert.ok(homePage.includes('<DBBNav'))
+})
+
+check('HomeView renders the showcase rows and reuses BazaarDetailModal for the inspector', () => {
+  assert.ok(homeView.includes("import ShowcaseRow from '@/components/ShowcaseRow'"))
+  assert.ok(homeView.includes("import BazaarDetailModal from '@/components/BazaarDetailModal'"))
+  assert.ok(homeView.includes('data-home-showcase'))
+  assert.ok(homeView.includes('title="Hot Selling"'))
+  assert.ok(homeView.includes('title="Latest"'))
+})
+
+check('ShowcaseRow is a standalone component (not a local BazaarView function)', () => {
+  assert.ok(showcaseRow.includes('export default function ShowcaseRow'))
+  assert.ok(!view.includes('function ShowcaseRow'))
+})
+
+check('heroListings.js owns the hot/latest query logic shared by Home', () => {
+  assert.ok(heroListingsLib.includes('export async function getHeroListings'))
+  assert.ok(heroListingsLib.includes("eq('status', 'active')"))
+})
+
+check('DBBNav adds Home as the first primary link and wordmark points at /', () => {
+  assert.ok(dbbNav.includes("{ href: '/', label: 'Home', icon: Home }"))
+  const primaryLinksBlock = dbbNav.slice(dbbNav.indexOf('const PRIMARY_LINKS'), dbbNav.indexOf(']', dbbNav.indexOf('const PRIMARY_LINKS')))
+  assert.ok(primaryLinksBlock.trim().startsWith("const PRIMARY_LINKS = [\n  { href: '/', label: 'Home'"), 'Home must be the first primary link')
+  assert.ok(dbbNav.includes('<Link href="/" className="text-lg font-bold'))
+  assert.ok(dbbNav.includes("href === '/' ? pathname === '/' : pathname?.startsWith(href)"), 'isActive must not treat every route as matching Home')
 })
 
 console.log(`\n${passed} Phase 44 checks passed`)

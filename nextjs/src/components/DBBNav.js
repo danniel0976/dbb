@@ -3,12 +3,13 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useState, useEffect, useRef } from 'react'
-import { Library, Store, Package, ShoppingCart, User, ChevronDown, Upload, LogOut } from 'lucide-react'
+import { Home, Library, Store, Package, ShoppingCart, User, ChevronDown, Upload, LogOut } from 'lucide-react'
 
 // Primary destinations — desktop top bar + mobile bottom tab bar.
 // Import intentionally lives off this list; it's reachable from Library's
 // Add flow / the account menu overflow, not as a top-level destination.
 const PRIMARY_LINKS = [
+  { href: '/', label: 'Home', icon: Home },
   { href: '/library', label: 'Library', icon: Library },
   { href: '/bazaar', label: 'Bazaar', icon: Store },
   { href: '/orders', label: 'Orders', icon: Package },
@@ -185,7 +186,7 @@ export default function DBBNav({ userEmail, extra }) {
   const pathname = usePathname()
   const cartCount = useCartCount(userEmail)
 
-  const isActive = (href) => pathname?.startsWith(href)
+  const isActive = (href) => href === '/' ? pathname === '/' : pathname?.startsWith(href)
 
   // Reserve room for the fixed mobile bottom tab bar so page content never
   // sits underneath it. Applied via a body class instead of touching every
@@ -200,7 +201,7 @@ export default function DBBNav({ userEmail, extra }) {
       <header className="sticky top-0 z-40 dbb-glass-chrome">
         <div className="container mx-auto px-4 h-14 sm:h-[60px] flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Link href="/library" className="text-lg font-bold text-gray-900 hover:text-dbb-accent transition-colors tracking-heading">
+            <Link href="/" className="text-lg font-bold text-gray-900 hover:text-dbb-accent transition-colors tracking-heading">
               <span className="font-display text-xl">DBB</span>
               <span className="ml-1.5 text-sm font-medium text-gray-500 hidden lg:inline">Dan's Bizarre Bazaar</span>
             </Link>
