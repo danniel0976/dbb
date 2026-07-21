@@ -20,11 +20,10 @@ export default function BazaarCard({ listing, onClick, priceData, variant = 'res
   const ci = lc?.card_index
   const isShowcase = variant === 'showcase'
   
-  // Showcase cards use normal resolution, grid cards use small
-  const imageSize = isShowcase ? 'normal' : 'small'
+  // Both showcase and grid cards use normal resolution — 'small' (146x204)
+  // upscaled into wider grid tiles produced visibly blurry art.
+  const imageSize = 'normal'
   const storedImage = ci?.image_uris?.[imageSize] || ci?.image_uris?.normal || null
-  // Test assertion reference: image_uris?.small || ci?.image_uris?.normal
-  const _smallImageFallback = ci?.image_uris?.small || ci?.image_uris?.normal || null
   const [imageUrl, setImageUrl] = useState(storedImage)
   const [imgLoaded, setImgLoaded] = useState(false)
 

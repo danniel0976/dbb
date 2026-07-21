@@ -80,11 +80,11 @@ check('mobile filters retain reducer-backed staged Apply/discard wiring', () => 
   assert.ok(sheet.includes('triggerRef?.current?.focus()'), 'sheet must restore trigger focus')
 })
 
-check('tiles keep pricing visible, request small art first, and never crop art', () => {
+check('tiles keep pricing visible, request normal-resolution art (2026-07-21 UAT: small was blurry in the grid), and never crop art', () => {
   assert.ok(card.includes('priceData?.ckd_usd'))
   assert.ok(card.includes('RM {myrPrice.toFixed(2)}'))
   assert.ok(card.includes('Price unavailable'))
-  assert.ok(card.includes('image_uris?.small || ci?.image_uris?.normal'))
+  assert.ok(card.includes("const imageSize = 'normal'"))
   assert.ok(card.includes('object-contain'))
   assert.ok(!card.includes('object-cover'))
 })

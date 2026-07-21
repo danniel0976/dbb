@@ -363,18 +363,19 @@ export default function BazaarDetailModal({ listing, onClose, onSelectListing, u
           {/* Scrollable single-column content */}
           <div className="flex-1 overflow-y-auto">
             <div className="space-y-5 p-4">
-              {/* Card image — full width of inspector, normal resolution */}
-              <div className="w-full">
+              {/* Card image — height-capped so name/price/sellers stay visible
+                  below without scrolling on a typical ~900px viewport */}
+              <div className="w-full flex justify-center">
                 {cardLoading ? (
-                  <div className="aspect-[5/7] skeleton rounded-dbb-lg" />
+                  <div className="aspect-[5/7] max-h-[32vh] w-auto skeleton rounded-dbb-lg" />
                 ) : imageUrl ? (
                   <img
                     src={imageUrl}
                     alt={cardName}
-                    className="w-full h-auto rounded-dbb-lg object-contain shadow-dbb-md"
+                    className="max-h-[32vh] w-auto rounded-dbb-lg object-contain shadow-dbb-md"
                   />
                 ) : (
-                  <div className="flex aspect-[5/7] items-center justify-center rounded-dbb-lg bg-gray-100">
+                  <div className="flex aspect-[5/7] max-h-[32vh] w-auto items-center justify-center rounded-dbb-lg bg-gray-100">
                     <span className="p-2 text-center text-dbb-sm text-gray-500">{cardName}</span>
                   </div>
                 )}
@@ -566,18 +567,18 @@ export default function BazaarDetailModal({ listing, onClose, onSelectListing, u
 
         {/* Scrollable single-column content */}
         <div className="space-y-5 p-4 pb-8">
-          {/* Card image — full width, normal resolution */}
-          <div className="w-full">
+          {/* Card image — height-capped, consistent with the desktop panel */}
+          <div className="w-full flex justify-center">
             {cardLoading ? (
-              <div className="aspect-[5/7] skeleton rounded-dbb-lg" />
+              <div className="aspect-[5/7] max-h-[32vh] w-auto skeleton rounded-dbb-lg" />
             ) : imageUrl ? (
               <img
                 src={imageUrl}
                 alt={cardName}
-                className="w-full h-auto rounded-dbb-lg object-contain shadow-dbb-md"
+                className="max-h-[32vh] w-auto rounded-dbb-lg object-contain shadow-dbb-md"
               />
             ) : (
-              <div className="flex aspect-[5/7] items-center justify-center rounded-dbb-lg bg-gray-100">
+              <div className="flex aspect-[5/7] max-h-[32vh] w-auto items-center justify-center rounded-dbb-lg bg-gray-100">
                 <span className="p-2 text-center text-dbb-sm text-gray-500">{cardName}</span>
               </div>
             )}

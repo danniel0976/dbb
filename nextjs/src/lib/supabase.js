@@ -9,6 +9,12 @@ if (!supabaseUrl || !supabaseAnonKey) {
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
+// Escapes POSIX ERE metacharacters so user-typed search text can't inject
+// regex syntax into an `imatch` (~*) filter.
+function escapeRegex(str) {
+  return str.replace(/[.^$*+?()[\]{}|\\]/g, '\\$&')
+}
+
 // Scryfall API for images
 export const scryfallAPI = {
   getCardImages: async (setCode, collectorNumber) => {
@@ -163,7 +169,7 @@ export const cardQueries = {
     if (filters.isFoil !== undefined && filters.isFoil !== null) query = query.eq('is_foil', filters.isFoil)
     if (filters.minPrice) query = query.gte('myr_price_2_8', filters.minPrice)
     if (filters.maxPrice) query = query.lte('myr_price_2_8', filters.maxPrice)
-    if (filters.search && filters.search.trim()) query = query.ilike('card_name', `%${filters.search.trim()}%`)
+    if (filters.search && filters.search.trim()) query = query.regexIMatch('card_name', `\\m${escapeRegex(filters.search.trim())}`)
 
     // Apply DB-level ordering
     switch (sortBy) {
