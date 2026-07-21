@@ -43,7 +43,7 @@ export default function LibraryCard({ libraryRow, onStar, onDelete, onOpen, dimm
 
   return (
     <article
-      className={['group relative flex flex-col overflow-hidden rounded-[12px] bg-white shadow-sm transition-shadow duration-200 dark:bg-dbb-secondary', isFoil && 'foil-card', dimmed && 'opacity-50'].filter(Boolean).join(' ')}
+      className={['group relative flex flex-col overflow-hidden rounded-dbb-lg bg-white shadow-dbb-sm spring-press transition-shadow duration-200', isFoil && 'foil-card', dimmed && 'opacity-50'].filter(Boolean).join(' ')}
     >
       {/* Image area */}
       <div
@@ -51,7 +51,7 @@ export default function LibraryCard({ libraryRow, onStar, onDelete, onOpen, dimm
         tabIndex={0}
         aria-label={`View details for ${ci?.name || 'card'}`}
         onKeyDown={handleOpenKeyDown}
-        className="relative aspect-[5/7] cursor-pointer bg-gray-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-dbb-accent dark:bg-dbb-primary"
+        className="relative aspect-[5/7] cursor-pointer bg-gray-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-dbb-accent"
         onClick={() => onOpen(libraryRow)}
       >
         {!imgLoaded && !imgError && (
@@ -69,7 +69,7 @@ export default function LibraryCard({ libraryRow, onStar, onDelete, onOpen, dimm
         )}
         {imgError && (
           <div className="absolute inset-0 flex items-center justify-center p-2">
-            <span className="text-gray-400 dark:text-gray-500 text-xs text-center">{ci?.name || 'Unknown card'}</span>
+            <span className="text-gray-400 text-xs text-center">{ci?.name || 'Unknown card'}</span>
           </div>
         )}
 
@@ -105,22 +105,22 @@ export default function LibraryCard({ libraryRow, onStar, onDelete, onOpen, dimm
       {/* Card info */}
       <div className="flex flex-col gap-1.5 p-3">
         <div className="min-w-0">
-          <h3 className="truncate text-dbb-sm font-semibold leading-tight text-gray-900 dark:text-gray-100" title={ci?.name}>
+          <h3 className="truncate text-dbb-sm font-semibold leading-tight text-gray-900" title={ci?.name}>
             {ci?.name || '—'}
           </h3>
         </div>
 
-        <div className="flex min-w-0 items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+        <div className="flex min-w-0 items-center gap-1.5 text-xs text-gray-500">
           <span className="truncate uppercase tracking-wide">{ci?.set_code || '—'}</span>
-          <span aria-hidden="true" className="text-gray-300 dark:text-gray-600">·</span>
-          <span className="truncate font-medium text-gray-600 dark:text-gray-300">
+          <span aria-hidden="true" className="text-gray-300">·</span>
+          <span className="truncate font-medium text-gray-600">
             {libraryRow.condition || '—'}
           </span>
         </div>
 
         {/* Price remains visible on the card face, including before pricing resolves. */}
         <div className="pt-0.5">
-          <span className="text-dbb-sm font-medium price-green">
+          <span className="text-dbb-sm font-semibold text-dbb-price">
             RM {myrPrice != null ? myrPrice.toFixed(2) : '—'}
           </span>
         </div>

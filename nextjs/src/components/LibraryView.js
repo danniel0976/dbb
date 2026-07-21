@@ -554,7 +554,7 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
   const skeletonGrid = (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
       {Array.from({ length: 12 }).map((_, i) => (
-        <div key={i} className="overflow-hidden rounded-[12px] bg-white shadow-sm dark:bg-dbb-secondary">
+        <div key={i} className="overflow-hidden rounded-dbb-lg bg-white shadow-dbb-sm">
           <div className="aspect-[5/7] card-skeleton" />
           <div className="space-y-2 p-3">
             <div className="h-3 skeleton rounded w-3/4" />
@@ -573,7 +573,7 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
       {/* Library summary and disciplined action hierarchy */}
       <div className="mb-4 flex items-end justify-between gap-4">
         <div>
-          <p className="text-dbb-sm text-gray-500 dark:text-gray-400">
+          <p className="text-dbb-sm text-gray-500">
             {total} card{total !== 1 ? 's' : ''}{binderId ? ' in this binder' : ' in your collection'}
           </p>
         </div>
@@ -590,13 +590,13 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
       <div className="dbb-glass-chrome sticky top-[56px] z-20 -mx-2 mb-4 rounded-[16px] p-2 sm:static sm:mx-0 sm:rounded-[16px] sm:p-3">
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative min-w-[min(100%,220px)] flex-1">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-gray-500" />
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
           <input
             type="text"
             placeholder="Search by name..."
             value={q}
             onChange={(e) => handleSearchChange(e.target.value)}
-            className="min-h-11 w-full rounded-[12px] border border-black/10 bg-white/80 pl-9 pr-12 text-[16px] text-gray-900 outline-none placeholder:text-gray-400 focus:border-dbb-accent dark:border-white/10 dark:bg-dbb-secondary/80 dark:text-white dark:placeholder:text-gray-600"
+            className="min-h-11 w-full rounded-[12px] border border-black/10 bg-white/80 pl-9 pr-12 text-[16px] text-gray-900 outline-none placeholder:text-gray-400 focus:border-dbb-accent"
           />
           {q && (
             <button
@@ -604,19 +604,19 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
               onClick={() => handleSearchChange('')}
               aria-label="Clear search"
               title="Clear search"
-              className="absolute right-1 top-1/2 flex min-h-9 min-w-9 -translate-y-1/2 items-center justify-center rounded-full text-gray-400 transition-colors hover:text-red-400"
+              className="absolute right-1 top-1/2 flex min-h-9 min-w-9 -translate-y-1/2 items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-dbb-accent/10 hover:text-dbb-accent"
             >
               <X className="h-4 w-4" />
             </button>
           )}
           </div>
-          <label className="flex min-h-11 items-center gap-2 rounded-[12px] border border-black/10 bg-white/70 px-3 text-sm text-gray-600 dark:border-white/10 dark:bg-dbb-secondary/70 dark:text-gray-300">
-            <SortAsc className="h-4 w-4 text-gray-400 dark:text-gray-500" />
+          <label className="flex min-h-11 items-center gap-2 rounded-[12px] border border-black/10 bg-white/70 px-3 text-sm text-gray-600">
+            <SortAsc className="h-4 w-4 text-gray-400" />
             <span className="sr-only">Sort library</span>
           <select
             value={sort}
             onChange={(e) => handleSortChange(e.target.value)}
-              className="bg-transparent text-sm text-gray-900 outline-none dark:text-white"
+              className="bg-transparent text-sm text-gray-900 outline-none"
           >
             {SORTS.map(s => (
               <option key={s.value} value={s.value}>{s.label}</option>
@@ -631,10 +631,10 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
             else setMultiSelect(true)
           }}
           title={multiSelect ? 'Exit multi-select' : 'Multi-select'}
-          className={`flex min-h-11 items-center gap-2 rounded-[12px] border px-3 text-sm transition-colors ${
+          className={`flex min-h-11 items-center gap-2 rounded-[12px] border px-3 text-sm transition-colors spring-press ${
             multiSelect
               ? 'border-dbb-accent text-dbb-accent bg-dbb-accent/10'
-              : 'border-gray-200 dark:border-dbb-tertiary/50 text-gray-500 dark:text-gray-400 hover:border-dbb-accent/50'
+              : 'border-gray-200 text-gray-500 hover:bg-dbb-accent/10 hover:text-dbb-accent hover:border-dbb-accent/50'
           }`}
         >
           <CheckSquare className="h-4 w-4" />
@@ -644,10 +644,10 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
         {/* Filters button */}
         <button
           onClick={() => setShowPanel(v => !v)}
-          className={`flex min-h-11 items-center gap-1.5 rounded-[12px] border px-3 text-sm transition-colors ${
+          className={`flex min-h-11 items-center gap-1.5 rounded-[12px] border px-3 text-sm transition-colors spring-press ${
             showPanel || filterActive
               ? 'border-dbb-accent text-dbb-accent bg-dbb-accent/10'
-              : 'border-gray-200 dark:border-dbb-tertiary/50 text-gray-500 dark:text-gray-400 hover:border-dbb-accent/50'
+              : 'border-gray-200 text-gray-500 hover:bg-dbb-accent/10 hover:text-dbb-accent hover:border-dbb-accent/50'
           }`}
         >
           <Filter className="w-4 h-4" />
@@ -676,7 +676,7 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
           ))}
           <button
             onClick={handleClearAllFilters}
-            className="text-xs text-gray-600 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 underline transition-colors"
+            className="text-xs text-gray-600 hover:text-dbb-accent underline transition-colors"
           >
             Clear all
           </button>
@@ -697,14 +697,14 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
 
       {/* Multi-select header bar */}
       {multiSelect && (
-        <div className="mb-4 flex min-h-11 items-center gap-3 rounded-[12px] bg-black/[.04] px-4 py-2.5 dark:bg-white/[.06]">
+        <div className="mb-4 flex min-h-11 items-center gap-3 rounded-[12px] bg-black/[.04] px-4 py-2.5">
           {/* Select-all / status label */}
           {selectingAll ? (
             <span className="text-sm text-dbb-accent animate-pulse">
               Selecting all…
             </span>
           ) : selectedCount > 0 && selectedCount === total ? (
-            <span className="text-sm font-medium text-green-600 dark:text-green-400">
+            <span className="text-sm font-medium text-green-600">
               ✓ All {total} selected
             </span>
           ) : selectedCount > 0 ? (
@@ -726,7 +726,7 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
 
           {/* Counter - always prominent when in multi-select */}
           {selectedCount > 0 && (
-            <span className="text-sm font-medium text-gray-900 dark:text-white">
+            <span className="text-sm font-medium text-gray-900">
               {selectedCount === total
                 ? `${selectedCount} selected`
                 : `${selectedCount} of ${total} selected`}
@@ -737,7 +737,7 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
           {selectedCount > 0 && (
             <button
               onClick={clearSelection}
-              className="ml-auto flex items-center gap-1.5 px-3 py-1 text-sm border border-gray-300 dark:border-dbb-tertiary/50 text-gray-600 dark:text-gray-300 rounded-dbb hover:border-red-400 hover:text-red-500 dark:hover:border-red-500 dark:hover:text-red-400 transition-colors"
+              className="ml-auto flex items-center gap-1.5 px-3 py-1 text-sm border border-gray-300 text-gray-600 rounded-dbb hover:border-red-400 hover:text-red-500 transition-colors"
             >
               <X className="w-3.5 h-3.5" />
               Clear all
@@ -752,7 +752,7 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
       ) : cards.length === 0 ? (
         <div className="text-center py-24">
           <div className="text-5xl mb-4">📦</div>
-          <h2 className="text-xl font-semibold mb-2 text-gray-700 dark:text-gray-300">
+          <h2 className="text-xl font-semibold mb-2 text-gray-700">
             {filterActive || q ? 'No cards match your filters' : 'Your library is empty'}
           </h2>
           <p className="text-gray-500 mb-6">
@@ -819,10 +819,10 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
 
           <div ref={sentinelRef} className="h-12 flex items-center justify-center mt-4">
             {loadingMore && (
-              <span className="text-sm text-gray-600 dark:text-gray-500">Loading more...</span>
+              <span className="text-sm text-gray-600">Loading more...</span>
             )}
             {!hasMore && cards.length > 0 && (
-              <span className="text-sm text-gray-500 dark:text-gray-600">All {total} cards loaded</span>
+              <span className="text-sm text-gray-500">All {total} cards loaded</span>
             )}
           </div>
         </>
@@ -830,21 +830,21 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
 
       {/* Multi-select action bar (fixed bottom) */}
       {multiSelect && selectedCount > 0 && (
-        <div className="dbb-glass-chrome dbb-glass-chrome--edge-top fixed bottom-0 left-0 right-0 z-40 border-t border-black/10 dark:border-white/10">
+        <div className="dbb-glass-chrome dbb-glass-chrome--edge-top fixed bottom-0 left-0 right-0 z-40 border-t border-black/10">
           <div className="container mx-auto flex items-center gap-3 px-4 py-3 pb-[calc(12px+env(safe-area-inset-bottom))]">
-            <span className="text-sm font-medium text-gray-900 dark:text-white">
+            <span className="text-sm font-medium text-gray-900">
               {selectedCount} selected
             </span>
             <div className="ml-auto flex items-center gap-2">
               <button
                 onClick={() => handleBulkStar(true)}
-                className="flex min-h-11 items-center gap-1.5 rounded-[12px] border border-black/10 bg-white/60 px-3 text-sm text-gray-700 transition-colors hover:border-dbb-gold hover:text-dbb-gold dark:border-white/10 dark:bg-white/10 dark:text-gray-200"
+                className="flex min-h-11 items-center gap-1.5 rounded-[12px] border border-black/10 bg-white/60 px-3 text-sm text-gray-700 transition-colors hover:border-dbb-gold hover:text-dbb-gold"
               >
                 <Star className="w-4 h-4" /> Star all
               </button>
               <button
                 onClick={() => setShowBinderPicker(true)}
-                className="hidden min-h-11 items-center gap-1.5 rounded-[12px] border border-black/10 bg-white/60 px-3 text-sm text-gray-700 transition-colors hover:border-dbb-accent hover:text-dbb-accent dark:border-white/10 dark:bg-white/10 dark:text-gray-200 sm:flex"
+                className="hidden min-h-11 items-center gap-1.5 rounded-[12px] border border-black/10 bg-white/60 px-3 text-sm text-gray-700 transition-colors hover:border-dbb-accent hover:text-dbb-accent sm:flex"
               >
                 <FolderOpen className="w-4 h-4" /> Move to binder
               </button>
@@ -852,23 +852,23 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
                 <button
                   onClick={() => setShowMoreBulkActions(v => !v)}
                   aria-expanded={showMoreBulkActions}
-                  className="flex min-h-11 items-center gap-1.5 rounded-[12px] border border-black/10 bg-white/60 px-3 text-sm text-gray-700 transition-colors hover:border-dbb-accent dark:border-white/10 dark:bg-white/10 dark:text-gray-200"
+                  className="flex min-h-11 items-center gap-1.5 rounded-[12px] border border-black/10 bg-white/60 px-3 text-sm text-gray-700 transition-colors hover:border-dbb-accent"
                 >
                   More <ChevronDown className={`h-4 w-4 transition-transform ${showMoreBulkActions ? 'rotate-180' : ''}`} />
                 </button>
                 {showMoreBulkActions && (
                   <div className="dbb-glass-sheet absolute bottom-full right-0 mb-2 w-48 rounded-[16px] p-1 shadow-xl">
-                    <button onClick={() => handleBulkStar(false)} className="flex min-h-11 w-full items-center gap-2 rounded-[10px] px-3 text-left text-sm text-gray-700 hover:bg-black/5 dark:text-gray-200 dark:hover:bg-white/10"><StarOff className="h-4 w-4" /> Unstar all</button>
-                    <button onClick={() => setShowBinderPicker(true)} className="flex min-h-11 w-full items-center gap-2 rounded-[10px] px-3 text-left text-sm text-gray-700 hover:bg-black/5 dark:text-gray-200 dark:hover:bg-white/10 sm:hidden"><FolderOpen className="h-4 w-4" /> Move to binder</button>
-                    <button onClick={() => setShowListPicker(true)} className="flex min-h-11 w-full items-center gap-2 rounded-[10px] px-3 text-left text-sm text-gray-700 hover:bg-black/5 dark:text-gray-200 dark:hover:bg-white/10"><Tag className="h-4 w-4" /> List on Bazaar</button>
-                    <button onClick={handleBulkDelete} className="flex min-h-11 w-full items-center gap-2 rounded-[10px] px-3 text-left text-sm text-red-600 hover:bg-black/5 dark:text-red-400 dark:hover:bg-white/10"><Trash2 className="h-4 w-4" /> Delete all</button>
+                    <button onClick={() => handleBulkStar(false)} className="flex min-h-11 w-full items-center gap-2 rounded-[10px] px-3 text-left text-sm text-gray-700 hover:bg-black/5"><StarOff className="h-4 w-4" /> Unstar all</button>
+                    <button onClick={() => setShowBinderPicker(true)} className="flex min-h-11 w-full items-center gap-2 rounded-[10px] px-3 text-left text-sm text-gray-700 hover:bg-black/5 sm:hidden"><FolderOpen className="h-4 w-4" /> Move to binder</button>
+                    <button onClick={() => setShowListPicker(true)} className="flex min-h-11 w-full items-center gap-2 rounded-[10px] px-3 text-left text-sm text-gray-700 hover:bg-black/5"><Tag className="h-4 w-4" /> List on Bazaar</button>
+                    <button onClick={handleBulkDelete} className="flex min-h-11 w-full items-center gap-2 rounded-[10px] px-3 text-left text-sm text-red-600 hover:bg-black/5"><Trash2 className="h-4 w-4" /> Delete all</button>
                   </div>
                 )}
               </div>
               <button
                 onClick={exitMultiSelect}
                 aria-label="Exit multi-select"
-                className="flex h-11 w-11 items-center justify-center text-gray-500 transition-colors hover:text-gray-900 dark:hover:text-white"
+                className="flex h-11 w-11 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-dbb-accent/10 hover:text-dbb-accent"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -918,31 +918,31 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
           className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
           onClick={(e) => { if (e.target === e.currentTarget) setShowListPicker(false) }}
         >
-          <div className="bg-white dark:bg-dbb-primary border border-dbb-accent/30 rounded-dbb max-w-sm w-full p-6 shadow-2xl">
+          <div className="bg-white border border-dbb-accent/30 rounded-dbb max-w-sm w-full p-6 shadow-2xl">
             {listMode === null && (
               <>
                 <h3 className="text-lg font-bold mb-1">List on Bazaar</h3>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                <p className="text-sm text-gray-500 mb-4">
                   {selectedCount} card{selectedCount !== 1 ? 's' : ''} selected
                 </p>
-                <p className="text-xs text-gray-600 dark:text-gray-400 mb-3 font-medium">Sell as singles or put up for claim sale?</p>
+                <p className="text-xs text-gray-600 mb-3 font-medium">Sell as singles or put up for claim sale?</p>
                 <div className="flex gap-3 mb-4">
                   <button
                     onClick={() => setListMode('singles')}
-                    className="flex-1 py-3 border border-gray-200 dark:border-dbb-tertiary/50 hover:border-dbb-accent text-gray-600 dark:text-gray-300 hover:text-dbb-accent rounded-dbb text-sm font-medium transition-colors flex items-center justify-center gap-1.5"
+                    className="flex-1 py-3 border border-gray-200 hover:border-dbb-accent text-gray-600 hover:text-dbb-accent rounded-dbb text-sm font-medium transition-colors flex items-center justify-center gap-1.5"
                   >
                     <Tag className="w-4 h-4" /> Singles
                   </button>
                   <button
                     onClick={() => setListMode('claim')}
-                    className="flex-1 py-3 border border-gray-200 dark:border-dbb-tertiary/50 hover:border-dbb-accent text-gray-600 dark:text-gray-300 hover:text-dbb-accent rounded-dbb text-sm font-medium transition-colors flex items-center justify-center gap-1.5"
+                    className="flex-1 py-3 border border-gray-200 hover:border-dbb-accent text-gray-600 hover:text-dbb-accent rounded-dbb text-sm font-medium transition-colors flex items-center justify-center gap-1.5"
                   >
                     <Package className="w-4 h-4" /> Claim Sale
                   </button>
                 </div>
                 <button
                   onClick={() => { setShowListPicker(false); setListMode(null) }}
-                  className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
+                  className="text-sm text-gray-500 hover:text-dbb-accent transition-colors"
                 >
                   Cancel
                 </button>
@@ -952,11 +952,11 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
             {listMode === 'singles' && (
               <>
                 <h3 className="text-lg font-bold mb-1">List as Singles</h3>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                <p className="text-sm text-gray-500 mb-4">
                   {selectedCount} card{selectedCount !== 1 ? 's' : ''} · Price = CKD USD × multiplier
                 </p>
 
-                <p className="text-xs text-gray-600 dark:text-gray-500 mb-1.5 font-medium">Multiplier</p>
+                <p className="text-xs text-gray-600 mb-1.5 font-medium">Multiplier</p>
                 <div className="flex gap-3 mb-4">
                   {[2.5, 2.8, 3.0].map(m => (
                     <button
@@ -965,7 +965,7 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
                       className={`flex-1 py-3 rounded-dbb border text-sm font-semibold transition-colors ${
                         listMultiplier === m
                           ? 'border-dbb-accent bg-dbb-accent/10 text-dbb-accent'
-                          : 'border-gray-200 dark:border-dbb-tertiary/50 text-gray-500 dark:text-gray-400 hover:border-dbb-accent/50'
+                          : 'border-gray-200 text-gray-500 hover:border-dbb-accent/50'
                       }`}
                     >
                       ×{m}
@@ -973,7 +973,7 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
                   ))}
                 </div>
 
-                <p className="text-xs text-gray-600 dark:text-gray-500 mb-1.5 font-medium">Duration (max 24h)</p>
+                <p className="text-xs text-gray-600 mb-1.5 font-medium">Duration (max 24h)</p>
                 <div className="flex gap-2 mb-4">
                   {[1, 3, 6, 12, 24].map(h => (
                     <button
@@ -982,7 +982,7 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
                       className={`flex-1 py-2 rounded-dbb border text-xs font-medium transition-colors ${
                         listDuration === h
                           ? 'border-dbb-accent bg-dbb-accent/10 text-dbb-accent'
-                          : 'border-gray-200 dark:border-dbb-tertiary/50 text-gray-600 dark:text-gray-500 hover:border-gray-400 dark:hover:border-gray-500'
+                          : 'border-gray-200 text-gray-600 hover:border-gray-400 '
                       }`}
                     >
                       {h}h
@@ -992,10 +992,10 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
 
                 {/* Per-card quantities */}
                 <div className="mb-4 max-h-40 overflow-y-auto">
-                  <p className="text-xs text-gray-600 dark:text-gray-500 mb-1.5 font-medium">Quantities</p>
+                  <p className="text-xs text-gray-600 mb-1.5 font-medium">Quantities</p>
                   {selectedCards.map(c => (
                     <div key={c.id} className="flex items-center gap-2 py-1">
-                      <span className="text-xs text-gray-600 dark:text-gray-400 flex-1 truncate">
+                      <span className="text-xs text-gray-600 flex-1 truncate">
                         {c.card_index?.name || 'Card'}{(c.foil && c.foil !== 'normal') ? ` (${c.foil})` : ''}
                       </span>
                       <input
@@ -1007,7 +1007,7 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
                           const v = Math.max(1, Math.min(c.quantity || 1, parseInt(e.target.value) || 1))
                           setListQuantities(prev => ({ ...prev, [c.id]: v }))
                         }}
-                        className="w-14 text-center bg-white dark:bg-dbb-secondary border border-gray-200 dark:border-dbb-tertiary/50 rounded px-1 py-0.5 text-xs focus:border-dbb-accent focus:outline-none"
+                        className="w-14 text-center bg-white border border-gray-200 rounded px-1 py-0.5 text-xs focus:border-dbb-accent focus:outline-none"
                       />
                       <span className="text-[10px] text-gray-500">of {c.quantity || 1}</span>
                     </div>
@@ -1035,7 +1035,7 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
             {listMode === 'claim' && (
               <>
                 <h3 className="text-lg font-bold mb-1">Claim Sale</h3>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                <p className="text-sm text-gray-500 mb-4">
                   {selectedCount} card{selectedCount !== 1 ? 's' : ''} in one claim sale
                 </p>
 
@@ -1045,25 +1045,25 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
                     placeholder="Claim sale title"
                     value={csTitle}
                     onChange={(e) => setCsTitle(e.target.value)}
-                    className="w-full bg-white dark:bg-dbb-secondary border border-gray-200 dark:border-dbb-tertiary/50 rounded-dbb px-3 py-2 text-sm focus:border-dbb-accent focus:outline-none placeholder-gray-400 dark:placeholder-gray-600"
+                    className="w-full bg-white border border-gray-200 rounded-dbb px-3 py-2 text-sm focus:border-dbb-accent focus:outline-none placeholder-gray-400"
                   />
                   <textarea
                     placeholder="Description (optional)"
                     value={csDescription}
                     onChange={(e) => setCsDescription(e.target.value)}
                     rows={2}
-                    className="w-full bg-white dark:bg-dbb-secondary border border-gray-200 dark:border-dbb-tertiary/50 rounded-dbb px-3 py-2 text-sm focus:border-dbb-accent focus:outline-none placeholder-gray-400 dark:placeholder-gray-600 resize-none"
+                    className="w-full bg-white border border-gray-200 rounded-dbb px-3 py-2 text-sm focus:border-dbb-accent focus:outline-none placeholder-gray-400 resize-none"
                   />
                   <input
                     type="text"
                     placeholder="Set code (optional)"
                     value={csSetCode}
                     onChange={(e) => setCsSetCode(e.target.value)}
-                    className="w-full bg-white dark:bg-dbb-secondary border border-gray-200 dark:border-dbb-tertiary/50 rounded-dbb px-3 py-2 text-sm focus:border-dbb-accent focus:outline-none placeholder-gray-400 dark:placeholder-gray-600"
+                    className="w-full bg-white border border-gray-200 rounded-dbb px-3 py-2 text-sm focus:border-dbb-accent focus:outline-none placeholder-gray-400"
                   />
 
                   <div>
-                    <p className="text-xs text-gray-600 dark:text-gray-500 mb-1.5 font-medium">Duration (max 24h)</p>
+                    <p className="text-xs text-gray-600 mb-1.5 font-medium">Duration (max 24h)</p>
                     <div className="flex gap-1.5">
                       {[1, 3, 6, 12, 24].map(h => (
                         <button
@@ -1072,7 +1072,7 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
                           className={`flex-1 py-1.5 rounded border text-xs font-medium transition-colors ${
                             listDuration === h
                               ? 'border-dbb-accent bg-dbb-accent/10 text-dbb-accent'
-                              : 'border-gray-200 dark:border-dbb-tertiary/50 text-gray-600 dark:text-gray-500 hover:border-gray-400 dark:hover:border-gray-500'
+                              : 'border-gray-200 text-gray-600 hover:border-gray-400 '
                           }`}
                         >
                           {h}h
@@ -1082,7 +1082,7 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
                   </div>
 
                   <div>
-                    <p className="text-xs text-gray-600 dark:text-gray-500 mb-1.5 font-medium">Delivery</p>
+                    <p className="text-xs text-gray-600 mb-1.5 font-medium">Delivery</p>
                     <div className="flex gap-2">
                       {[
                         { value: 'pickup', label: 'TCG store pickup' },
@@ -1093,7 +1093,7 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
                           className={`flex-1 py-1.5 rounded border text-xs font-medium transition-colors ${
                             csDelivery === opt.value
                               ? 'border-dbb-accent bg-dbb-accent/10 text-dbb-accent'
-                              : 'border-gray-200 dark:border-dbb-tertiary/50 text-gray-600 dark:text-gray-500 hover:border-gray-400 dark:hover:border-gray-500'
+                              : 'border-gray-200 text-gray-600 hover:border-gray-400 '
                           }`}
                         >
                           {opt.label}
@@ -1132,11 +1132,11 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
         const cardName = card?.card_index?.name || 'Selected card'
         return (
           <div className="fixed inset-0 z-[70] bg-black/80 flex items-center justify-center p-4">
-            <div className="bg-white dark:bg-dbb-primary border border-dbb-accent/30 rounded-dbb max-w-md w-full p-5 shadow-2xl max-h-[95vh] overflow-y-auto">
+            <div className="bg-white border border-dbb-accent/30 rounded-dbb max-w-md w-full p-5 shadow-2xl max-h-[95vh] overflow-y-auto">
               <div className="flex items-start justify-between gap-3 mb-3">
                 <div>
-                  <h3 className="font-bold text-gray-900 dark:text-white">Add condition photos</h3>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                  <h3 className="font-bold text-gray-900">Add condition photos</h3>
+                  <p className="text-sm text-gray-500">
                     Card {photoCaptureIndex + 1} of {missingPhotoIds.length}: {cardName}
                   </p>
                   <p className="text-xs text-gray-500 mt-1">
@@ -1145,7 +1145,7 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
                 </div>
                 <button
                   onClick={() => { setMissingPhotoIds([]); setPhotoCaptureIndex(0); setShowListPicker(true) }}
-                  className="p-1 text-gray-500 hover:text-gray-900 dark:hover:text-white"
+                  className="rounded-full p-1 text-gray-500 transition-colors hover:bg-dbb-accent/10 hover:text-dbb-accent"
                   aria-label="Close photo capture"
                 >
                   <X className="w-5 h-5" />
