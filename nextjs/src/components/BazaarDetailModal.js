@@ -340,13 +340,13 @@ export default function BazaarDetailModal({ listing, onClose, onSelectListing, u
       <div className="hidden lg:block fixed inset-0 z-40">
         {/* Backdrop - click to close */}
         <div
-          className="absolute inset-0 bg-black/30"
+          className="absolute inset-0 bg-black/50"
           onClick={handleClose}
           aria-hidden="true"
         />
-        
+
         {/* Inspector panel */}
-        <div data-testid="bazaar-detail-panel" className="absolute top-0 right-0 h-full w-[480px] max-w-[90vw] bg-white shadow-2xl flex flex-col">
+        <div data-testid="bazaar-detail-panel" className="absolute top-0 right-0 h-full w-[480px] max-w-[90vw] bg-white border-l border-gray-200 shadow-[-12px_0_40px_-8px_rgba(0,0,0,0.35)] flex flex-col">
           {/* Header — glass chrome */}
           <div className="dbb-glass-chrome flex shrink-0 items-center justify-between gap-3 px-4 py-3">
             <h2 className="truncate text-dbb-lg font-semibold tracking-heading text-gray-900">{cardName}</h2>
@@ -354,7 +354,7 @@ export default function BazaarDetailModal({ listing, onClose, onSelectListing, u
               ref={closeBtnRef}
               onClick={handleClose}
               aria-label="Close"
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-black/5 hover:text-gray-900 spring-press"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-dbb-accent/10 hover:text-dbb-accent spring-press"
             >
               <X className="h-5 w-5" />
             </button>
@@ -500,7 +500,7 @@ export default function BazaarDetailModal({ listing, onClose, onSelectListing, u
                               className={`flex min-h-[44px] flex-shrink-0 items-center justify-center px-6 text-dbb-sm font-medium transition-colors spring-press ${
                                 isSelected
                                   ? 'bg-dbb-accent text-white'
-                                  : 'bg-gray-100 text-gray-600 hover:bg-dbb-accent hover:text-white'
+                                  : 'bg-dbb-accent/10 text-dbb-accent border border-dbb-accent/30 hover:bg-dbb-accent hover:text-white'
                               }`}
                             >
                               {isSelected ? (
@@ -510,7 +510,7 @@ export default function BazaarDetailModal({ listing, onClose, onSelectListing, u
                               )}
                             </button>
                           </div>
-                          
+
                           {/* Row 3: Condition proof button (full width) */}
                           <button
                             onClick={() => setProofListingId(s.id)}
@@ -542,7 +542,7 @@ export default function BazaarDetailModal({ listing, onClose, onSelectListing, u
           >
             <button
               onClick={handleClose}
-              className="min-h-[44px] px-4 text-dbb-sm text-gray-500 transition-colors hover:text-gray-900 spring-press"
+              className="min-h-[44px] rounded-dbb-md px-4 text-dbb-sm text-gray-600 transition-colors hover:bg-dbb-accent/10 hover:text-dbb-accent spring-press"
             >
               Close
             </button>
@@ -559,7 +559,7 @@ export default function BazaarDetailModal({ listing, onClose, onSelectListing, u
             ref={closeBtnRef}
             onClick={handleClose}
             aria-label="Close"
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-black/5 hover:text-gray-900 spring-press"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-dbb-accent/10 hover:text-dbb-accent spring-press"
           >
             <X className="h-5 w-5" />
           </button>
@@ -703,7 +703,7 @@ export default function BazaarDetailModal({ listing, onClose, onSelectListing, u
                           className={`flex min-h-[44px] flex-shrink-0 items-center justify-center px-6 text-dbb-sm font-medium transition-colors spring-press ${
                             isSelected
                               ? 'bg-dbb-accent text-white'
-                              : 'bg-gray-100 text-gray-600 hover:bg-dbb-accent hover:text-white'
+                              : 'bg-dbb-accent/10 text-dbb-accent border border-dbb-accent/30 hover:bg-dbb-accent hover:text-white'
                           }`}
                         >
                           {isSelected ? (
