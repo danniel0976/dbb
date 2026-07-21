@@ -185,7 +185,7 @@ test.describe('Library Detail Inspector (Pass C2)', () => {
     expect(wrappedToLast).toBe(true);
   });
 
-  test('photo-gate: listing a photo-less card opens the camera; cancel clears the pending action', async ({ page, context }) => {
+  test('photo-gate: listing a photo-less card opens the camera; cancel clears the pending action', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await login(page);
 
@@ -228,9 +228,8 @@ test.describe('Library Detail Inspector (Pass C2)', () => {
     await expect(cameraCancel).toBeVisible({ timeout: 8000 });
 
     // Cancel the camera — this must clear pendingPhotoAction without retrying the list.
-    const cancelBtns = panel.locator('button', { hasText: '' }).filter({ has: page.locator('svg') });
-    // The camera's cancel control is an X-icon-only button adjacent to the shutter/error copy.
-    // Use its accessible structure: it's the last button in the camera's own action row.
+    // The camera's cancel control is an X-icon-only button adjacent to the shutter/error copy;
+    // it's the last button in the camera's own action row.
     await panel.locator('button:has(svg)').last().click();
 
     // After cancelling, the "List on Bazaar" CTA (or the photo-required copy) should be
