@@ -55,8 +55,8 @@ export default function ClaimSaleForm({ libraryRow, onCancel, onRequirePhoto }) 
   }
 
   return (
-    <div className="pt-2 border-t border-black/5 dark:border-white/10 space-y-3">
-      <p className="text-xs text-gray-600 dark:text-gray-400 font-medium flex items-center gap-1">
+    <div className="pt-2 border-t border-black/5 space-y-3">
+      <p className="text-xs text-gray-600 font-medium flex items-center gap-1">
         <Package className="w-3 h-3" /> Claim Sale
       </p>
 
@@ -66,7 +66,7 @@ export default function ClaimSaleForm({ libraryRow, onCancel, onRequirePhoto }) 
           placeholder="Claim sale title (e.g. Modern staples sale)"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          className="w-full bg-white dark:bg-dbb-secondary border border-gray-200 dark:border-gray-700 rounded px-3 py-1.5 text-sm focus:border-dbb-accent focus:outline-none placeholder-gray-400 dark:placeholder-gray-600"
+          className="w-full bg-white border border-gray-200 rounded px-3 py-1.5 text-sm focus:border-dbb-accent focus:outline-none placeholder-gray-400"
         />
       </div>
 
@@ -76,7 +76,7 @@ export default function ClaimSaleForm({ libraryRow, onCancel, onRequirePhoto }) 
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           rows={2}
-          className="w-full bg-white dark:bg-dbb-secondary border border-gray-200 dark:border-gray-700 rounded px-3 py-1.5 text-sm focus:border-dbb-accent focus:outline-none placeholder-gray-400 dark:placeholder-gray-600 resize-none"
+          className="w-full bg-white border border-gray-200 rounded px-3 py-1.5 text-sm focus:border-dbb-accent focus:outline-none placeholder-gray-400 resize-none"
         />
       </div>
 
@@ -86,7 +86,7 @@ export default function ClaimSaleForm({ libraryRow, onCancel, onRequirePhoto }) 
           placeholder="Set code (optional, e.g. MKM)"
           value={setCode}
           onChange={(e) => setSetCode(e.target.value)}
-          className="w-full bg-white dark:bg-dbb-secondary border border-gray-200 dark:border-gray-700 rounded px-3 py-1.5 text-sm focus:border-dbb-accent focus:outline-none placeholder-gray-400 dark:placeholder-gray-600"
+          className="w-full bg-white border border-gray-200 rounded px-3 py-1.5 text-sm focus:border-dbb-accent focus:outline-none placeholder-gray-400"
         />
       </div>
 
@@ -100,7 +100,7 @@ export default function ClaimSaleForm({ libraryRow, onCancel, onRequirePhoto }) 
               className={`flex-1 py-1.5 rounded border text-xs font-medium transition-colors ${
                 durationHours === hours
                   ? 'border-dbb-accent bg-dbb-accent/10 text-dbb-accent'
-                  : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-500 hover:border-gray-400 dark:hover:border-gray-500'
+                  : 'border-gray-200 text-gray-600 hover:border-gray-400'
               }`}
             >
               {label}
@@ -121,7 +121,7 @@ export default function ClaimSaleForm({ libraryRow, onCancel, onRequirePhoto }) 
               className={`flex-1 py-1.5 rounded border text-xs font-medium transition-colors ${
                 deliveryOption === opt.value
                   ? 'border-dbb-accent bg-dbb-accent/10 text-dbb-accent'
-                  : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-500 hover:border-gray-400 dark:hover:border-gray-500'
+                  : 'border-gray-200 text-gray-600 hover:border-gray-400'
               }`}
             >
               {opt.label}
@@ -137,7 +137,7 @@ export default function ClaimSaleForm({ libraryRow, onCancel, onRequirePhoto }) 
           <div className="flex items-center gap-2">
             <button
               onClick={() => setCsQuantity(q => Math.max(1, q - 1))}
-              className="p-1 rounded bg-gray-100 dark:bg-dbb-secondary hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+              className="p-1 rounded bg-gray-100 hover:bg-gray-200 transition-colors"
             >
               <Minus className="w-4 h-4" />
             </button>
@@ -150,11 +150,11 @@ export default function ClaimSaleForm({ libraryRow, onCancel, onRequirePhoto }) 
                 const v = parseInt(e.target.value) || 1
                 setCsQuantity(Math.max(1, Math.min(ownedQty, v)))
               }}
-              className="w-16 text-center bg-white dark:bg-dbb-secondary border border-gray-200 dark:border-gray-700 rounded px-2 py-1 text-sm focus:border-dbb-accent focus:outline-none"
+              className="w-16 text-center bg-white border border-gray-200 rounded px-2 py-1 text-sm focus:border-dbb-accent focus:outline-none"
             />
             <button
               onClick={() => setCsQuantity(q => Math.min(ownedQty, q + 1))}
-              className="p-1 rounded bg-gray-100 dark:bg-dbb-secondary hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+              className="p-1 rounded bg-gray-100 hover:bg-gray-200 transition-colors"
             >
               <Plus className="w-4 h-4" />
             </button>
@@ -173,7 +173,7 @@ export default function ClaimSaleForm({ libraryRow, onCancel, onRequirePhoto }) 
         </button>
         <button
           onClick={onCancel}
-          className="px-3 py-1.5 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
+          className="px-3 py-1.5 text-sm text-gray-500 hover:text-gray-900 transition-colors"
         >
           Cancel
         </button>

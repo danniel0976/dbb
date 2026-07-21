@@ -137,7 +137,7 @@ export default function ListingSection({ libraryRow, hasPhoto, onRequirePhoto })
 
   if (listing === undefined) {
     return (
-      <div className="flex items-center gap-2 text-xs text-gray-600 pt-2 border-t border-black/5 dark:border-white/10">
+      <div className="flex items-center gap-2 text-xs text-gray-600 pt-2 border-t border-black/5">
         <Loader2 className="w-3 h-3 animate-spin" /> Checking bazaar status...
       </div>
     )
@@ -151,7 +151,7 @@ export default function ListingSection({ libraryRow, hasPhoto, onRequirePhoto })
   // Not listed yet — show a "List on Bazaar" button (not the picker right away)
   if (!listing && !showPicker && !showClaimSale && !showListPrompt) {
     return (
-      <div className="pt-2 border-t border-black/5 dark:border-white/10">
+      <div className="pt-2 border-t border-black/5">
         <button
           onClick={() => {
             if (!hasPhoto) {
@@ -159,7 +159,7 @@ export default function ListingSection({ libraryRow, hasPhoto, onRequirePhoto })
               onRequirePhoto?.()
             } else { setShowListPrompt(true) }
           }}
-          className="flex items-center justify-center gap-2 w-full py-1.5 border border-gray-200 dark:border-gray-700 hover:border-dbb-accent text-gray-500 dark:text-gray-400 hover:text-dbb-accent rounded-lg text-xs font-medium transition-colors"
+          className="flex items-center justify-center gap-2 w-full py-1.5 border border-gray-200 hover:border-dbb-accent text-gray-500 hover:text-dbb-accent rounded-lg text-xs font-medium transition-colors"
         >
           <Tag className="w-3 h-3" />
           List on Bazaar
@@ -176,25 +176,25 @@ export default function ListingSection({ libraryRow, hasPhoto, onRequirePhoto })
   // Show listing type prompt: singles or claim sale
   if (showListPrompt && !showPicker && !showClaimSale) {
     return (
-      <div className="pt-2 border-t border-black/5 dark:border-white/10 space-y-3">
-        <p className="text-xs text-gray-600 dark:text-gray-400 font-medium">Sell as singles or put up for claim sale?</p>
+      <div className="pt-2 border-t border-black/5 space-y-3">
+        <p className="text-xs text-gray-600 font-medium">Sell as singles or put up for claim sale?</p>
         <div className="flex gap-2">
           <button
             onClick={() => { setShowListPrompt(false); setShowPicker(true) }}
-            className="flex-1 py-2 border border-gray-200 dark:border-gray-700 hover:border-dbb-accent text-gray-600 dark:text-gray-300 hover:text-dbb-accent rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-1.5"
+            className="flex-1 py-2 border border-gray-200 hover:border-dbb-accent text-gray-600 hover:text-dbb-accent rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-1.5"
           >
             <Tag className="w-3 h-3" /> Singles
           </button>
           <button
             onClick={() => { setShowListPrompt(false); setShowClaimSale(true) }}
-            className="flex-1 py-2 border border-gray-200 dark:border-gray-700 hover:border-dbb-accent text-gray-600 dark:text-gray-300 hover:text-dbb-accent rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-1.5"
+            className="flex-1 py-2 border border-gray-200 hover:border-dbb-accent text-gray-600 hover:text-dbb-accent rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-1.5"
           >
             <Package className="w-3 h-3" /> Claim Sale
           </button>
         </div>
         <button
           onClick={() => setShowListPrompt(false)}
-          className="text-xs text-gray-500 hover:text-gray-900 dark:hover:text-white transition-colors"
+          className="text-xs text-gray-500 hover:text-gray-900 transition-colors"
         >
           Cancel
         </button>
@@ -220,13 +220,13 @@ export default function ListingSection({ libraryRow, hasPhoto, onRequirePhoto })
     // Photo gate — shouldn't happen (button above checks), but block at render level too
     if (!hasPhoto) {
       return (
-        <div className="pt-2 border-t border-black/5 dark:border-white/10 space-y-2">
+        <div className="pt-2 border-t border-black/5 space-y-2">
           <p className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded px-2 py-1.5">
             A card photo is required before listing. Please take a photo above.
           </p>
           <button
             onClick={() => { setShowPicker(false); setIsRelist(false); setPhotoRequired(false) }}
-            className="text-xs text-gray-500 hover:text-gray-900 dark:hover:text-white transition-colors"
+            className="text-xs text-gray-500 hover:text-gray-900 transition-colors"
           >
             Cancel
           </button>
@@ -236,7 +236,7 @@ export default function ListingSection({ libraryRow, hasPhoto, onRequirePhoto })
 
     if (merchantProfileRequired) {
       return (
-        <div className="pt-2 border-t border-black/5 dark:border-white/10 space-y-2">
+        <div className="pt-2 border-t border-black/5 space-y-2">
           <p className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded px-2 py-1.5">
             Complete your seller payment information in Profile before listing or relisting.
           </p>
@@ -246,7 +246,7 @@ export default function ListingSection({ libraryRow, hasPhoto, onRequirePhoto })
             </a>
             <button
               onClick={() => { setMerchantProfileRequired(false); setShowPicker(false); setIsRelist(false) }}
-              className="text-xs text-gray-500 hover:text-gray-900 dark:hover:text-white transition-colors"
+              className="text-xs text-gray-500 hover:text-gray-900 transition-colors"
             >
               Cancel
             </button>
@@ -256,9 +256,9 @@ export default function ListingSection({ libraryRow, hasPhoto, onRequirePhoto })
     }
 
     return (
-      <div className="pt-2 border-t border-black/5 dark:border-white/10">
+      <div className="pt-2 border-t border-black/5">
         <div className="space-y-3">
-          <p className="text-xs text-gray-600 dark:text-gray-400 font-medium">
+          <p className="text-xs text-gray-600 font-medium">
             {isRelisting ? 'Relist on Bazaar' : 'List on Bazaar'}
           </p>
 
@@ -275,7 +275,7 @@ export default function ListingSection({ libraryRow, hasPhoto, onRequirePhoto })
                     className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-colors ${
                       multiplier === m
                         ? 'border-dbb-accent bg-dbb-accent/10 text-dbb-accent'
-                        : 'border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:border-dbb-accent/50'
+                        : 'border-gray-200 text-gray-500 hover:border-dbb-accent/50'
                     }`}
                   >
                     <div>×{m}</div>
@@ -297,7 +297,7 @@ export default function ListingSection({ libraryRow, hasPhoto, onRequirePhoto })
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => setListQuantity(q => Math.max(1, q - 1))}
-                  className="p-1 rounded bg-gray-100 dark:bg-dbb-secondary hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                  className="p-1 rounded bg-gray-100 hover:bg-gray-200 transition-colors"
                 >
                   <Minus className="w-4 h-4" />
                 </button>
@@ -310,11 +310,11 @@ export default function ListingSection({ libraryRow, hasPhoto, onRequirePhoto })
                     const v = parseInt(e.target.value) || 1
                     setListQuantity(Math.max(1, Math.min(ownedQty, v)))
                   }}
-                  className="w-16 text-center bg-white dark:bg-dbb-secondary border border-gray-200 dark:border-gray-700 rounded px-2 py-1 text-sm focus:border-dbb-accent focus:outline-none"
+                  className="w-16 text-center bg-white border border-gray-200 rounded px-2 py-1 text-sm focus:border-dbb-accent focus:outline-none"
                 />
                 <button
                   onClick={() => setListQuantity(q => Math.min(ownedQty, q + 1))}
-                  className="p-1 rounded bg-gray-100 dark:bg-dbb-secondary hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                  className="p-1 rounded bg-gray-100 hover:bg-gray-200 transition-colors"
                 >
                   <Plus className="w-4 h-4" />
                 </button>
@@ -334,7 +334,7 @@ export default function ListingSection({ libraryRow, hasPhoto, onRequirePhoto })
                   className={`flex-1 py-1.5 rounded border text-xs font-medium transition-colors ${
                     durationHours === hours
                       ? 'border-dbb-accent bg-dbb-accent/10 text-dbb-accent'
-                      : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-500 hover:border-gray-400 dark:hover:border-gray-500'
+                      : 'border-gray-200 text-gray-600 hover:border-gray-400'
                   }`}
                 >
                   {label}
@@ -353,7 +353,7 @@ export default function ListingSection({ libraryRow, hasPhoto, onRequirePhoto })
             </button>
             <button
               onClick={() => { setShowPicker(false); setIsRelist(false) }}
-              className="px-3 py-1.5 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
+              className="px-3 py-1.5 text-sm text-gray-500 hover:text-gray-900 transition-colors"
             >
               Cancel
             </button>
@@ -367,7 +367,7 @@ export default function ListingSection({ libraryRow, hasPhoto, onRequirePhoto })
   const expiredQty = listing.quantity || 1
   if (isExpired) {
     return (
-      <div className="pt-2 border-t border-black/5 dark:border-white/10">
+      <div className="pt-2 border-t border-black/5">
         <div className="flex items-center justify-between">
           <span className="flex items-center gap-1 text-xs font-medium text-orange-400 bg-orange-500/10 border border-orange-500/30 rounded px-2 py-0.5">
             <Tag className="w-3 h-3" /> Listing Expired
@@ -392,7 +392,7 @@ export default function ListingSection({ libraryRow, hasPhoto, onRequirePhoto })
   const listedQty = listing.quantity || 1
 
   return (
-    <div className="pt-2 border-t border-black/5 dark:border-white/10">
+    <div className="pt-2 border-t border-black/5">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <span className="flex items-center gap-1 text-xs font-medium text-green-400 bg-green-500/10 border border-green-500/30 rounded px-2 py-0.5">

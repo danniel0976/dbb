@@ -52,8 +52,8 @@ export default function PhotoSection({ libraryRow, listing, onPhotoChange, force
 
   if (photoUrl === undefined) {
     return (
-      <div className="pt-2 border-t border-black/5 dark:border-white/10">
-        <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-600">
+      <div className="pt-2 border-t border-black/5">
+        <div className="flex items-center gap-2 text-xs text-gray-500">
           <Loader2 className="w-3 h-3 animate-spin" /> Loading photo...
         </div>
       </div>
@@ -61,13 +61,13 @@ export default function PhotoSection({ libraryRow, listing, onPhotoChange, force
   }
 
   return (
-    <div className="pt-2 border-t border-black/5 dark:border-white/10 space-y-2">
+    <div className="pt-2 border-t border-black/5 space-y-2">
       <div className="flex items-center justify-between">
-        <p className="text-xs font-medium text-gray-600 dark:text-gray-400">Card photo</p>
+        <p className="text-xs font-medium text-gray-600">Card photo</p>
         {photoUrl && !showCamera && (
           <button
             onClick={() => setShowCamera(true)}
-            className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-900 dark:hover:text-white transition-colors"
+            className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-900 transition-colors"
           >
             <RotateCcw className="w-3 h-3" /> Retake
           </button>
@@ -88,7 +88,7 @@ export default function PhotoSection({ libraryRow, listing, onPhotoChange, force
           <img
             src={photoUrl}
             alt="Card photo"
-            className="w-full max-h-40 object-contain rounded-dbb-md bg-gray-100 dark:bg-dbb-secondary"
+            className="w-full max-h-40 object-contain rounded-dbb-md bg-gray-100"
           />
           <button
             onClick={handleOpenLightbox}
@@ -99,10 +99,10 @@ export default function PhotoSection({ libraryRow, listing, onPhotoChange, force
         </div>
       ) : (
         <div className="space-y-2">
-          <p className="text-xs text-gray-500 dark:text-gray-600">No photo yet — required before listing.</p>
+          <p className="text-xs text-gray-500">No photo yet — required before listing.</p>
           <button
             onClick={() => setShowCamera(true)}
-            className="flex items-center justify-center gap-2 w-full py-2 border border-dashed border-gray-300 dark:border-gray-600 hover:border-dbb-accent text-gray-400 hover:text-dbb-accent rounded-lg text-xs transition-colors"
+            className="flex items-center justify-center gap-2 w-full py-2 border border-dashed border-gray-300 hover:border-dbb-accent text-gray-400 hover:text-dbb-accent rounded-lg text-xs transition-colors"
           >
             <Camera className="w-4 h-4" />
             Take Photo
