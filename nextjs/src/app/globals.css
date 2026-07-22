@@ -52,7 +52,7 @@
   --glass-chrome-blur: 24px;
   --glass-chrome-bg: rgba(255, 255, 255, 0.72);
   --glass-sheet-blur: 24px;
-  --glass-sheet-bg: rgba(255, 255, 255, 0.80);
+  --glass-sheet-bg: rgba(255, 255, 255, 0.94);
   --glass-partition-bg: rgba(255, 255, 255, 0.72);
   --glass-scrim: rgba(0, 0, 0, 0.35);
 }
@@ -273,7 +273,11 @@ body {
   }
 }
 
-/* Floating glass sheet — account menu dropdown, condition proof modal */
+/* Floating glass sheet — account menu dropdown (DBBNav), library bulk-actions
+   dropdown (LibraryView). Not the condition-proof modal — that uses
+   .dbb-glass-chrome (confirmed by grep, Phase 44 Pass D3); comment corrected
+   since both actual consumers are floating menus over busy content and
+   benefit equally from the raised opacity below. */
 .dbb-glass-sheet {
   background: var(--glass-sheet-bg);
   -webkit-backdrop-filter: blur(var(--glass-sheet-blur)) saturate(180%);
@@ -367,4 +371,20 @@ body {
 /* Sidebar transitions */
 .sidebar-transition {
   transition: transform 0.3s ease-in-out;
+}
+
+/* Foil/etched spectrum border (Phase 44 Pass D2) — signals a foil card via a
+   holographic ring instead of a corner badge, so it never competes with the
+   Star toggle's top-right corner on LibraryCard. Built from colors already
+   established in tailwind.config.js (accent red, rarity gold, MTG green/blue,
+   dbb-pink) rather than inventing a new palette. The dual-background-layer +
+   background-clip trick keeps the ring inside the card's own border-radius
+   (a pseudo-element ring would get cut off by the card's overflow-hidden). */
+.foil-card {
+  border: 2px solid transparent;
+  background-image:
+    linear-gradient(rgb(var(--dbb-surface-rgb)), rgb(var(--dbb-surface-rgb))),
+    linear-gradient(135deg, rgb(var(--dbb-accent-rgb)), #f4d03f, #27ae60, #4a90e2, #E02179, rgb(var(--dbb-accent-rgb)));
+  background-origin: border-box;
+  background-clip: padding-box, border-box;
 }

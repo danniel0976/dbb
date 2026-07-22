@@ -11,6 +11,39 @@ import { X, Star, Minus, Plus, Trash2 } from 'lucide-react'
 const CONDITIONS = ['M', 'NM', 'LP', 'MP', 'HP', 'DMG']
 const FOILS = ['normal', 'foil', 'etched']
 
+const DETAIL_TABS = [
+  { id: 'details', label: 'Details', testId: 'library-detail-tab-details' },
+  { id: 'photo', label: 'Condition Photo', testId: 'library-detail-tab-photo' },
+  { id: 'fbsale', label: 'Facebook Sale', testId: 'library-detail-tab-fbsale' },
+]
+
+// idPrefix namespaces the ids per breakpoint tree — CardDetailModal renders
+// both the desktop panel and mobile sheet simultaneously (only one visible
+// per CSS breakpoint, an established pattern in this file), so a bare id
+// would collide as a duplicate DOM id between the two trees.
+function DetailTabBar({ activeTab, onChange, idPrefix }) {
+  return (
+    <div role="tablist" aria-label="Card detail sections" className="flex shrink-0 items-center gap-1 p-1 h-11 rounded-full bg-gray-100 mx-4 mt-3">
+      {DETAIL_TABS.map(tab => (
+        <button
+          key={tab.id}
+          role="tab"
+          id={`${idPrefix}-tabbtn-${tab.id}`}
+          data-testid={tab.testId}
+          aria-selected={activeTab === tab.id}
+          aria-controls={`${idPrefix}-tabpanel-${tab.id}`}
+          onClick={() => onChange(tab.id)}
+          className={`flex-1 h-full rounded-full text-dbb-xs font-medium transition-colors spring-press ${
+            activeTab === tab.id ? 'bg-white text-gray-900 shadow-dbb-sm' : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          {tab.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 export default function CardDetailModal({ libraryRow, onClose, onSave, onDelete }) {
   const { toast } = useToast()
   const [cardData, setCardData] = useState(null)
@@ -24,6 +57,7 @@ export default function CardDetailModal({ libraryRow, onClose, onSave, onDelete 
   const [forcePhotoCamera, setForcePhotoCamera] = useState(false)
   const [pendingPhotoAction, setPendingPhotoAction] = useState(null)
   const [showMore, setShowMore] = useState(false) // gates the destructive "Remove" affordance one level deeper
+  const [activeTab, setActiveTab] = useState('details')
 
   const sheetRef = useRef(null)
   const closeBtnRef = useRef(null)
@@ -307,40 +341,90 @@ export default function CardDetailModal({ libraryRow, onClose, onSave, onDelete 
     </div>
   )
 
-  const photoAndListing = (
-    <>
-      {/* Card photo */}
-      <PhotoSection
-        libraryRow={libraryRow}
-        listing={currentListing}
-        onPhotoChange={setHasPhoto}
-        forceCamera={forcePhotoCamera}
-        onCameraOpened={() => setForcePhotoCamera(false)}
-        onCaptureComplete={() => {
-          if (pendingPhotoAction) {
-            const retry = pendingPhotoAction
-            setPendingPhotoAction(null)
-            retry()
-          }
-        }}
-        onCaptureCancel={() => setPendingPhotoAction(null)}
-      />
-
-      <FacebookSaleImage
-        libraryRow={libraryRow}
-        hasPhoto={hasPhoto}
-        hasUnsavedDetails={condition !== libraryRow.condition || foil !== libraryRow.foil}
-      />
-
-      {/* Bazaar listing */}
+  // Tab "Details": art + metadata + editable fields + listing controls + more
+  // options. ListingSection lives here rather than a separate tab — it's
+  // edit-adjacent (list/unlist/relist) and has no natural home of its own.
+  const detailsTab = (
+    <div className="space-y-5">
+      {artBlock}
+      {metadataBlock}
+      {editableFields}
       <ListingSection
         libraryRow={libraryRow}
         hasPhoto={hasPhoto}
         onRequirePhoto={(retry) => {
           if (retry) setPendingPhotoAction(() => retry)
           setForcePhotoCamera(true)
+          setActiveTab('photo')
         }}
       />
+      {moreOptions}
+    </div>
+  )
+
+  // Tab "Condition Photo"
+  const photoTab = (
+    <PhotoSection
+      libraryRow={libraryRow}
+      listing={currentListing}
+      onPhotoChange={setHasPhoto}
+      forceCamera={forcePhotoCamera}
+      onCameraOpened={() => setForcePhotoCamera(false)}
+      onCaptureComplete={() => {
+        if (pendingPhotoAction) {
+          const retry = pendingPhotoAction
+          setPendingPhotoAction(null)
+          retry()
+        }
+      }}
+      onCaptureCancel={() => setPendingPhotoAction(null)}
+    />
+  )
+
+  // Tab "Facebook Sale"
+  const fbSaleTab = (
+    <FacebookSaleImage
+      libraryRow={libraryRow}
+      hasPhoto={hasPhoto}
+      hasUnsavedDetails={condition !== libraryRow.condition || foil !== libraryRow.foil}
+    />
+  )
+
+  // All 3 panels stay mounted (just visibility-toggled) rather than
+  // unmounting on tab switch — PhotoSection owns `hasPhoto` via
+  // onPhotoChange, and ListingSection (in the Details tab) needs that value
+  // correct from the moment the modal opens, not only after the user has
+  // visited the Photo tab at least once.
+  // idPrefix namespaces ids per breakpoint tree — see the note on DetailTabBar.
+  const renderTabContent = (idPrefix) => (
+    <>
+      <div
+        role="tabpanel"
+        id={`${idPrefix}-tabpanel-details`}
+        data-testid="library-detail-tabpanel-details"
+        aria-labelledby={`${idPrefix}-tabbtn-details`}
+        className={activeTab === 'details' ? '' : 'hidden'}
+      >
+        {detailsTab}
+      </div>
+      <div
+        role="tabpanel"
+        id={`${idPrefix}-tabpanel-photo`}
+        data-testid="library-detail-tabpanel-photo"
+        aria-labelledby={`${idPrefix}-tabbtn-photo`}
+        className={activeTab === 'photo' ? '' : 'hidden'}
+      >
+        {photoTab}
+      </div>
+      <div
+        role="tabpanel"
+        id={`${idPrefix}-tabpanel-fbsale`}
+        data-testid="library-detail-tabpanel-fbsale"
+        aria-labelledby={`${idPrefix}-tabbtn-fbsale`}
+        className={activeTab === 'fbsale' ? '' : 'hidden'}
+      >
+        {fbSaleTab}
+      </div>
     </>
   )
 
@@ -394,14 +478,12 @@ export default function CardDetailModal({ libraryRow, onClose, onSave, onDelete 
             </button>
           </div>
 
-          {/* Scrollable single-column content */}
+          <DetailTabBar activeTab={activeTab} onChange={setActiveTab} idPrefix="library-detail-panel" />
+
+          {/* Scrollable tabbed content */}
           <div className="flex-1 overflow-y-auto overscroll-contain">
-            <div className="space-y-5 p-4">
-              {artBlock}
-              {metadataBlock}
-              {editableFields}
-              {photoAndListing}
-              {moreOptions}
+            <div className="p-4">
+              {renderTabContent('library-detail-panel')}
             </div>
           </div>
 
@@ -436,14 +518,12 @@ export default function CardDetailModal({ libraryRow, onClose, onSave, onDelete 
           </button>
         </div>
 
-        {/* Scrollable single-column content */}
+        <DetailTabBar activeTab={activeTab} onChange={setActiveTab} idPrefix="library-detail-sheet" />
+
+        {/* Scrollable tabbed content */}
         <div className="flex-1 overflow-y-auto overscroll-contain">
-          <div className="space-y-5 p-4">
-            {artBlock}
-            {metadataBlock}
-            {editableFields}
-            {photoAndListing}
-            {moreOptions}
+          <div className="p-4">
+            {renderTabContent('library-detail-sheet')}
           </div>
         </div>
 

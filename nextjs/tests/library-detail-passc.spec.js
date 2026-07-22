@@ -221,7 +221,12 @@ test.describe('Library Detail Inspector (Pass C2)', () => {
     // Attempting to list without a photo routes into the camera (CameraCapture renders
     // either a live viewfinder or a permission/device error state — both are valid outcomes
     // in a headless CI browser without a real camera; either way its Cancel affordance
-    // must appear, proving the retry choreography opened the camera).
+    // must appear, proving the retry choreography opened the camera). Pass D wraps this
+    // content behind a "Condition Photo" tab, so this also proves the forced-camera flow
+    // auto-switches the active tab rather than opening the camera invisibly.
+    const photoTabBtn = panel.locator('[data-testid="library-detail-tab-photo"]');
+    await expect(photoTabBtn).toHaveAttribute('aria-selected', 'true', { timeout: 8000 });
+
     const cameraCancel = panel.locator('[data-testid="portrait-camera-viewport"]').or(
       panel.getByText(/camera is required|camera permission/i)
     );
@@ -235,5 +240,51 @@ test.describe('Library Detail Inspector (Pass C2)', () => {
     // After cancelling, the "List on Bazaar" CTA (or the photo-required copy) should be
     // showing again — not stuck mid-listing, and no listing was created.
     await expect(panel.getByText(/List on Bazaar|photo is required|No photo yet/i).first()).toBeVisible({ timeout: 5000 });
+  });
+
+  test('tabs: Details/Condition Photo/Facebook Sale switch content, Details is the default', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await login(page);
+
+    const firstCard = page.locator('[aria-label^="View details for"]').first();
+    await firstCard.click();
+
+    const panel = page.locator('[data-testid="library-detail-panel"]');
+    await expect(panel).toBeVisible({ timeout: 5000 });
+
+    const detailsTabBtn = panel.locator('[data-testid="library-detail-tab-details"]');
+    const photoTabBtn = panel.locator('[data-testid="library-detail-tab-photo"]');
+    const fbsaleTabBtn = panel.locator('[data-testid="library-detail-tab-fbsale"]');
+    // Scoped to `panel` (not `page`) — the desktop panel and mobile sheet
+    // trees both exist in the DOM at once (only one visible per CSS
+    // breakpoint), so an unscoped page-level locator would match 2 elements.
+    const detailsPanel = panel.locator('[data-testid="library-detail-tabpanel-details"]');
+    const photoPanel = panel.locator('[data-testid="library-detail-tabpanel-photo"]');
+    const fbsalePanel = panel.locator('[data-testid="library-detail-tabpanel-fbsale"]');
+
+    // Details tab is active by default — quantity/condition fields visible, others hidden.
+    await expect(detailsTabBtn).toHaveAttribute('aria-selected', 'true');
+    await expect(detailsPanel).toBeVisible();
+    await expect(photoPanel).toBeHidden();
+    await expect(fbsalePanel).toBeHidden();
+
+    // Switch to Condition Photo.
+    await photoTabBtn.click();
+    await expect(photoTabBtn).toHaveAttribute('aria-selected', 'true');
+    await expect(detailsTabBtn).toHaveAttribute('aria-selected', 'false');
+    await expect(photoPanel).toBeVisible();
+    await expect(detailsPanel).toBeHidden();
+
+    // Switch to Facebook Sale.
+    await fbsaleTabBtn.click();
+    await expect(fbsaleTabBtn).toHaveAttribute('aria-selected', 'true');
+    await expect(fbsalePanel).toBeVisible();
+    await expect(photoPanel).toBeHidden();
+
+    // Switching back to Details preserves quantity field state (panels stay mounted).
+    await detailsTabBtn.click();
+    await expect(detailsPanel).toBeVisible();
+    const qtyInput = detailsPanel.locator('input[type="number"]').first();
+    await expect(qtyInput).toBeVisible();
   });
 });

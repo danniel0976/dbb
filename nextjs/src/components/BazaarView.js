@@ -372,57 +372,61 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
 
   return (
     <div className="min-h-screen">
+      {/* Page title + Singles/Claim Sales segmented control — hoisted above the
+          bazaarSection conditional (Phase 44 Pass D4) so the tab control stays
+          visible and clickable regardless of which section is active; it used
+          to live only inside the "singles" branch, unmounting itself (with no
+          way back) the instant Claim Sales was selected. */}
+      <div className="container mx-auto px-4 pt-6 pb-3">
+        <div className="flex items-baseline gap-3 flex-wrap">
+          <h1 className="text-dbb-xl sm:text-dbb-2xl font-bold tracking-heading text-gray-900">Bazaar</h1>
+          {!loading && bazaarSection === 'singles' && (
+            <span className="text-dbb-sm text-gray-500">
+              {total} listing{total !== 1 ? 's' : ''}
+            </span>
+          )}
+        </div>
+
+        {/* Singles / Claim Sales segmented control */}
+        <div
+          role="tablist"
+          aria-label="Bazaar section"
+          className="relative inline-flex mt-4 p-1 h-11 rounded-full bg-gray-100"
+        >
+          <div
+            aria-hidden="true"
+            className="absolute top-1 bottom-1 w-[calc(50%-4px)] rounded-full bg-white shadow-dbb-sm transition-transform duration-200 ease-out"
+            style={{ transform: bazaarSection === 'claim_sales' ? 'translateX(calc(100% + 8px))' : 'translateX(0)' }}
+          />
+          <button
+            role="tab"
+            aria-selected={bazaarSection === 'singles'}
+            onClick={() => setBazaarSection('singles')}
+            className={`relative z-10 flex items-center gap-1.5 px-4 h-full rounded-full text-sm font-medium transition-colors ${
+              bazaarSection === 'singles' ? 'text-gray-900' : 'text-gray-500'
+            }`}
+          >
+            <Grid className="w-3.5 h-3.5" />
+            Singles
+          </button>
+          <button
+            role="tab"
+            aria-selected={bazaarSection === 'claim_sales'}
+            onClick={() => setBazaarSection('claim_sales')}
+            className={`relative z-10 flex items-center gap-1.5 px-4 h-full rounded-full text-sm font-medium transition-colors ${
+              bazaarSection === 'claim_sales' ? 'text-gray-900' : 'text-gray-500'
+            }`}
+          >
+            <Layers className="w-3.5 h-3.5" />
+            Claim Sales
+          </button>
+        </div>
+      </div>
+
       {bazaarSection === 'claim_sales' ? (
         <ClaimSalesBrowse userId={userId} />
       ) : (
         <div className="container mx-auto px-4 pb-8">
-          {/* Page title */}
-          <div className="pt-6 pb-3">
-            <div className="flex items-baseline gap-3 flex-wrap">
-              <h1 className="text-dbb-xl sm:text-dbb-2xl font-bold tracking-heading text-gray-900">Bazaar</h1>
-              {!loading && (
-                <span className="text-dbb-sm text-gray-500">
-                  {total} listing{total !== 1 ? 's' : ''}
-                </span>
-              )}
-            </div>
-
-            {/* Singles / Claim Sales segmented control */}
-            <div
-              role="tablist"
-              aria-label="Bazaar section"
-              className="relative inline-flex mt-4 p-1 h-11 rounded-full bg-gray-100"
-            >
-              <div
-                aria-hidden="true"
-                className="absolute top-1 bottom-1 w-[calc(50%-4px)] rounded-full bg-white shadow-dbb-sm transition-transform duration-200 ease-out"
-                style={{ transform: bazaarSection === 'claim_sales' ? 'translateX(calc(100% + 8px))' : 'translateX(0)' }}
-              />
-              <button
-                role="tab"
-                aria-selected={bazaarSection === 'singles'}
-                onClick={() => setBazaarSection('singles')}
-                className={`relative z-10 flex items-center gap-1.5 px-4 h-full rounded-full text-sm font-medium transition-colors ${
-                  bazaarSection === 'singles' ? 'text-gray-900' : 'text-gray-500'
-                }`}
-              >
-                <Grid className="w-3.5 h-3.5" />
-                Singles
-              </button>
-              <button
-                role="tab"
-                aria-selected={bazaarSection === 'claim_sales'}
-                onClick={() => setBazaarSection('claim_sales')}
-                className={`relative z-10 flex items-center gap-1.5 px-4 h-full rounded-full text-sm font-medium transition-colors ${
-                  bazaarSection === 'claim_sales' ? 'text-gray-900' : 'text-gray-500'
-                }`}
-              >
-                <Layers className="w-3.5 h-3.5" />
-                Claim Sales
-              </button>
-            </div>
-          </div>
-
           {/* SEARCH + FILTER BAR — Liquid Glass partition */}
           <div ref={filterPopoverRef} className="relative z-20 mb-5">
             <div className="sticky top-14 sm:top-[60px] z-30 -mx-4 px-4 py-3 dbb-glass-partition" style={{ backdropFilter: 'blur(24px) saturate(180%)' }}>

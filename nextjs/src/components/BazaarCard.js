@@ -71,7 +71,7 @@ export default function BazaarCard({ listing, onClick, priceData, variant = 'res
   if (isShowcase) {
     return (
       <div
-        className="group relative overflow-hidden rounded-dbb-lg bg-gradient-to-b from-white to-gray-50/50 shadow-dbb-sm spring-press focus-visible:outline focus-visible:outline-2 focus-visible:outline-dbb-accent"
+        className={['group relative overflow-hidden rounded-dbb-lg bg-gradient-to-b from-white to-gray-50/50 shadow-dbb-sm spring-press focus-visible:outline focus-visible:outline-2 focus-visible:outline-dbb-accent', foilBadge && 'foil-card'].filter(Boolean).join(' ')}
         onClick={onClick}
         role="button"
         tabIndex={0}
@@ -142,7 +142,7 @@ export default function BazaarCard({ listing, onClick, priceData, variant = 'res
   // Results/grid variant
   return (
     <div
-      className="group relative overflow-hidden rounded-dbb-lg bg-white shadow-dbb-sm spring-press focus-visible:outline focus-visible:outline-2 focus-visible:outline-dbb-accent dark:bg-dbb-secondary"
+      className={['group relative overflow-hidden rounded-dbb-lg bg-white shadow-dbb-sm spring-press focus-visible:outline focus-visible:outline-2 focus-visible:outline-dbb-accent dark:bg-dbb-secondary', foilBadge && 'foil-card'].filter(Boolean).join(' ')}
       onClick={onClick}
       role="button"
       tabIndex={0}

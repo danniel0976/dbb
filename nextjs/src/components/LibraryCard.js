@@ -80,10 +80,19 @@ export default function LibraryCard({ libraryRow, onStar, onDelete, onOpen, dimm
           </div>
         )}
 
-        {/* Foil badge */}
+        {/* Foil/etched — small badge, bottom-left (mirrors the qty badge's
+            top-left placement) so it never competes with Star's top-right
+            corner. The .foil-card spectrum border on the article is the
+            primary foil signal; this badge only disambiguates foil vs
+            etched at a glance. */}
         {isFoil && (
-          <div className="absolute right-2 top-2 rounded-full bg-black/75 px-2 py-1 text-[11px] font-semibold text-white">
-            {libraryRow.foil === 'etched' ? 'ETCHED' : 'FOIL'}
+          <div
+            className={`absolute left-2 bottom-2 flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold shadow-dbb-sm ${
+              libraryRow.foil === 'etched' ? 'bg-purple-400/90 text-black' : 'bg-yellow-400/90 text-black'
+            }`}
+            aria-label={libraryRow.foil === 'etched' ? 'Etched' : 'Foil'}
+          >
+            {libraryRow.foil === 'etched' ? 'E' : 'F'}
           </div>
         )}
 
