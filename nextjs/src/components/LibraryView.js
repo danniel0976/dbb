@@ -587,7 +587,13 @@ export default function LibraryView({ userId, initialData, binders = [], binderI
         </button>
       </div>
 
-      <div className="dbb-glass-chrome sticky top-[56px] z-20 -mx-2 mb-4 rounded-[16px] p-2 sm:static sm:mx-0 sm:rounded-[16px] sm:p-3">
+      {/* dbb-glass-rail-opaque (UAT M3): below `sm` this bar is sticky right
+          under the header (top-[56px] matches DBBNav's h-14 mobile height)
+          and pinned over a scrolling card grid; the default translucent
+          glass let cards bleed through and read as overlapping the rail.
+          Above `sm` it drops to `sm:static` in normal flow, so translucency
+          there is fine and the opaque override is a no-op. */}
+      <div className="dbb-glass-chrome dbb-glass-rail-opaque sticky top-[56px] z-20 -mx-2 mb-4 rounded-[16px] p-2 sm:static sm:mx-0 sm:rounded-[16px] sm:p-3">
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative min-w-[min(100%,220px)] flex-1">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />

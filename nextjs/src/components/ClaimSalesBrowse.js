@@ -192,7 +192,7 @@ function serializeClaimSalesQueryState(section, q) {
   return params
 }
 
-export default function ClaimSalesBrowse({ userId }) {
+export default function ClaimSalesBrowse({ userId, sectionTabs }) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const initialState = parseClaimSalesQueryState(searchParams)
@@ -341,8 +341,13 @@ export default function ClaimSalesBrowse({ userId }) {
 
   return (
     <div className="flex-1 lg:ml-72 p-4 lg:p-6">
-      {/* Section toggle + search */}
+      {/* Section toggle + search. `sectionTabs` (the Bazaar Singles/Claim
+          Sales segmented control, owned by BazaarView) renders as the first
+          control in this same row so the parent section selector shares one
+          rail with Hot/Ending Soon/search instead of floating as an
+          unrelated layer above it (UAT M2). */}
       <div className="mb-4 flex flex-wrap items-center gap-2">
+        {sectionTabs}
         <button
           onClick={() => setSection('hot')}
           className={`flex items-center gap-1.5 px-4 py-2 rounded-dbb text-dbb-sm font-medium transition-colors ${

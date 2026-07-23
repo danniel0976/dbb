@@ -245,6 +245,21 @@ body {
   background: var(--glass-chrome-bg);
   -webkit-backdrop-filter: blur(var(--glass-chrome-blur)) saturate(180%);
   backdrop-filter: blur(var(--glass-chrome-blur)) saturate(180%);
+}
+
+/* Phase 44 mobile alignment repair: `position: relative` needs to live here
+   as the anchor for the ::after scroll-edge fade below, but as a plain class
+   rule declared after `@tailwind utilities` it was tying (same 0,1,0
+   specificity) with — and, by source order, always beating — any `sticky`/
+   `fixed` utility applied alongside it in className. DBBNav's header/mobile
+   tab bar and Library's search chrome all combine `dbb-glass-chrome` with a
+   position utility and were silently stuck at `position: relative` as a
+   result (confirmed via computed styles) — the root cause behind UAT M3's
+   "sticky chrome isn't robust" finding. `:where()` has zero specificity, so
+   it always loses to a real utility class regardless of source order, while
+   still providing the fallback where no such utility is present (the modal
+   header chrome variants below).  */
+:where(.dbb-glass-chrome) {
   position: relative;
 }
 
@@ -311,6 +326,22 @@ body {
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
     background: var(--dbb-surface);
+  }
+}
+
+/* Phase 44 mobile alignment repair (UAT M3): sticky control rails (Library
+   search/sort/filter chrome, Bazaar's filter partition) sit directly over a
+   scrolling card grid at phone widths. The default glass treatment is
+   translucent + blurred, so cards scrolling underneath show through and read
+   as the rail overlapping the grid rather than sitting cleanly above it.
+   Force an opaque, unblurred background for these rails below the `sm`
+   breakpoint, where they're actually pinned over scrolling content; above it
+   they're either static-positioned or the translucency reads as intended. */
+@media (max-width: 639px) {
+  .dbb-glass-rail-opaque {
+    background: var(--dbb-surface);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
   }
 }
 

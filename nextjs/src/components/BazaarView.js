@@ -370,13 +370,70 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
     }
   }
 
+  // Singles / Claim Sales segmented control. Defined once and rendered from
+  // a single call site per render (the bazaarSection ternary below is
+  // mutually exclusive) so there is never more than one `[role="tablist"]`
+  // node in the DOM — Pass E's spec locates it by role+aria-label alone and
+  // would hit a Playwright strict-mode violation if a hidden duplicate ever
+  // existed alongside it.
+  //
+  // Phase 44 mobile alignment repair (UAT M1/M2): this used to render in its
+  // own page-title block above the search/filter/sort rail, and above
+  // ClaimSalesBrowse's own Hot/Ending Soon/search row — two competing
+  // control layers on a phone instead of one. It now renders inside
+  // whichever rail is actually visible (the Singles filter rail, or
+  // ClaimSalesBrowse's control row via the `sectionTabs` prop), still
+  // hoisted outside the bazaarSection conditional itself (Phase 44 Pass D4)
+  // so switching sections never unmounts it.
+  //
+  // The two labels ("Singles" vs "Claim Sales") aren't the same width, so
+  // plain inline-flex sized each button to its own content — the sliding
+  // highlight pill below (fixed at 50% of the container) then didn't land on
+  // the real button boundary and visibly overlapped/cropped whichever label
+  // was wider. inline-grid with two equal 1fr columns forces both buttons to
+  // the width of the wider one (Claim Sales) while the container still
+  // shrink-wraps to content, so the 50% pill math and the actual boundary
+  // always agree (Pass E fix). `self-start` keeps that shrink-wrap intact
+  // when the control sits inside a `flex-col` mobile rail, which would
+  // otherwise stretch it to the full rail width.
+  const sectionTabs = (
+    <div
+      role="tablist"
+      aria-label="Bazaar section"
+      className="relative inline-grid grid-cols-2 shrink-0 self-start p-1 h-11 rounded-full bg-gray-100"
+    >
+      <div
+        aria-hidden="true"
+        className="absolute top-1 bottom-1 left-1 w-[calc(50%-4px)] rounded-full bg-white shadow-dbb-sm transition-transform duration-200 ease-out"
+        style={{ transform: bazaarSection === 'claim_sales' ? 'translateX(calc(100% + 8px))' : 'translateX(0)' }}
+      />
+      <button
+        role="tab"
+        aria-selected={bazaarSection === 'singles'}
+        onClick={() => setBazaarSection('singles')}
+        className={`relative z-10 flex items-center justify-center gap-1.5 px-4 h-full whitespace-nowrap rounded-full text-sm font-medium transition-colors ${
+          bazaarSection === 'singles' ? 'text-gray-900' : 'text-gray-500'
+        }`}
+      >
+        <Grid className="w-3.5 h-3.5 shrink-0" />
+        Singles
+      </button>
+      <button
+        role="tab"
+        aria-selected={bazaarSection === 'claim_sales'}
+        onClick={() => setBazaarSection('claim_sales')}
+        className={`relative z-10 flex items-center justify-center gap-1.5 px-4 h-full whitespace-nowrap rounded-full text-sm font-medium transition-colors ${
+          bazaarSection === 'claim_sales' ? 'text-gray-900' : 'text-gray-500'
+        }`}
+      >
+        <Layers className="w-3.5 h-3.5 shrink-0" />
+        Claim Sales
+      </button>
+    </div>
+  )
+
   return (
     <div className="min-h-screen">
-      {/* Page title + Singles/Claim Sales segmented control — hoisted above the
-          bazaarSection conditional (Phase 44 Pass D4) so the tab control stays
-          visible and clickable regardless of which section is active; it used
-          to live only inside the "singles" branch, unmounting itself (with no
-          way back) the instant Claim Sales was selected. */}
       <div className="container mx-auto px-4 pt-6 pb-3">
         <div className="flex items-baseline gap-3 flex-wrap">
           <h1 className="text-dbb-xl sm:text-dbb-2xl font-bold tracking-heading text-gray-900">Bazaar</h1>
@@ -386,60 +443,24 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
             </span>
           )}
         </div>
-
-        {/* Singles / Claim Sales segmented control. The two labels ("Singles"
-            vs "Claim Sales") aren't the same width, so plain inline-flex
-            sized each button to its own content — the sliding highlight
-            pill below (fixed at 50% of the container) then didn't land on
-            the real button boundary and visibly overlapped/cropped
-            whichever label was wider. inline-grid with two equal 1fr
-            columns forces both buttons to the width of the wider one
-            (Claim Sales) while the container still shrink-wraps to content,
-            so the 50% pill math and the actual boundary always agree
-            (Pass E fix). */}
-        <div
-          role="tablist"
-          aria-label="Bazaar section"
-          className="relative inline-grid grid-cols-2 mt-4 p-1 h-11 rounded-full bg-gray-100"
-        >
-          <div
-            aria-hidden="true"
-            className="absolute top-1 bottom-1 left-1 w-[calc(50%-4px)] rounded-full bg-white shadow-dbb-sm transition-transform duration-200 ease-out"
-            style={{ transform: bazaarSection === 'claim_sales' ? 'translateX(calc(100% + 8px))' : 'translateX(0)' }}
-          />
-          <button
-            role="tab"
-            aria-selected={bazaarSection === 'singles'}
-            onClick={() => setBazaarSection('singles')}
-            className={`relative z-10 flex items-center justify-center gap-1.5 px-4 h-full whitespace-nowrap rounded-full text-sm font-medium transition-colors ${
-              bazaarSection === 'singles' ? 'text-gray-900' : 'text-gray-500'
-            }`}
-          >
-            <Grid className="w-3.5 h-3.5 shrink-0" />
-            Singles
-          </button>
-          <button
-            role="tab"
-            aria-selected={bazaarSection === 'claim_sales'}
-            onClick={() => setBazaarSection('claim_sales')}
-            className={`relative z-10 flex items-center justify-center gap-1.5 px-4 h-full whitespace-nowrap rounded-full text-sm font-medium transition-colors ${
-              bazaarSection === 'claim_sales' ? 'text-gray-900' : 'text-gray-500'
-            }`}
-          >
-            <Layers className="w-3.5 h-3.5 shrink-0" />
-            Claim Sales
-          </button>
-        </div>
       </div>
 
       {bazaarSection === 'claim_sales' ? (
-        <ClaimSalesBrowse userId={userId} />
+        <ClaimSalesBrowse userId={userId} sectionTabs={sectionTabs} />
       ) : (
         <div className="container mx-auto px-4 pb-8">
-          {/* SEARCH + FILTER BAR — Liquid Glass partition */}
+          {/* SEARCH + FILTER BAR — Liquid Glass partition. dbb-glass-rail-opaque
+              drops the translucent blur at phone widths only: cards scrolling
+              underneath a semi-transparent sticky rail read as visual overlap
+              (UAT M3-adjacent finding), so this rail — which stays sticky at
+              every breakpoint — needs an opaque background there. The old
+              inline backdropFilter style is dropped since it duplicated (and
+              would otherwise always win over) the class-based rule the
+              opaque override needs to switch off. */}
           <div ref={filterPopoverRef} className="relative z-20 mb-5">
-            <div className="sticky top-14 sm:top-[60px] z-30 -mx-4 px-4 py-3 dbb-glass-partition" style={{ backdropFilter: 'blur(24px) saturate(180%)' }}>
+            <div className="sticky top-14 sm:top-[60px] z-30 -mx-4 px-4 py-3 dbb-glass-partition dbb-glass-rail-opaque">
               <div data-bazaar-filter-rail className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+              {sectionTabs}
               {/* Search input */}
               <div className="relative flex-1 max-w-xl">
                 <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
