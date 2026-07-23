@@ -459,10 +459,18 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
               opaque override needs to switch off. */}
           <div ref={filterPopoverRef} className="relative z-20 mb-5">
             <div className="sticky top-14 sm:top-[60px] z-30 -mx-4 px-4 py-3 dbb-glass-partition dbb-glass-rail-opaque">
-              <div data-bazaar-filter-rail className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+              {/* Phase 44 mobile repair2: one intentional single-line control
+                  rail (tabs + search + Filters + Sort). `flex-nowrap` +
+                  `overflow-x-auto` means narrow phones/tablets scroll the rail
+                  horizontally instead of stacking the controls across several
+                  vertical levels (390px) or painting Sort past the viewport as
+                  uncontained overflow (640px). Every direct child is
+                  `shrink-0` so nothing collapses; search alone grows to fill
+                  the rail from `sm` up where there is room. */}
+              <div data-bazaar-filter-rail className="flex items-center gap-3 overflow-x-auto scrollbar-none">
               {sectionTabs}
               {/* Search input */}
-              <div className="relative flex-1 max-w-xl">
+              <div className="relative w-64 shrink-0 sm:w-auto sm:flex-1 sm:max-w-xl">
                 <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <input
                   type="text"
@@ -483,7 +491,7 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
               </div>
 
               {/* Filter button */}
-              <div className="relative">
+              <div className="relative shrink-0">
                 <button
                   ref={filterTriggerRef}
                   type="button"
@@ -531,9 +539,13 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
                 </select>
                 <ChevronDown className="pointer-events-none absolute right-3 h-3.5 w-3.5 text-gray-500" />
               </label>
+              </div>
 
-              {/* Filter chips */}
-              <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none flex-1">
+              {/* Filter chips — a second row beneath the single-line control
+                  rail so the rail itself stays tabs+search+Filters+Sort only
+                  (Phase 44 mobile repair2). Chips keep their own horizontal
+                  scroll and never widen or wrap the control rail. */}
+              <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none mt-2">
                 {chips.map(chip => (
                   <button
                     key={chip.key}
@@ -555,7 +567,6 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
                     Clear all
                   </button>
                 )}
-              </div>
               </div>
             </div>
 

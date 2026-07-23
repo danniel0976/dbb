@@ -29,6 +29,7 @@ const { test, expect } = require('@playwright/test');
 const TEST_EMAIL = 'checkout-seller@dbb.test';
 const TEST_PASSWORD = 'PassC2QaTest_2026!';
 const PHONE_VIEWPORT = { width: 390, height: 844 }; // iPhone 12-class
+const TABLET_VIEWPORT = { width: 640, height: 900 }; // sm-breakpoint edge
 
 // Waits on the search input rather than a rendered card: the sticky-chrome
 // layering this file checks renders identically whether or not the fixture
@@ -47,6 +48,29 @@ async function login(page) {
 function boxesOverlap(a, b) {
   return a.x < b.x + b.width && a.x + a.width > b.x &&
     a.y < b.y + b.height && a.y + a.height > b.y;
+}
+
+// Vertical center of a bounding box.
+function centerY(box) {
+  return box.y + box.height / 2;
+}
+
+// Reads the scroll/overflow geometry of a rail element so a test can assert it
+// is an *intentional* horizontal scroll container (overflowX auto/scroll) whose
+// own box stays within the viewport, rather than a plain block whose children
+// paint outside the viewport as uncontained overflow.
+function railGeometry(locator) {
+  return locator.evaluate((el) => {
+    const cs = getComputedStyle(el);
+    const rect = el.getBoundingClientRect();
+    return {
+      overflowX: cs.overflowX,
+      scrollWidth: el.scrollWidth,
+      clientWidth: el.clientWidth,
+      left: rect.left,
+      right: rect.right,
+    };
+  });
 }
 
 test.describe('Phase 44 mobile alignment repair', () => {
@@ -91,6 +115,41 @@ test.describe('Phase 44 mobile alignment repair', () => {
     // Keyboard focus remains usable across the merged rail.
     await searchInput.focus();
     await expect(searchInput).toBeFocused();
+
+    // ── repair2 discriminators (these FAIL on 53c321a, where the rail was
+    //    `flex-col` and stacked the four controls across separate levels) ──
+
+    // (a) One-line rail: all four controls share a common vertical centerline.
+    //     Stacked (flex-col) controls have centers tens/hundreds of px apart.
+    const centers = [tabsBox, searchBox, filtersBox, sortBox].map(centerY);
+    const centerSpread = Math.max(...centers) - Math.min(...centers);
+    expect(centerSpread).toBeLessThanOrEqual(6);
+
+    // (b) The rail is an intentional horizontal scroll container whose own box
+    //     stays inside the viewport (no uncontained overflow), and it actually
+    //     overflows here — the controls do not all fit at 390px, so the rail
+    //     owns horizontal scrolling. On 53c321a overflowX was `visible` and the
+    //     column did not overflow horizontally.
+    const geo = await railGeometry(rail);
+    expect(['auto', 'scroll']).toContain(geo.overflowX);
+    expect(geo.right).toBeLessThanOrEqual(PHONE_VIEWPORT.width + 1);
+    expect(geo.scrollWidth).toBeGreaterThan(geo.clientWidth);
+
+    // (c) First and last required controls are reachable via that scroll and
+    //     stay focusable. Scroll the rail to each end and confirm the control
+    //     is within the viewport, then focus it.
+    await rail.evaluate((el) => el.scrollTo(0, 0));
+    const firstTab = tabsInRail.getByRole('tab', { name: /^Singles/i });
+    const firstBox = await firstTab.boundingBox();
+    expect(firstBox.x).toBeGreaterThanOrEqual(-1);
+    expect(firstBox.x + firstBox.width).toBeLessThanOrEqual(PHONE_VIEWPORT.width + 1);
+
+    await rail.evaluate((el) => el.scrollTo(el.scrollWidth, 0));
+    const sortBoxEnd = await sortSelect.boundingBox();
+    expect(sortBoxEnd.x).toBeGreaterThanOrEqual(-1);
+    expect(sortBoxEnd.x + sortBoxEnd.width).toBeLessThanOrEqual(PHONE_VIEWPORT.width + 1);
+    await sortSelect.focus();
+    await expect(sortSelect).toBeFocused();
   });
 
   test('M2: Bazaar Claim Sales — section tabs, Hot, Ending Soon, and search form one control rail on phone widths', async ({ page }) => {
@@ -126,10 +185,73 @@ test.describe('Phase 44 mobile alignment repair', () => {
     expect(boxesOverlap(endingBox, searchBox)).toBe(false);
     expect(boxesOverlap(tabsBox, searchBox)).toBe(false);
 
+    // ── repair2 discriminators (FAIL on 53c321a, where this row was
+    //    `flex-wrap` and wrapped the controls onto a second line at 390px) ──
+    const csRail = page.locator('[data-claim-sales-rail]');
+    await expect(csRail).toBeVisible();
+
+    // (a) One-line rail: tabs, Hot, Ending Soon, and search share a common
+    //     vertical centerline. Wrapped controls sit a full row-height apart.
+    const csCenters = [tabsBox, hotBox, endingBox, searchBox].map(centerY);
+    const csSpread = Math.max(...csCenters) - Math.min(...csCenters);
+    expect(csSpread).toBeLessThanOrEqual(6);
+
+    // (b) Intentional horizontal scroll container, contained within viewport,
+    //     actually overflowing at 390px (controls don't all fit).
+    const csGeo = await railGeometry(csRail);
+    expect(['auto', 'scroll']).toContain(csGeo.overflowX);
+    expect(csGeo.right).toBeLessThanOrEqual(PHONE_VIEWPORT.width + 1);
+    expect(csGeo.scrollWidth).toBeGreaterThan(csGeo.clientWidth);
+
+    // (c) First (section tabs) and last (search) controls reachable via scroll
+    //     and focusable.
+    await csRail.evaluate((el) => el.scrollTo(0, 0));
+    const csFirstBox = await tablistLocator.boundingBox();
+    expect(csFirstBox.x).toBeGreaterThanOrEqual(-1);
+    expect(csFirstBox.x + csFirstBox.width).toBeLessThanOrEqual(PHONE_VIEWPORT.width + 1);
+
+    await csRail.evaluate((el) => el.scrollTo(el.scrollWidth, 0));
+    const csSearchEnd = await csSearchInput.boundingBox();
+    expect(csSearchEnd.x).toBeGreaterThanOrEqual(-1);
+    expect(csSearchEnd.x + csSearchEnd.width).toBeLessThanOrEqual(PHONE_VIEWPORT.width + 1);
+    await csSearchInput.focus();
+    await expect(csSearchInput).toBeFocused();
+
     // Section switching still works from within the merged rail.
     await tablistLocator.getByRole('tab', { name: /^Singles/i }).click();
     await expect(tablistLocator.getByRole('tab', { name: /^Singles/i })).toHaveAttribute('aria-selected', 'true');
     await expect(page.locator('[data-bazaar-filter-rail]')).toBeVisible();
+  });
+
+  test('M4: Bazaar Singles rail — at 640px controls stay viewport-contained or reachable inside the rail\'s own horizontal scroll (no uncontained overflow)', async ({ page }) => {
+    await page.setViewportSize(TABLET_VIEWPORT);
+    await page.goto('/bazaar', { waitUntil: 'networkidle' });
+
+    const rail = page.locator('[data-bazaar-filter-rail]');
+    await expect(rail).toBeVisible({ timeout: 10000 });
+    const sortSelect = rail.locator('select[aria-label="Sort listings"]');
+    await expect(sortSelect).toBeVisible();
+
+    // The rail is an intentional horizontal scroll container. On 53c321a the
+    // rail was `sm:flex-row` with `overflow: visible`, so at exactly 640px the
+    // Sort control painted ~95px past the right viewport edge as uncontained
+    // overflow — overflowX `visible` fails this assertion.
+    const geo = await railGeometry(rail);
+    expect(['auto', 'scroll']).toContain(geo.overflowX);
+    // The rail's own box never exceeds the viewport.
+    expect(geo.right).toBeLessThanOrEqual(TABLET_VIEWPORT.width + 1);
+
+    // Every control is contained; if the rail overflows, each control must be
+    // reachable inside the rail's own scroll (never painted past the viewport
+    // as uncontained overflow). Check the Sort control specifically — it was
+    // the one that spilled on 53c321a.
+    await rail.evaluate((el) => el.scrollTo(el.scrollWidth, 0));
+    const sortBox = await sortSelect.boundingBox();
+    expect(sortBox).not.toBeNull();
+    expect(sortBox.x).toBeGreaterThanOrEqual(-1);
+    expect(sortBox.x + sortBox.width).toBeLessThanOrEqual(TABLET_VIEWPORT.width + 1);
+    await sortSelect.focus();
+    await expect(sortSelect).toBeFocused();
   });
 
   test('M1/M5 desktop: Bazaar section tabs remain a single, working control at desktop widths (no regression)', async ({ page }) => {
