@@ -91,18 +91,18 @@ test('PATCH /api/library/[id] rejects quantity reduction below active listing', 
   assert(src.includes('status: 409'), 'Must return 409 conflict')
 })
 
-// Test 8: CardDetailModal has listing quantity picker
+// Test 8: ListingSection has listing quantity picker (Phase 44: extracted from CardDetailModal)
 test('CardDetailModal has listing quantity picker (1..owned)', () => {
-  const src = readSrc('nextjs/src/components/CardDetailModal.js')
+  const src = readSrc('nextjs/src/components/library-detail/ListingSection.js')
   assert(src.includes('listQuantity'), 'Must have listQuantity state')
   assert(src.includes('ownedQty'), 'Must compute ownedQty')
   assert(src.includes('max={ownedQty}'), 'Must cap at ownedQty')
   assert(src.includes('quantity: listQuantity'), 'Must send quantity in POST')
 })
 
-// Test 9: CardDetailModal ClaimSaleForm has quantity picker
+// Test 9: ClaimSaleForm passes quantities (Phase 44: extracted from CardDetailModal)
 test('CardDetailModal ClaimSaleForm passes quantities', () => {
-  const src = readSrc('nextjs/src/components/CardDetailModal.js')
+  const src = readSrc('nextjs/src/components/library-detail/ClaimSaleForm.js')
   assert(src.includes('csQuantity'), 'Must have csQuantity state')
   assert(src.includes('quantities: { [libraryRow.id]: csQuantity }'), 'Must pass quantities to claim sale')
 })
