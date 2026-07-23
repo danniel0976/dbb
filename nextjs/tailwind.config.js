@@ -34,9 +34,9 @@ module.exports = {
         'rarity-mythic': '#e94560',
         
         // Color pie (MTG)
-        'white': '#f5f5dc',
+        'white': '#FFFFFF',
         'blue': '#4a90e2',
-        'black': '#2c2c2c',
+        'black': '#0A0A0C',
         'red': '#e74c3c',
         'green': '#27ae60',
       },

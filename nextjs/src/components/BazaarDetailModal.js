@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { X, Loader2, User, Camera, Calendar, Maximize2, MoreHorizontal } from 'lucide-react'
+import { X, Loader2, User, Camera, Calendar } from 'lucide-react'
 
 function relativeTime(isoString, future = false) {
   if (!isoString) return null
@@ -30,13 +30,10 @@ const RARITY_COLORS = {
   common: 'text-gray-400',
 }
 
-const FOIL_LABELS = { foil: 'Foil', etched: 'Etched', normal: 'Non-foil' }
-
-// ConditionProof — lazy-loaded lightbox showing the seller's real-life card photo.
+// ConditionProof — lightbox showing the seller's real-life card photo.
 function ConditionProof({ listingId, onClose }) {
   const [photoUrl, setPhotoUrl] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [enlarged, setEnlarged] = useState(false)
 
   useEffect(() => {
     fetch(`/api/listings/${listingId}/condition-proof`)
@@ -51,16 +48,16 @@ function ConditionProof({ listingId, onClose }) {
       className="fixed inset-0 z-[70] bg-black/80 flex items-center justify-center p-4"
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
-      <div className="bg-white dark:bg-dbb-primary rounded-dbb-xl max-w-md w-full shadow-2xl overflow-hidden">
+      <div className="bg-white rounded-dbb-xl max-w-md w-full shadow-2xl overflow-hidden">
         {/* Glass chrome header */}
         <div className="dbb-glass-chrome flex items-center justify-between px-4 py-3">
-          <h3 className="text-dbb-sm font-semibold text-gray-900 dark:text-white flex items-center gap-1.5">
+          <h3 className="text-dbb-sm font-semibold text-gray-900 flex items-center gap-1.5">
             <Camera className="h-4 w-4 text-dbb-accent" /> Condition proof
           </h3>
           <button
             onClick={onClose}
             aria-label="Close"
-            className="flex h-11 w-11 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-black/5 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-white/10 dark:hover:text-white"
+            className="flex h-11 w-11 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-black/5 hover:text-gray-900"
           >
             <X className="h-5 w-5" />
           </button>
@@ -68,54 +65,33 @@ function ConditionProof({ listingId, onClose }) {
         {/* Solid body */}
         <div className="p-4">
           {loading ? (
-            <div className="flex items-center justify-center gap-2 py-8 text-dbb-sm text-gray-500 dark:text-gray-600">
+            <div className="flex items-center justify-center gap-2 py-8 text-dbb-sm text-gray-500">
               <Loader2 className="h-4 w-4 animate-spin" /> Loading photo...
             </div>
           ) : photoUrl ? (
-            <div className="relative">
-              <img
-                src={photoUrl}
-                alt="Card condition proof"
-                className="w-full rounded-dbb-md object-contain"
-              />
-              <button
-                onClick={() => setEnlarged(true)}
-                className="absolute bottom-2 right-2 flex h-11 w-11 items-center justify-center rounded-dbb-md bg-black/60 text-white transition-colors hover:bg-black/80"
-                title="View full size"
-              >
-                <Maximize2 className="h-4 w-4" />
-              </button>
-            </div>
+            <img
+              src={photoUrl}
+              alt="Card condition proof"
+              className="w-full rounded-dbb-md object-contain"
+            />
           ) : (
-            <div className="flex items-center gap-2 py-6 text-dbb-xs text-gray-500 justify-center">
-              <Camera className="h-4 w-4" /> No condition photo available
+            <div className="flex flex-col items-center gap-3 py-8">
+              <Camera className="h-8 w-8 text-gray-400" />
+              <p className="text-dbb-sm font-medium text-gray-900">
+                No condition photo available
+              </p>
+              <p className="text-center text-dbb-xs text-gray-500 max-w-[260px]">
+                This listing doesn't have a condition photo. The seller hasn't uploaded one yet.
+              </p>
             </div>
           )}
-          <p className="mt-2 text-center text-dbb-xs text-gray-500 dark:text-gray-600">
-            Seller's real-life card photo — condition evidence for this listing.
-          </p>
+          {!loading && (
+            <p className="mt-3 text-center text-dbb-xs text-gray-500">
+              Seller's real-life card photo — condition evidence for this listing.
+            </p>
+          )}
         </div>
       </div>
-
-      {/* Full-size lightbox */}
-      {enlarged && photoUrl && (
-        <div
-          className="fixed inset-0 z-[80] bg-black/95 flex items-center justify-center p-4"
-          onClick={() => setEnlarged(false)}
-        >
-          <button
-            className="absolute top-4 right-4 flex h-11 w-11 items-center justify-center text-white transition-colors hover:text-dbb-accent"
-            onClick={() => setEnlarged(false)}
-          >
-            <X className="h-6 w-6" />
-          </button>
-          <img
-            src={photoUrl.split('?')[0]}
-            alt="Card condition proof — full size"
-            className="max-w-full max-h-full object-contain rounded-dbb-md"
-          />
-        </div>
-      )}
     </div>
   )
 }
@@ -174,14 +150,14 @@ function SellerPopup({ listingId, onClose, userId }) {
       className="fixed inset-0 z-[60] bg-black/60 flex items-center justify-center p-4"
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
-      <div className="bg-white dark:bg-dbb-primary rounded-dbb-xl max-w-sm w-full shadow-2xl overflow-hidden">
+      <div className="bg-white rounded-dbb-xl max-w-sm w-full shadow-2xl overflow-hidden">
         {/* Glass chrome header */}
         <div className="dbb-glass-chrome flex items-center justify-between px-4 py-3">
-          <h3 className="text-dbb-sm font-semibold text-gray-900 dark:text-white">Seller info</h3>
+          <h3 className="text-dbb-sm font-semibold text-gray-900">Seller info</h3>
           <button
             onClick={onClose}
             aria-label="Close"
-            className="flex h-11 w-11 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-black/5 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-white/10 dark:hover:text-white"
+            className="flex h-11 w-11 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-black/5 hover:text-gray-900"
           >
             <X className="h-5 w-5" />
           </button>
@@ -189,7 +165,7 @@ function SellerPopup({ listingId, onClose, userId }) {
         {/* Solid body */}
         <div className="space-y-3 p-4">
           {loading ? (
-            <div className="flex items-center justify-center gap-2 py-6 text-dbb-sm text-gray-500 dark:text-gray-600">
+            <div className="flex items-center justify-center gap-2 py-6 text-dbb-sm text-gray-500">
               <Loader2 className="h-4 w-4 animate-spin" /> Loading...
             </div>
           ) : !data ? (
@@ -201,7 +177,7 @@ function SellerPopup({ listingId, onClose, userId }) {
                   <User className="h-5 w-5 text-dbb-accent" />
                 </div>
                 <div>
-                  <p className="text-dbb-sm font-semibold text-gray-900 dark:text-white">{data.display_name}</p>
+                  <p className="text-dbb-sm font-semibold text-gray-900">{data.display_name}</p>
                   {data.member_since && (
                     <p className="flex items-center gap-1 text-dbb-xs text-gray-500">
                       <Calendar className="h-3 w-3" />
@@ -253,8 +229,14 @@ export default function BazaarDetailModal({ listing, onClose, onSelectListing, u
   const [sellerPopupId, setSellerPopupId] = useState(null)
   const [proofListingId, setProofListingId] = useState(null)
 
-  const sheetRef = useRef(null)
   const closeBtnRef = useRef(null)
+  const triggerCardRef = useRef(null)
+
+  // Capture the currently focused element (the card that triggered this) for focus restoration
+  useEffect(() => {
+    triggerCardRef.current = document.activeElement
+    closeBtnRef.current?.focus()
+  }, [])
 
   // Fetch Scryfall card data
   useEffect(() => {
@@ -311,40 +293,34 @@ export default function BazaarDetailModal({ listing, onClose, onSelectListing, u
       .finally(() => setSellersLoading(false))
   }, [scryfallId])
 
-  // Focus trap + scroll lock (matches CardDetailModal Pass 4a pattern)
+  // Escape key handler + scroll lock
   useEffect(() => {
-    closeBtnRef.current?.focus()
-
     const onKeyDown = (e) => {
       if (e.key === 'Escape') {
         e.preventDefault()
-        onClose()
+        handleClose()
         return
-      }
-      if (e.key !== 'Tab') return
-      const focusables = sheetRef.current?.querySelectorAll(
-        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
-      )
-      if (!focusables || focusables.length === 0) return
-      const first = focusables[0]
-      const last = focusables[focusables.length - 1]
-      if (e.shiftKey && document.activeElement === first) {
-        e.preventDefault()
-        last.focus()
-      } else if (!e.shiftKey && document.activeElement === last) {
-        e.preventDefault()
-        first.focus()
       }
     }
 
     document.addEventListener('keydown', onKeyDown)
+    
+    // Lock body scroll
     const prevOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
     return () => {
       document.removeEventListener('keydown', onKeyDown)
       document.body.style.overflow = prevOverflow
     }
-  }, [onClose])
+  }, [])
+
+  const handleClose = () => {
+    // Restore focus to the card that opened this modal
+    if (triggerCardRef.current && triggerCardRef.current.focus) {
+      triggerCardRef.current.focus()
+    }
+    onClose()
+  }
 
   const computeMyr = (ckdUsd, multiplier) => {
     if (ckdUsd == null) return null
@@ -360,101 +336,102 @@ export default function BazaarDetailModal({ listing, onClose, onSelectListing, u
 
   return (
     <>
-    <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 sm:items-center sm:p-4"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
-      role="presentation"
-    >
-      {/* Mobile: full-height bottom sheet. Desktop: centered panel.
-          Solid content body; glass chrome only on header/footer. */}
-      <div
-        ref={sheetRef}
-        role="dialog"
-        aria-modal="true"
-        aria-label={cardName}
-        className="relative flex h-[92vh] w-full flex-col overflow-hidden rounded-t-dbb-xl bg-white shadow-2xl dark:bg-dbb-primary sm:h-auto sm:max-h-[90vh] sm:max-w-3xl sm:rounded-dbb-xl"
-      >
-        {/* Header — glass chrome */}
-        <div className="dbb-glass-chrome flex shrink-0 items-center justify-between gap-3 px-4 py-3 sm:px-6">
-          <h2 className="truncate text-dbb-lg font-semibold tracking-heading text-gray-900 dark:text-white">{cardName}</h2>
-          <button
-            ref={closeBtnRef}
-            onClick={onClose}
-            aria-label="Close"
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-black/5 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-white/10 dark:hover:text-white"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
+      {/* Desktop: right-side non-blocking inspector panel (≥1024px) */}
+      <div className="hidden lg:block fixed inset-0 z-40">
+        {/* Backdrop - click to close */}
+        <div
+          className="absolute inset-0 bg-black/50"
+          onClick={handleClose}
+          aria-hidden="true"
+        />
 
-        {/* Scrollable solid body */}
-        <div className="flex-1 overflow-y-auto overscroll-contain">
-          <div className="flex flex-col gap-5 p-4 sm:flex-row sm:gap-6 sm:p-6">
-            {/* Card image — native MTG aspect ratio, never cropped */}
-            <div className="mx-auto w-40 shrink-0 sm:mx-0 sm:w-44">
-              {cardLoading ? (
-                <div className="aspect-[5/7] skeleton rounded-dbb-md" />
-              ) : imageUrl ? (
-                <img
-                  src={imageUrl}
-                  alt={cardName}
-                  className="h-auto w-full rounded-dbb-md object-contain shadow-dbb-md"
-                />
-              ) : (
-                <div className="flex aspect-[5/7] items-center justify-center rounded-dbb-md bg-gray-100 dark:bg-dbb-secondary">
-                  <span className="p-2 text-center text-dbb-sm text-gray-500">{cardName}</span>
-                </div>
-              )}
-            </div>
+        {/* Inspector panel */}
+        <div data-testid="bazaar-detail-panel" className="absolute top-0 right-0 h-full w-[480px] max-w-[90vw] bg-white border-l border-gray-200 shadow-[-12px_0_40px_-8px_rgba(0,0,0,0.35)] flex flex-col">
+          {/* Header — glass chrome */}
+          <div className="dbb-glass-chrome flex shrink-0 items-center justify-between gap-3 px-4 py-3">
+            <h2 className="truncate text-dbb-lg font-semibold tracking-heading text-gray-900">{cardName}</h2>
+            <button
+              ref={closeBtnRef}
+              onClick={handleClose}
+              aria-label="Close"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-dbb-accent/10 hover:text-dbb-accent spring-press"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
 
-            {/* Right side — progressive info panel */}
-            <div className="flex min-w-0 flex-1 flex-col gap-4">
+          {/* Scrollable single-column content */}
+          <div className="flex-1 overflow-y-auto">
+            <div className="space-y-5 p-4">
+              {/* Card image — height-capped so name/price/sellers stay visible
+                  below without scrolling on a typical ~900px viewport */}
+              <div className="w-full flex justify-center">
+                {cardLoading ? (
+                  <div className="aspect-[5/7] max-h-[32vh] w-auto skeleton rounded-dbb-lg" />
+                ) : imageUrl ? (
+                  <img
+                    src={imageUrl}
+                    alt={cardName}
+                    className="max-h-[32vh] w-auto rounded-dbb-lg object-contain shadow-dbb-md"
+                  />
+                ) : (
+                  <div className="flex aspect-[5/7] max-h-[32vh] w-auto items-center justify-center rounded-dbb-lg bg-gray-100">
+                    <span className="p-2 text-center text-dbb-sm text-gray-500">{cardName}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Card name (repeated for single-column flow) */}
+              <div>
+                <h3 className="text-dbb-xl font-semibold text-gray-900">{cardName}</h3>
+              </div>
+
+              {/* Price — prominent, red accent */}
+              <div className="rounded-dbb-md bg-gray-50 p-4">
+                <p className="mb-1 text-dbb-xs text-gray-600">CardKingdom Reference Price</p>
+                {priceLoading ? (
+                  <div className="flex items-center gap-1.5 text-dbb-xs text-gray-500">
+                    <Loader2 className="h-3 w-3 animate-spin" /> Loading...
+                  </div>
+                ) : ckdPrice != null ? (
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-2xl font-bold text-dbb-accent">${ckdPrice.toFixed(2)}</span>
+                    <span className="text-dbb-xs text-gray-500">CKD USD</span>
+                  </div>
+                ) : (
+                  <span className="text-dbb-xs text-gray-500">No price data available</span>
+                )}
+              </div>
+
               {/* Card metadata */}
-              <div className="space-y-1 text-dbb-sm text-gray-600 dark:text-gray-300">
+              <div className="space-y-2 text-dbb-sm text-gray-600">
                 {setName && (
                   <div>
-                    <span className="text-gray-400 dark:text-gray-500">Set</span> · {setName}
+                    <span className="text-gray-400">Set</span> · {setName}
                     {collectorNumber && <span className="ml-1 text-gray-500">#{collectorNumber}</span>}
                   </div>
                 )}
                 {rarity && (
                   <div>
-                    <span className="text-gray-400 dark:text-gray-500">Rarity</span> ·{' '}
+                    <span className="text-gray-400">Rarity</span> ·{' '}
                     <span className={RARITY_COLORS[rarity] || 'text-gray-400'}>
                       {rarity.charAt(0).toUpperCase() + rarity.slice(1)}
                     </span>
                   </div>
                 )}
                 {typeLine && (
-                  <div><span className="text-gray-400 dark:text-gray-500">Type</span> · {typeLine}</div>
+                  <div><span className="text-gray-400">Type</span> · {typeLine}</div>
                 )}
                 {oracleText && (
-                  <div className="mt-2 whitespace-pre-line rounded-dbb-md bg-gray-50 p-3 text-dbb-xs leading-relaxed text-gray-600 dark:bg-dbb-secondary dark:text-gray-300">
+                  <div className="mt-2 whitespace-pre-line rounded-dbb-md bg-gray-50 p-3 text-dbb-xs leading-relaxed text-gray-600">
                     {oracleText}
                   </div>
                 )}
               </div>
 
-              {/* CKD reference price — always visible */}
-              <div className="rounded-dbb-md bg-gray-50 p-3 dark:bg-dbb-secondary">
-                <p className="mb-1 text-dbb-xs text-gray-600 dark:text-gray-500">CardKingdom Reference Price</p>
-                {priceLoading ? (
-                  <div className="flex items-center gap-1.5 text-dbb-xs text-gray-500 dark:text-gray-600">
-                    <Loader2 className="h-3 w-3 animate-spin" /> Loading...
-                  </div>
-                ) : ckdPrice != null ? (
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-base font-semibold text-gray-900 dark:text-white">${ckdPrice.toFixed(2)}</span>
-                    <span className="text-dbb-xs text-gray-500">CKD USD</span>
-                  </div>
-                ) : (
-                  <span className="text-dbb-xs text-gray-500 dark:text-gray-600">No price data available</span>
-                )}
-              </div>
-
-              {/* Sellers / listings */}
+              {/* Sellers / listings — stacked vertically */}
               <div>
-                <h3 className="mb-2 text-dbb-sm font-semibold text-gray-900 dark:text-white">
+                <h3 className="mb-3 text-dbb-sm font-semibold text-gray-900">
                   {sellersLoading
                     ? 'Loading sellers...'
                     : sellers?.length === 0
@@ -463,11 +440,11 @@ export default function BazaarDetailModal({ listing, onClose, onSelectListing, u
                 </h3>
 
                 {sellersLoading ? (
-                  <div className="flex items-center gap-2 py-3 text-dbb-xs text-gray-500 dark:text-gray-600">
+                  <div className="flex items-center gap-2 py-3 text-dbb-xs text-gray-500">
                     <Loader2 className="h-4 w-4 animate-spin" /> Fetching listings...
                   </div>
                 ) : sellers && sellers.length > 0 ? (
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     {sellers.map(s => {
                       const slc = s.library_cards
                       const myr = computeMyr(ckdPrice, s.multiplier)
@@ -476,71 +453,79 @@ export default function BazaarDetailModal({ listing, onClose, onSelectListing, u
                       return (
                         <div
                           key={s.id}
-                          className={`rounded-dbb-md border p-3 transition-colors ${
+                          className={`rounded-dbb-md border p-4 transition-colors ${
                             isSelected
                               ? 'border-dbb-accent bg-dbb-accent/10'
-                              : 'border-gray-200 bg-white dark:border-gray-700 dark:bg-dbb-secondary hover:border-gray-300 dark:hover:border-gray-600'
+                              : 'border-gray-200 bg-white hover:border-gray-300'
                           }`}
                         >
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="flex min-w-0 flex-1 items-center gap-2">
-                              <User className="h-3.5 w-3.5 flex-shrink-0 text-gray-500" />
-                              <button
-                                onClick={() => setSellerPopupId(s.id)}
-                                className="max-w-[120px] truncate text-left text-dbb-sm text-gray-600 transition-colors hover:text-dbb-accent dark:text-gray-300"
-                                title="View seller profile"
-                              >
-                                {s.seller_name || 'Seller'}
-                              </button>
-                              <span className="flex-shrink-0 rounded border border-gray-300 px-1 py-0.5 text-dbb-xs text-gray-500 dark:border-gray-600 dark:text-gray-400">
-                                {slc?.condition || 'NM'}
+                          {/* Row 1: Seller name + metadata */}
+                          <div className="flex items-center flex-wrap gap-2 mb-3">
+                            <User className="h-3.5 w-3.5 flex-shrink-0 text-gray-500" />
+                            <button
+                              onClick={() => setSellerPopupId(s.id)}
+                              className="truncate text-left text-dbb-sm text-gray-600 transition-colors hover:text-dbb-accent"
+                              title="View seller profile"
+                            >
+                              {s.seller_name || 'Seller'}
+                            </button>
+                            <span className="flex-shrink-0 rounded border border-gray-300 px-1.5 py-0.5 text-dbb-xs text-gray-500">
+                              {slc?.condition || 'NM'}
+                            </span>
+                            {foilBadge && (
+                              <span className={`flex-shrink-0 rounded border px-1.5 py-0.5 text-dbb-xs ${foilBadge.cls}`}>
+                                {foilBadge.label}
                               </span>
-                              {foilBadge && (
-                                <span className={`flex-shrink-0 rounded border px-1 py-0.5 text-dbb-xs ${foilBadge.cls}`}>
-                                  {foilBadge.label}
-                                </span>
-                              )}
-                              {s.quantity > 1 && (
-                                <span className="flex-shrink-0 text-dbb-xs text-gray-500 dark:text-gray-400">
-                                  {s.quantity}×
-                                </span>
-                              )}
-                            </div>
-                            <div className="flex flex-shrink-0 items-center gap-2">
-                              <div className="text-right">
-                                <div className="text-dbb-sm font-semibold text-dbb-accent">
-                                  {myr != null ? `RM ${myr.toFixed(2)}` : '—'}
-                                </div>
-                                <div className="text-dbb-xs text-gray-500 dark:text-gray-600">×{s.multiplier}</div>
-                              </div>
-                              <button
-                                onClick={() => {
-                                  setSelectedListingId(s.id)
-                                  onSelectListing(s)
-                                }}
-                                className={`flex min-h-[44px] flex-shrink-0 items-center rounded-dbb-md px-3 text-dbb-sm font-medium transition-colors ${
-                                  isSelected
-                                    ? 'bg-dbb-accent text-white'
-                                    : 'bg-gray-100 text-gray-600 hover:bg-dbb-accent hover:text-white dark:bg-dbb-secondary dark:text-gray-300'
-                                }`}
-                              >
-                                {isSelected ? 'Selected' : 'Select'}
-                              </button>
-                            </div>
+                            )}
+                            {s.quantity > 1 && (
+                              <span className="flex-shrink-0 text-dbb-xs text-gray-500">
+                                {s.quantity}×
+                              </span>
+                            )}
                           </div>
+                          
+                          {/* Row 2: Price + Select button */}
+                          <div className="flex items-center justify-between gap-3 pt-2 border-t border-gray-100">
+                            <div className="text-right">
+                              <div className="text-dbb-lg font-bold text-dbb-accent">
+                                {myr != null ? `RM ${myr.toFixed(2)}` : '—'}
+                              </div>
+                              <div className="text-dbb-xs text-gray-500">×{s.multiplier}</div>
+                            </div>
+                            <button
+                              onClick={() => {
+                                setSelectedListingId(s.id)
+                                onSelectListing(s)
+                              }}
+                              className={`flex min-h-[44px] flex-shrink-0 items-center justify-center px-6 text-dbb-sm font-medium transition-colors spring-press ${
+                                isSelected
+                                  ? 'bg-dbb-accent text-white'
+                                  : 'bg-dbb-accent/10 text-dbb-accent border border-dbb-accent/30 hover:bg-dbb-accent hover:text-white'
+                              }`}
+                            >
+                              {isSelected ? (
+                                <span className="flex items-center gap-1.5">✓ Selected</span>
+                              ) : (
+                                'Select'
+                              )}
+                            </button>
+                          </div>
+
+                          {/* Row 3: Condition proof button (full width) */}
+                          <button
+                            onClick={() => setProofListingId(s.id)}
+                            className="flex min-h-[44px] w-full mt-3 items-center justify-center gap-1.5 rounded-dbb-md border border-gray-200 px-3 text-dbb-sm text-gray-600 transition-colors hover:border-dbb-accent hover:text-dbb-accent spring-press"
+                          >
+                            <Camera className="h-3.5 w-3.5" /> View card condition
+                          </button>
+                          
                           {(s.created_at || s.expires_at) && (
-                            <p className="mt-1 pl-0.5 text-dbb-xs text-gray-500 dark:text-gray-600">
+                            <p className="mt-2 text-dbb-xs text-gray-500">
                               {s.created_at && `listed ${relativeTime(s.created_at, false)}`}
                               {s.created_at && s.expires_at && ' · '}
                               {s.expires_at && `expires ${relativeTime(s.expires_at, true)}`}
                             </p>
                           )}
-                          <button
-                            onClick={() => setProofListingId(s.id)}
-                            className="mt-2 flex min-h-[44px] items-center gap-1.5 rounded-dbb-md border border-gray-200 px-3 text-dbb-sm text-gray-600 transition-colors hover:border-dbb-accent hover:text-dbb-accent dark:border-gray-700 dark:text-gray-300"
-                          >
-                            <Camera className="h-3.5 w-3.5" /> View card condition
-                          </button>
                         </div>
                       )
                     })}
@@ -549,36 +534,223 @@ export default function BazaarDetailModal({ listing, onClose, onSelectListing, u
               </div>
             </div>
           </div>
-        </div>
 
-        {/* Sticky footer — glass chrome top edge */}
-        <div
-          className="dbb-glass-chrome dbb-glass-chrome--edge-top flex shrink-0 items-center justify-end gap-3 px-4 py-3 sm:px-6"
-          style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
-        >
-          <button
-            onClick={onClose}
-            className="min-h-[44px] px-4 text-dbb-sm text-gray-500 transition-colors hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
+          {/* Sticky footer — glass chrome top edge */}
+          <div
+            className="dbb-glass-chrome flex shrink-0 items-center justify-end gap-3 px-4 py-3"
+            style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
           >
-            Close
-          </button>
+            <button
+              onClick={handleClose}
+              className="min-h-[44px] rounded-dbb-md px-4 text-dbb-sm text-gray-600 transition-colors hover:bg-dbb-accent/10 hover:text-dbb-accent spring-press"
+            >
+              Close
+            </button>
+          </div>
         </div>
       </div>
-    </div>
 
-    {sellerPopupId && (
-      <SellerPopup
-        listingId={sellerPopupId}
-        onClose={() => setSellerPopupId(null)}
-        userId={userId}
-      />
-    )}
-    {proofListingId && (
-      <ConditionProof
-        listingId={proofListingId}
-        onClose={() => setProofListingId(null)}
-      />
-    )}
-  </>
+      {/* Mobile: full-screen overlay (≤1023px) */}
+      <div data-testid="bazaar-detail-sheet" className="lg:hidden fixed inset-0 z-50 bg-white overflow-y-auto">
+        {/* Header — glass chrome */}
+        <div className="sticky top-0 dbb-glass-chrome flex items-center justify-between gap-3 px-4 py-3">
+          <h2 className="truncate text-dbb-lg font-semibold tracking-heading text-gray-900">{cardName}</h2>
+          <button
+            ref={closeBtnRef}
+            onClick={handleClose}
+            aria-label="Close"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-dbb-accent/10 hover:text-dbb-accent spring-press"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        {/* Scrollable single-column content */}
+        <div className="space-y-5 p-4 pb-8">
+          {/* Card image — height-capped, consistent with the desktop panel */}
+          <div className="w-full flex justify-center">
+            {cardLoading ? (
+              <div className="aspect-[5/7] max-h-[32vh] w-auto skeleton rounded-dbb-lg" />
+            ) : imageUrl ? (
+              <img
+                src={imageUrl}
+                alt={cardName}
+                className="max-h-[32vh] w-auto rounded-dbb-lg object-contain shadow-dbb-md"
+              />
+            ) : (
+              <div className="flex aspect-[5/7] max-h-[32vh] w-auto items-center justify-center rounded-dbb-lg bg-gray-100">
+                <span className="p-2 text-center text-dbb-sm text-gray-500">{cardName}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Card name */}
+          <div>
+            <h3 className="text-dbb-xl font-semibold text-gray-900">{cardName}</h3>
+          </div>
+
+          {/* Price */}
+          <div className="rounded-dbb-md bg-gray-50 p-4">
+            <p className="mb-1 text-dbb-xs text-gray-600">CardKingdom Reference Price</p>
+            {priceLoading ? (
+              <div className="flex items-center gap-1.5 text-dbb-xs text-gray-500">
+                <Loader2 className="h-3 w-3 animate-spin" /> Loading...
+              </div>
+            ) : ckdPrice != null ? (
+              <div className="flex items-baseline gap-2">
+                <span className="text-2xl font-bold text-dbb-accent">${ckdPrice.toFixed(2)}</span>
+                <span className="text-dbb-xs text-gray-500">CKD USD</span>
+              </div>
+            ) : (
+              <span className="text-dbb-xs text-gray-500">No price data available</span>
+            )}
+          </div>
+
+          {/* Card metadata */}
+          <div className="space-y-2 text-dbb-sm text-gray-600">
+            {setName && (
+              <div>
+                <span className="text-gray-400">Set</span> · {setName}
+                {collectorNumber && <span className="ml-1 text-gray-500">#{collectorNumber}</span>}
+              </div>
+            )}
+            {rarity && (
+              <div>
+                <span className="text-gray-400">Rarity</span> ·{' '}
+                <span className={RARITY_COLORS[rarity] || 'text-gray-400'}>
+                  {rarity.charAt(0).toUpperCase() + rarity.slice(1)}
+                </span>
+              </div>
+            )}
+            {typeLine && (
+              <div><span className="text-gray-400">Type</span> · {typeLine}</div>
+            )}
+            {oracleText && (
+              <div className="mt-2 whitespace-pre-line rounded-dbb-md bg-gray-50 p-3 text-dbb-xs leading-relaxed text-gray-600">
+                {oracleText}
+              </div>
+            )}
+          </div>
+
+          {/* Sellers */}
+          <div>
+            <h3 className="mb-3 text-dbb-sm font-semibold text-gray-900">
+              {sellersLoading
+                ? 'Loading sellers...'
+                : sellers?.length === 0
+                ? 'No sellers available for this card'
+                : `${sellers.length} seller${sellers.length !== 1 ? 's' : ''}`}
+            </h3>
+
+            {sellersLoading ? (
+              <div className="flex items-center gap-2 py-3 text-dbb-xs text-gray-500">
+                <Loader2 className="h-4 w-4 animate-spin" /> Fetching listings...
+              </div>
+            ) : sellers && sellers.length > 0 ? (
+              <div className="space-y-3">
+                {sellers.map(s => {
+                  const slc = s.library_cards
+                  const myr = computeMyr(ckdPrice, s.multiplier)
+                  const foilBadge = slc?.foil && FOIL_BADGES[slc.foil]
+                  const isSelected = selectedListingId === s.id
+                  return (
+                    <div
+                      key={s.id}
+                      className={`rounded-dbb-md border p-4 transition-colors ${
+                        isSelected
+                          ? 'border-dbb-accent bg-dbb-accent/10'
+                          : 'border-gray-200 bg-white'
+                      }`}
+                    >
+                      {/* Row 1: Seller name + metadata */}
+                      <div className="flex items-center flex-wrap gap-2 mb-3">
+                        <User className="h-3.5 w-3.5 flex-shrink-0 text-gray-500" />
+                        <button
+                          onClick={() => setSellerPopupId(s.id)}
+                          className="truncate text-left text-dbb-sm text-gray-600 transition-colors hover:text-dbb-accent"
+                          title="View seller profile"
+                        >
+                          {s.seller_name || 'Seller'}
+                        </button>
+                        <span className="flex-shrink-0 rounded border border-gray-300 px-1.5 py-0.5 text-dbb-xs text-gray-500">
+                          {slc?.condition || 'NM'}
+                        </span>
+                        {foilBadge && (
+                          <span className={`flex-shrink-0 rounded border px-1.5 py-0.5 text-dbb-xs ${foilBadge.cls}`}>
+                            {foilBadge.label}
+                          </span>
+                        )}
+                        {s.quantity > 1 && (
+                          <span className="flex-shrink-0 text-dbb-xs text-gray-500">
+                            {s.quantity}×
+                          </span>
+                        )}
+                      </div>
+                      
+                      {/* Row 2: Price + Select button */}
+                      <div className="flex items-center justify-between gap-3 pt-2 border-t border-gray-100">
+                        <div className="text-right">
+                          <div className="text-dbb-lg font-bold text-dbb-accent">
+                            {myr != null ? `RM ${myr.toFixed(2)}` : '—'}
+                          </div>
+                          <div className="text-dbb-xs text-gray-500">×{s.multiplier}</div>
+                        </div>
+                        <button
+                          onClick={() => {
+                            setSelectedListingId(s.id)
+                            onSelectListing(s)
+                          }}
+                          className={`flex min-h-[44px] flex-shrink-0 items-center justify-center px-6 text-dbb-sm font-medium transition-colors spring-press ${
+                            isSelected
+                              ? 'bg-dbb-accent text-white'
+                              : 'bg-dbb-accent/10 text-dbb-accent border border-dbb-accent/30 hover:bg-dbb-accent hover:text-white'
+                          }`}
+                        >
+                          {isSelected ? (
+                            <span className="flex items-center gap-1.5">✓ Selected</span>
+                          ) : (
+                            'Select'
+                          )}
+                        </button>
+                      </div>
+                      
+                      {/* Row 3: Condition proof button */}
+                      <button
+                        onClick={() => setProofListingId(s.id)}
+                        className="flex min-h-[44px] w-full mt-3 items-center justify-center gap-1.5 rounded-dbb-md border border-gray-200 px-3 text-dbb-sm text-gray-600 transition-colors hover:border-dbb-accent hover:text-dbb-accent spring-press"
+                      >
+                        <Camera className="h-3.5 w-3.5" /> View card condition
+                      </button>
+                      
+                      {(s.created_at || s.expires_at) && (
+                        <p className="mt-2 text-dbb-xs text-gray-500">
+                          {s.created_at && `listed ${relativeTime(s.created_at, false)}`}
+                          {s.created_at && s.expires_at && ' · '}
+                          {s.expires_at && `expires ${relativeTime(s.expires_at, true)}`}
+                        </p>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            ) : null}
+          </div>
+        </div>
+      </div>
+
+      {sellerPopupId && (
+        <SellerPopup
+          listingId={sellerPopupId}
+          onClose={() => setSellerPopupId(null)}
+          userId={userId}
+        />
+      )}
+      {proofListingId && (
+        <ConditionProof
+          listingId={proofListingId}
+          onClose={() => setProofListingId(null)}
+        />
+      )}
+    </>
   )
 }

@@ -15,6 +15,12 @@ const PRICE_CORPUS_PAGE_SIZE = 1000
 // Postgres "undefined column" error — expires_at column not yet migrated
 const UNDEF_COLUMN = '42703'
 
+// Escapes POSIX ERE metacharacters so user-typed search text can't inject
+// regex syntax into the `imatch` (~*) filter below.
+function escapeRegex(str) {
+  return str.replace(/[.^$*+?()[\]{}|\\]/g, '\\$&')
+}
+
 function makeServiceClient() {
   return createServiceClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -121,7 +127,9 @@ export async function GET(request) {
 
     if (withExpiry) q = q.gt('listings.expires_at', new Date().toISOString())
 
-    if (search) q = q.ilike('card_index.name', `%${search}%`)
+    // Word-prefix match (not substring-anywhere): "D" should surface "Altar of
+    // Dementia" via the word "Dementia", not any name containing a lowercase d.
+    if (search) q = q.regexIMatch('card_index.name', `\\m${escapeRegex(search)}`)
     if (setCode) q = q.eq('card_index.set_code', setCode)
     if (rarities.length > 0) q = q.in('card_index.rarity', rarities)
     if (isFoil === 'true') q = q.neq('foil', 'normal')

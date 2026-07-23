@@ -79,7 +79,15 @@ export default function CameraCapture({ libraryCardId, onUploaded, onCancel, car
 
     if (!navigator.mediaDevices?.getUserMedia) {
       setStatus('error')
-      setErrorMsg('A camera is required to photograph your card.')
+      // Browsers only expose navigator.mediaDevices on secure origins
+      // (https://, or http://localhost/127.0.0.1) — this is not a "no camera
+      // device" case, it's the browser blocking camera API access entirely
+      // because the page is loaded over plain HTTP on a non-loopback host.
+      setErrorMsg(
+        window.isSecureContext
+          ? 'A camera is required to photograph your card.'
+          : 'Camera access requires a secure connection (HTTPS or localhost). This page is loaded over an insecure connection, so the browser is blocking camera access.'
+      )
       return
     }
 

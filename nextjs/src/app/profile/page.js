@@ -3,21 +3,13 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { User, Mail, Calendar, BookOpen, Layers, Star, Pencil, Check, X, Loader2, AlertTriangle, Sun, Moon, Monitor } from 'lucide-react'
+import { User, Mail, Calendar, BookOpen, Layers, Star, Pencil, Check, X, Loader2, AlertTriangle } from 'lucide-react'
 import DBBNav from '@/components/DBBNav'
-import { useTheme } from '@/components/ThemeProvider'
 import FollowingSection from '@/components/FollowingSection'
 import MerchantProfileForm from '@/components/MerchantProfileForm'
 
-const THEME_OPTIONS = [
-  { value: 'light', label: 'Light', icon: Sun },
-  { value: 'dark', label: 'Dark', icon: Moon },
-  { value: 'system', label: 'System', icon: Monitor },
-]
-
 export default function ProfilePage() {
   const router = useRouter()
-  const { theme, setTheme } = useTheme()
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -36,9 +28,6 @@ export default function ProfilePage() {
   const [deactivating, setDeactivating] = useState(false)
   const [confirmText, setConfirmText] = useState('')
 
-  // Theme saving state
-  const [savingTheme, setSavingTheme] = useState(false)
-
   useEffect(() => {
     fetch('/api/profile')
       .then(r => {
@@ -48,10 +37,6 @@ export default function ProfilePage() {
       .then(data => {
         setProfile(data)
         setNameInput(data.display_name || '')
-        // Sync theme from DB if different from localStorage
-        if (data.theme_preference && data.theme_preference !== theme) {
-          setTheme(data.theme_preference)
-        }
       })
       .catch(e => setError(e.message))
       .finally(() => setLoading(false))
@@ -81,22 +66,6 @@ export default function ProfilePage() {
     setNameInput(profile?.display_name || '')
     setNameError(null)
     setEditingName(false)
-  }
-
-  const handleThemeChange = async (newTheme) => {
-    setTheme(newTheme)
-    setSavingTheme(true)
-    try {
-      await fetch('/api/profile', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ theme_preference: newTheme }),
-      })
-    } catch {
-      // Silently ignore — localStorage is already updated
-    } finally {
-      setSavingTheme(false)
-    }
   }
 
   const handleDeactivate = async () => {
@@ -238,28 +207,6 @@ export default function ProfilePage() {
 
         {/* Following */}
         <FollowingSection />
-
-        {/* Appearance */}
-        <div className="bg-white dark:bg-dbb-secondary border border-gray-200 dark:border-gray-700 rounded-xl p-6 mb-6">
-          <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-4">Appearance</h3>
-          <div className="flex gap-3">
-            {THEME_OPTIONS.map(({ value, label, icon: Icon }) => (
-              <button
-                key={value}
-                onClick={() => handleThemeChange(value)}
-                className={`flex-1 flex flex-col items-center gap-2 py-3 px-2 rounded-lg border text-sm font-medium transition-colors ${
-                  theme === value
-                    ? 'border-dbb-accent bg-dbb-accent/10 text-dbb-accent'
-                    : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-500'
-                }`}
-              >
-                <Icon className="w-5 h-5" />
-                {label}
-              </button>
-            ))}
-          </div>
-          <p className="text-xs text-gray-500 mt-2">System follows your device's light/dark preference.</p>
-        </div>
 
         {/* Security */}
         <div className="bg-white dark:bg-dbb-secondary border border-gray-200 dark:border-gray-700 rounded-xl p-6 mb-6">

@@ -12,15 +12,9 @@ export const metadata = {
   keywords: ['MTG', 'Magic The Gathering', 'cards', 'marketplace', 'Malaysia', 'TCG'],
 }
 
-// Inline script to prevent FOUC: reads localStorage and sets dark class before first paint
-const themeScript = `(function(){try{var t=localStorage.getItem('dbb-theme')||'system';if(t==='dark'||(t==='system'&&window.matchMedia('(prefers-color-scheme: dark)').matches)){document.documentElement.classList.add('dark');}}catch(e){}})();`
-
 export default function RootLayout({ children }) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <head>
-        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
-      </head>
+    <html lang="en">
       <body className={`${inter.variable} ${barlow.variable} font-sans`}>
         <ThemeProvider>
           <ToastProvider>{children}</ToastProvider>

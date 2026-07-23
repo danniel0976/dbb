@@ -23,6 +23,7 @@ export default async function BazaarPage() {
   try {
     const sc = makeServiceClient()
 
+    // Main grid data (first page of results)
     const { data: listings, error, count } = await sc
       .from('listings')
       .select(`
@@ -90,7 +91,11 @@ export default async function BazaarPage() {
   return (
     <div className="min-h-screen">
       <DBBNav userEmail={user?.email} />
-      <BazaarView initialData={initialData} filterOptions={filterOptions} userId={user?.id || null} />
+      <BazaarView
+        initialData={initialData}
+        filterOptions={filterOptions}
+        userId={user?.id || null}
+      />
     </div>
   )
 }
