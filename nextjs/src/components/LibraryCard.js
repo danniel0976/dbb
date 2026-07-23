@@ -96,17 +96,23 @@ export default function LibraryCard({ libraryRow, onStar, onDelete, onOpen, dimm
           </div>
         )}
 
-        {/* Star remains visible without relying on hover or a detail view. */}
+        {/* Star remains visible without relying on hover or a detail view.
+            The button keeps a full 44px hit target (accessibility), but the
+            visible circle inside it is smaller — Pass D's full-size 44px
+            black disk read as visually oversized against small grid
+            thumbnails, so only the inner glyph is sized down here. */}
         {onStar && (
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); onStar(libraryRow) }}
-            className={['absolute right-2 top-2 flex h-11 w-11 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white', libraryRow.starred ? 'text-yellow-300' : 'text-white/80 hover:text-yellow-200'].join(' ')}
+            className={['absolute right-2 top-2 flex h-11 w-11 items-center justify-center rounded-full transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white', libraryRow.starred ? 'text-yellow-300' : 'text-white/80 hover:text-yellow-200'].join(' ')}
             title={libraryRow.starred ? 'Unstar' : 'Star'}
             aria-label={libraryRow.starred ? `Unstar ${ci?.name || 'card'}` : `Star ${ci?.name || 'card'}`}
             aria-pressed={libraryRow.starred}
           >
-            <Star className="h-[19px] w-[19px]" fill={libraryRow.starred ? 'currentColor' : 'none'} />
+            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-black/45 backdrop-blur-sm">
+              <Star className="h-[15px] w-[15px]" fill={libraryRow.starred ? 'currentColor' : 'none'} />
+            </span>
           </button>
         )}
       </div>

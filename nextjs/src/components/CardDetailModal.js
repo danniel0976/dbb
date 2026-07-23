@@ -6,7 +6,7 @@ import { useToast } from '@/components/Toast'
 import FacebookSaleImage from '@/components/FacebookSaleImage'
 import PhotoSection from '@/components/library-detail/PhotoSection'
 import ListingSection from '@/components/library-detail/ListingSection'
-import { X, Star, Minus, Plus, Trash2 } from 'lucide-react'
+import { X, Star, Minus, Plus, Trash2, Check } from 'lucide-react'
 
 const CONDITIONS = ['M', 'NM', 'LP', 'MP', 'HP', 'DMG']
 const FOILS = ['normal', 'foil', 'etched']
@@ -44,6 +44,73 @@ function DetailTabBar({ activeTab, onChange, idPrefix }) {
   )
 }
 
+// Header — title + a first-layer Remove action (distinct red icon button,
+// separate from Close) alongside Close itself. Remove used to live two taps
+// deep behind a "More options" disclosure at the bottom of the Details tab;
+// per UAT feedback it needed to be immediately discoverable without burying
+// the destructive action, while still requiring an explicit confirm step
+// (RemoveConfirmBar below) before anything is deleted.
+function ModalHeader({ idPrefix, title, assignCloseBtnRef, onRemoveClick, onClose }) {
+  return (
+    <div className="dbb-glass-chrome flex shrink-0 items-center justify-between gap-3 px-4 py-3">
+      <h2 className="truncate text-dbb-lg font-semibold tracking-heading text-gray-900">{title}</h2>
+      {/* flex-row-reverse keeps Close visually in the far corner (Remove to
+          its left) while Close stays FIRST in DOM/tab order — this modal
+          autofocuses Close on open and the focus trap treats it as the
+          panel's first focusable element, so DOM order has to stay stable
+          even though Remove is now visually first. */}
+      <div className="flex shrink-0 flex-row-reverse items-center gap-1">
+        <button
+          ref={assignCloseBtnRef}
+          onClick={onClose}
+          aria-label="Close"
+          className="flex h-11 w-11 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-dbb-accent/10 hover:text-dbb-accent spring-press"
+        >
+          <X className="h-5 w-5" />
+        </button>
+        <button
+          onClick={onRemoveClick}
+          data-testid={`${idPrefix}-remove-btn`}
+          aria-label="Remove from library"
+          title="Remove from library"
+          className="flex h-11 w-11 items-center justify-center rounded-full text-red-500 transition-colors hover:bg-red-500/10 spring-press"
+        >
+          <Trash2 className="h-5 w-5" />
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// Confirmation banner shown directly under the header once Remove is
+// tapped — first-layer and impossible to miss, but still a deliberate
+// second step before the destructive delete actually fires.
+function RemoveConfirmBar({ idPrefix, deleting, onConfirm, onCancel }) {
+  return (
+    <div
+      data-testid={`${idPrefix}-remove-confirm`}
+      className="flex shrink-0 flex-wrap items-center gap-2 border-b border-red-200 bg-red-50 px-4 py-2.5"
+    >
+      <span className="text-dbb-sm font-medium text-red-600">Remove this card from your library?</span>
+      <div className="ml-auto flex items-center gap-2">
+        <button
+          onClick={onCancel}
+          className="rounded-dbb-md px-3 py-1.5 text-dbb-sm text-gray-600 transition-colors hover:bg-black/5"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={onConfirm}
+          disabled={deleting}
+          className="rounded-dbb-md bg-red-600 px-3 py-1.5 text-dbb-sm font-medium text-white transition-colors hover:bg-red-500 disabled:opacity-50"
+        >
+          {deleting ? 'Removing...' : 'Remove'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export default function CardDetailModal({ libraryRow, onClose, onSave, onDelete }) {
   const { toast } = useToast()
   const [cardData, setCardData] = useState(null)
@@ -56,8 +123,8 @@ export default function CardDetailModal({ libraryRow, onClose, onSave, onDelete 
   const [currentListing, setCurrentListing] = useState(undefined)
   const [forcePhotoCamera, setForcePhotoCamera] = useState(false)
   const [pendingPhotoAction, setPendingPhotoAction] = useState(null)
-  const [showMore, setShowMore] = useState(false) // gates the destructive "Remove" affordance one level deeper
   const [activeTab, setActiveTab] = useState('details')
+  const [justSaved, setJustSaved] = useState(false)
 
   const sheetRef = useRef(null)
   const closeBtnRef = useRef(null)
@@ -158,10 +225,15 @@ export default function CardDetailModal({ libraryRow, onClose, onSave, onDelete 
       const { card } = await res.json()
       toast('Card updated', 'success')
       onSave({ ...libraryRow, ...card, card_index: ci })
-      handleClose()
+      setSaving(false)
+      // A brief in-panel "Saved" state before closing — the global toast
+      // alone wasn't a reliable enough confirmation (on mobile it renders
+      // behind/over the fixed bottom nav bar), so this gives a guaranteed-
+      // visible success signal inside the panel itself before it closes.
+      setJustSaved(true)
+      setTimeout(handleClose, 550)
     } catch {
       toast('Failed to save changes', 'error')
-    } finally {
       setSaving(false)
     }
   }
@@ -281,48 +353,6 @@ export default function CardDetailModal({ libraryRow, onClose, onSave, onDelete 
     </div>
   )
 
-  const moreOptions = (
-    <div className="pt-1">
-      {!showMore ? (
-        <button
-          onClick={() => setShowMore(true)}
-          className="text-dbb-sm text-gray-500 transition-colors hover:text-gray-900"
-        >
-          More options
-        </button>
-      ) : (
-        <div className="rounded-dbb-md bg-gray-50 p-3">
-          {!confirmDelete ? (
-            <button
-              onClick={() => setConfirmDelete(true)}
-              className="flex items-center gap-2 text-dbb-sm text-red-500 transition-colors hover:text-red-400"
-            >
-              <Trash2 className="h-4 w-4" />
-              Remove from library
-            </button>
-          ) : (
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-dbb-sm text-red-500">Remove from library?</span>
-              <button
-                onClick={handleDelete}
-                disabled={deleting}
-                className="rounded-dbb-md bg-red-600 px-3 py-1.5 text-dbb-sm text-white transition-colors hover:bg-red-500 disabled:opacity-50"
-              >
-                {deleting ? 'Removing...' : 'Confirm'}
-              </button>
-              <button
-                onClick={() => setConfirmDelete(false)}
-                className="px-2 py-1.5 text-dbb-sm text-gray-500 transition-colors hover:text-gray-900"
-              >
-                Cancel
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  )
-
   const artBlock = (
     <div className="w-full flex justify-center">
       {loading ? (
@@ -341,9 +371,11 @@ export default function CardDetailModal({ libraryRow, onClose, onSave, onDelete 
     </div>
   )
 
-  // Tab "Details": art + metadata + editable fields + listing controls + more
-  // options. ListingSection lives here rather than a separate tab — it's
+  // Tab "Details": art + metadata + editable fields + listing controls.
+  // ListingSection lives here rather than a separate tab — it's
   // edit-adjacent (list/unlist/relist) and has no natural home of its own.
+  // Remove-from-library now lives in the header (ModalHeader/RemoveConfirmBar
+  // below), not here.
   const detailsTab = (
     <div className="space-y-5">
       {artBlock}
@@ -358,7 +390,6 @@ export default function CardDetailModal({ libraryRow, onClose, onSave, onDelete 
           setActiveTab('photo')
         }}
       />
-      {moreOptions}
     </div>
   )
 
@@ -438,10 +469,17 @@ export default function CardDetailModal({ libraryRow, onClose, onSave, onDelete 
       </button>
       <button
         onClick={handleSave}
-        disabled={saving}
-        className="min-h-[44px] flex-1 rounded-dbb-md bg-dbb-accent px-4 text-dbb-sm font-semibold text-white transition-colors hover:bg-dbb-accent-hov disabled:opacity-50 spring-press"
+        disabled={saving || justSaved}
+        data-testid="library-detail-save-btn"
+        className={`min-h-[44px] flex-1 rounded-dbb-md px-4 text-dbb-sm font-semibold text-white transition-colors disabled:opacity-90 spring-press ${
+          justSaved ? 'bg-green-600' : 'bg-dbb-accent hover:bg-dbb-accent-hov'
+        }`}
       >
-        {saving ? 'Saving...' : 'Save changes'}
+        {justSaved ? (
+          <span className="flex items-center justify-center gap-1.5">
+            <Check className="h-4 w-4" /> Saved
+          </span>
+        ) : saving ? 'Saving...' : 'Save changes'}
       </button>
     </>
   )
@@ -465,18 +503,21 @@ export default function CardDetailModal({ libraryRow, onClose, onSave, onDelete 
           aria-label={title}
           className="absolute top-0 right-0 h-full w-[480px] max-w-[90vw] bg-white border-l border-gray-200 shadow-[-12px_0_40px_-8px_rgba(0,0,0,0.35)] flex flex-col"
         >
-          {/* Header — glass chrome */}
-          <div className="dbb-glass-chrome flex shrink-0 items-center justify-between gap-3 px-4 py-3">
-            <h2 className="truncate text-dbb-lg font-semibold tracking-heading text-gray-900">{title}</h2>
-            <button
-              ref={assignCloseBtnRef}
-              onClick={handleClose}
-              aria-label="Close"
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-dbb-accent/10 hover:text-dbb-accent spring-press"
-            >
-              <X className="h-5 w-5" />
-            </button>
-          </div>
+          <ModalHeader
+            idPrefix="library-detail-panel"
+            title={title}
+            assignCloseBtnRef={assignCloseBtnRef}
+            onClose={handleClose}
+            onRemoveClick={() => setConfirmDelete(true)}
+          />
+          {confirmDelete && (
+            <RemoveConfirmBar
+              idPrefix="library-detail-panel"
+              deleting={deleting}
+              onConfirm={handleDelete}
+              onCancel={() => setConfirmDelete(false)}
+            />
+          )}
 
           <DetailTabBar activeTab={activeTab} onChange={setActiveTab} idPrefix="library-detail-panel" />
 
@@ -505,18 +546,21 @@ export default function CardDetailModal({ libraryRow, onClose, onSave, onDelete 
         aria-label={title}
         className="lg:hidden fixed inset-0 z-50 flex flex-col bg-white"
       >
-        {/* Header — glass chrome */}
-        <div className="dbb-glass-chrome flex shrink-0 items-center justify-between gap-3 px-4 py-3">
-          <h2 className="truncate text-dbb-lg font-semibold tracking-heading text-gray-900">{title}</h2>
-          <button
-            ref={assignCloseBtnRef}
-            onClick={handleClose}
-            aria-label="Close"
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-dbb-accent/10 hover:text-dbb-accent spring-press"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
+        <ModalHeader
+          idPrefix="library-detail-sheet"
+          title={title}
+          assignCloseBtnRef={assignCloseBtnRef}
+          onClose={handleClose}
+          onRemoveClick={() => setConfirmDelete(true)}
+        />
+        {confirmDelete && (
+          <RemoveConfirmBar
+            idPrefix="library-detail-sheet"
+            deleting={deleting}
+            onConfirm={handleDelete}
+            onCancel={() => setConfirmDelete(false)}
+          />
+        )}
 
         <DetailTabBar activeTab={activeTab} onChange={setActiveTab} idPrefix="library-detail-sheet" />
 

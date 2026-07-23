@@ -373,18 +373,20 @@ body {
   transition: transform 0.3s ease-in-out;
 }
 
-/* Foil/etched spectrum border (Phase 44 Pass D2) — signals a foil card via a
-   holographic ring instead of a corner badge, so it never competes with the
-   Star toggle's top-right corner on LibraryCard. Built from colors already
-   established in tailwind.config.js (accent red, rarity gold, MTG green/blue,
-   dbb-pink) rather than inventing a new palette. The dual-background-layer +
-   background-clip trick keeps the ring inside the card's own border-radius
-   (a pseudo-element ring would get cut off by the card's overflow-hidden). */
+/* Foil/etched spectrum border (Phase 44 Pass D2, recolored Pass E per UAT
+   feedback — the original red/green/blue/pink spectrum read as an app-accent
+   ring, not a foil card). Signals a foil card via a holographic ring instead
+   of a corner badge, so it never competes with the Star toggle's top-right
+   corner on LibraryCard. Stays within the warm gold/amber/copper family
+   (dbb-gold plus adjacent warm tones) so it reads as metallic foil rather
+   than a status color. The dual-background-layer + background-clip trick
+   keeps the ring inside the card's own border-radius (a pseudo-element ring
+   would get cut off by the card's overflow-hidden). */
 .foil-card {
   border: 2px solid transparent;
   background-image:
     linear-gradient(rgb(var(--dbb-surface-rgb)), rgb(var(--dbb-surface-rgb))),
-    linear-gradient(135deg, rgb(var(--dbb-accent-rgb)), #f4d03f, #27ae60, #4a90e2, #E02179, rgb(var(--dbb-accent-rgb)));
+    linear-gradient(135deg, #f9e79f, #f4d03f, #f39c12, #c9821c, #f4d03f, #f9e79f);
   background-origin: border-box;
   background-clip: padding-box, border-box;
 }

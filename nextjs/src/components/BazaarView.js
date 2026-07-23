@@ -387,37 +387,46 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
           )}
         </div>
 
-        {/* Singles / Claim Sales segmented control */}
+        {/* Singles / Claim Sales segmented control. The two labels ("Singles"
+            vs "Claim Sales") aren't the same width, so plain inline-flex
+            sized each button to its own content — the sliding highlight
+            pill below (fixed at 50% of the container) then didn't land on
+            the real button boundary and visibly overlapped/cropped
+            whichever label was wider. inline-grid with two equal 1fr
+            columns forces both buttons to the width of the wider one
+            (Claim Sales) while the container still shrink-wraps to content,
+            so the 50% pill math and the actual boundary always agree
+            (Pass E fix). */}
         <div
           role="tablist"
           aria-label="Bazaar section"
-          className="relative inline-flex mt-4 p-1 h-11 rounded-full bg-gray-100"
+          className="relative inline-grid grid-cols-2 mt-4 p-1 h-11 rounded-full bg-gray-100"
         >
           <div
             aria-hidden="true"
-            className="absolute top-1 bottom-1 w-[calc(50%-4px)] rounded-full bg-white shadow-dbb-sm transition-transform duration-200 ease-out"
+            className="absolute top-1 bottom-1 left-1 w-[calc(50%-4px)] rounded-full bg-white shadow-dbb-sm transition-transform duration-200 ease-out"
             style={{ transform: bazaarSection === 'claim_sales' ? 'translateX(calc(100% + 8px))' : 'translateX(0)' }}
           />
           <button
             role="tab"
             aria-selected={bazaarSection === 'singles'}
             onClick={() => setBazaarSection('singles')}
-            className={`relative z-10 flex items-center gap-1.5 px-4 h-full rounded-full text-sm font-medium transition-colors ${
+            className={`relative z-10 flex items-center justify-center gap-1.5 px-4 h-full whitespace-nowrap rounded-full text-sm font-medium transition-colors ${
               bazaarSection === 'singles' ? 'text-gray-900' : 'text-gray-500'
             }`}
           >
-            <Grid className="w-3.5 h-3.5" />
+            <Grid className="w-3.5 h-3.5 shrink-0" />
             Singles
           </button>
           <button
             role="tab"
             aria-selected={bazaarSection === 'claim_sales'}
             onClick={() => setBazaarSection('claim_sales')}
-            className={`relative z-10 flex items-center gap-1.5 px-4 h-full rounded-full text-sm font-medium transition-colors ${
+            className={`relative z-10 flex items-center justify-center gap-1.5 px-4 h-full whitespace-nowrap rounded-full text-sm font-medium transition-colors ${
               bazaarSection === 'claim_sales' ? 'text-gray-900' : 'text-gray-500'
             }`}
           >
-            <Layers className="w-3.5 h-3.5" />
+            <Layers className="w-3.5 h-3.5 shrink-0" />
             Claim Sales
           </button>
         </div>
