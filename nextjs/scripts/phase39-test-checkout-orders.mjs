@@ -38,7 +38,8 @@ const claimSales = source('nextjs/src/app/api/claim-sales/route.js')
 const claimSaleEdit = source('nextjs/src/app/api/claim-sales/[id]/edit/route.js')
 const claimSaleCancel = source('nextjs/src/app/api/claim-sales/[id]/cancel/route.js')
 const cart = source('nextjs/src/components/CartView.js')
-const cardDetail = source('nextjs/src/components/CardDetailModal.js')
+// Phase 44: listing/relist UX extracted from CardDetailModal into ListingSection
+const cardDetail = source('nextjs/src/components/library-detail/ListingSection.js')
 
 console.log('\n=== Phase 39 Checkout and Orders Tests ===\n')
 
