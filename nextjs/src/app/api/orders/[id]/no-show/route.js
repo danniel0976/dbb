@@ -36,6 +36,20 @@ export async function POST(request, { params }) {
     p_payment_wait_hours: paymentHours,
     p_seller_stale_hours: sellerStaleHours,
   })
-  if (error) return NextResponse.json({ error: error.message }, { status: 409 })
+  if (error) {
+    const message = String(error?.message || '')
+    const mappings = [
+      ['ORDER_NOT_FOUND', 'ORDER_NOT_FOUND', 404],
+      ['ORDER_NO_SHOW_NOT_ELIGIBLE', 'ORDER_NO_SHOW_NOT_ELIGIBLE', 409],
+      ['INVALID_NO_SHOW_REASON', 'INVALID_NO_SHOW_REASON', 400],
+      ['ORDER_NO_SHOW_ALREADY_REPORTED', 'ORDER_NO_SHOW_ALREADY_REPORTED', 409],
+    ]
+    const hit = mappings.find(([needle]) => message.includes(needle))
+    if (hit) {
+      return NextResponse.json({ error: hit[1], code: hit[1] }, { status: hit[2] })
+    }
+    console.error('[POST /api/orders/[id]/no-show]', error.message)
+    return NextResponse.json({ error: 'ORDER_NO_SHOW_FAILED', code: 'ORDER_NO_SHOW_FAILED' }, { status: 500 })
+  }
   return NextResponse.json({ report: data }, { status: 201 })
 }

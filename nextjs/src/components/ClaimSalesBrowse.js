@@ -35,34 +35,17 @@ function ClaimSaleTile({ cs, userId, isFollowed, onToggleFollow }) {
   const [followCount, setFollowCount] = useState(cs.follower_count || 0)
   const [followLoading, setFollowLoading] = useState(false)
   const expiryText = useExpiryCountdown(cs.expires_at)
-  const [thumbUrl, setThumbUrl] = useState(null)
+
+  // Use the pre-resolved image URI from the API (no Scryfall call needed).
+  // Synthetic UAT IDs cannot be resolved through Scryfall; stored art_crop
+  // or normal URIs are the only reliable path.
+  const [thumbFailed, setThumbFailed] = useState(false)
+  const thumbUrl = thumbFailed ? null : (cs.featured_image_uri || null)
 
   // Sync follow state when parent batch data updates
   useEffect(() => {
     setFollowing(isFollowed)
   }, [isFollowed])
-
-  // Fetch first card's thumbnail from Scryfall (one request per tile, cached in sessionStorage)
-  useEffect(() => {
-    if (!cs.first_card_scryfall_id) return
-    const cacheKey = `sf_img_${cs.first_card_scryfall_id}`
-    const cached = sessionStorage.getItem(cacheKey)
-    if (cached) { setThumbUrl(cached); return }
-
-    let cancelled = false
-    fetch(`https://api.scryfall.com/cards/${cs.first_card_scryfall_id}`)
-      .then(r => r.ok ? r.json() : null)
-      .then(data => {
-        if (!data || cancelled) return
-        const url = data.image_uris?.small || data.image_uris?.normal || data.card_faces?.[0]?.image_uris?.small
-        if (url) {
-          sessionStorage.setItem(cacheKey, url)
-          setThumbUrl(url)
-        }
-      })
-      .catch(() => {})
-    return () => { cancelled = true }
-  }, [cs.first_card_scryfall_id])
 
   const handleFollow = async (e) => {
     e.preventDefault()
@@ -105,14 +88,15 @@ function ClaimSaleTile({ cs, userId, isFollowed, onToggleFollow }) {
     >
       {/* Card thumbnail (if available) */}
       {thumbUrl && (
-        <div className="relative h-32 overflow-hidden bg-gray-100 dark:bg-dbb-primary">
+        <div data-testid="claim-sale-thumbnail" className="relative h-40 sm:h-44 overflow-hidden bg-gray-100 dark:bg-dbb-primary">
           <img
             src={thumbUrl}
             alt=""
-            className="w-full h-full object-contain opacity-60 group-hover:opacity-80 transition-opacity"
+            title={cs.title}
+            className="w-full h-full object-cover"
             loading="lazy"
+            onError={() => setThumbFailed(true)}
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-white dark:from-dbb-secondary to-transparent" />
         </div>
       )}
 
@@ -340,7 +324,7 @@ export default function ClaimSalesBrowse({ userId, sectionTabs }) {
   }, [])
 
   return (
-    <div className="flex-1 lg:ml-72 p-4 lg:p-6">
+    <div className="container mx-auto px-4 pb-8">
       {/* Section toggle + search. `sectionTabs` (the Bazaar Singles/Claim
           Sales segmented control, owned by BazaarView) renders as the first
           control in this same row so the parent section selector shares one

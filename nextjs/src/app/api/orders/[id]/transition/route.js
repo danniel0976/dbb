@@ -32,6 +32,11 @@ export async function POST(request, { params }) {
     p_action: body.action,
     p_reason: body.reason?.trim() || null,
   })
-  if (error) return NextResponse.json({ error: error.message }, { status: 409 })
+  if (error) {
+    const message = String(error.message || '')
+    const code = ['ORDER_NOT_FOUND', 'ORDER_NOT_AUTHORIZED', 'ORDER_TRANSITION_NOT_ALLOWED',
+      'INVALID_CANCELLATION_REASON', 'RESERVATION_DRIFT'].find(value => message.includes(value)) || 'ORDER_TRANSITION_FAILED'
+    return NextResponse.json({ error: code, code }, { status: code === 'ORDER_NOT_FOUND' ? 404 : 409 })
+  }
   return NextResponse.json({ order: data })
 }

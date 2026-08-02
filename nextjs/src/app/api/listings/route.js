@@ -5,6 +5,7 @@ import { requireCompleteMerchantProfile } from '@/lib/merchantProfile'
 import { ensurePriceCache, lookupPrice, sellPrice } from '@/lib/pricingCache'
 import { normalizeBazaarSort } from '@/lib/bazaarSearchState'
 import { collectInBatches, dedupeValidIds } from '@/lib/postgrestBatch'
+import { stockError } from '@/lib/stockErrors'
 
 export const runtime = 'nodejs'
 
@@ -430,7 +431,8 @@ export async function POST(request) {
 
   if (result.error) {
     console.error('[POST /api/listings]', result.error.message)
-    return NextResponse.json({ error: result.error.message }, { status: 500 })
+    const { error: errCode, code, status } = stockError(result.error, 'LISTING_CREATE_FAILED')
+    return NextResponse.json({ error: errCode, code }, { status })
   }
 
   return NextResponse.json({ listings: result.data }, { status: 201 })

@@ -15,17 +15,22 @@ const RARITY_COLORS = {
   common: 'text-gray-500 dark:text-gray-400',
 }
 
-export default function ClaimSaleCard({ listing, onClick }) {
+// priceData: { ckd_usd } from the parent batch request, or undefined (loading), or null (no data)
+export default function ClaimSaleCard({ listing, onClick, priceData, priceError }) {
   const lc = listing.library_cards
   const ci = lc?.card_index
-  const [imageUrl, setImageUrl] = useState(null)
+  const cardName = ci?.name || 'card'
+  const storedImage = ci?.image_uris?.normal || ci?.image_uris?.small || null
+  const [imageUrl, setImageUrl] = useState(storedImage)
   const [imgLoaded, setImgLoaded] = useState(false)
-  const [myrPrice, setMyrPrice] = useState(null)
-  const [priceLoading, setPriceLoading] = useState(true)
   const [hasPhoto, setHasPhoto] = useState(false)
 
-  // Fetch card image from Scryfall
   useEffect(() => {
+    if (storedImage) {
+      setImageUrl(storedImage)
+      setImgLoaded(false)
+      return
+    }
     if (!lc?.scryfall_id) return
     const cacheKey = `sf_img_${lc.scryfall_id}`
     const cached = sessionStorage.getItem(cacheKey)
@@ -42,34 +47,8 @@ export default function ClaimSaleCard({ listing, onClick }) {
         }
       })
       .catch(() => {})
-  }, [lc?.scryfall_id])
+  }, [lc?.scryfall_id, storedImage])
 
-  // Fetch CKD price to compute MYR listing price
-  useEffect(() => {
-    if (!lc?.scryfall_id) { setPriceLoading(false); return }
-
-    const foilType = lc.foil || 'normal'
-    fetch('/api/pricing/batch', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ items: [{ scryfall_id: lc.scryfall_id, foil: foilType }] }),
-    })
-      .then(r => r.ok ? r.json() : null)
-      .then(data => {
-        const key = `${lc.scryfall_id}:${foilType}`
-        const entry = data?.prices?.[key]
-        const multiplier = Number(listing.multiplier)
-        let myr = null
-        if (entry?.ckd_usd != null) {
-          myr = Math.round(entry.ckd_usd * multiplier * 2) / 2
-        }
-        setMyrPrice(myr)
-      })
-      .catch(() => {})
-      .finally(() => setPriceLoading(false))
-  }, [lc?.scryfall_id, lc?.foil, listing.multiplier])
-
-  // Check if this card has a condition photo
   useEffect(() => {
     if (!lc?.id) return
     fetch(`/api/photos/${lc.id}`)
@@ -78,17 +57,30 @@ export default function ClaimSaleCard({ listing, onClick }) {
       .catch(() => {})
   }, [lc?.id])
 
+  const multiplier = Number(listing.multiplier)
+  const priceLoading = priceData === undefined
+  const myrPrice = priceData?.ckd_usd != null
+    ? Math.round(priceData.ckd_usd * multiplier * 2) / 2
+    : null
+
   const foilBadge = lc?.foil && FOIL_BADGE[lc.foil]
   const rarityColor = RARITY_COLORS[ci?.rarity] || 'text-gray-500 dark:text-gray-400'
 
+  const handleInspect = () => onClick?.()
+
   return (
     <div
-      className="group relative bg-white dark:bg-dbb-secondary border border-gray-200 dark:border-dbb-tertiary/40 rounded-dbb overflow-hidden card-hover cursor-pointer"
-      onClick={onClick}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onClick?.() }}
+      className="group relative bg-white dark:bg-dbb-secondary border border-gray-200 dark:border-dbb-tertiary/40 rounded-dbb overflow-hidden card-hover focus-within:ring-2 focus-within:ring-inset focus-within:ring-dbb-accent"
     >
+      <button
+        type="button"
+        data-testid="claim-sale-card-inspect"
+        aria-label={`Inspect ${cardName}`}
+        onClick={handleInspect}
+        className="absolute inset-0 z-30 cursor-pointer rounded-dbb focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-dbb-accent"
+      >
+        <span className="sr-only">Inspect {cardName}</span>
+      </button>
       {/* Card image */}
       <div className="relative aspect-[2/3] bg-gray-100 dark:bg-dbb-primary">
         {!imgLoaded && !imageUrl && (
@@ -108,7 +100,6 @@ export default function ClaimSaleCard({ listing, onClick }) {
             {foilBadge.label}
           </span>
         )}
-        {/* Condition photo indicator */}
         {hasPhoto && (
           <span className="absolute top-1.5 left-1.5 flex items-center gap-0.5 text-[10px] font-medium bg-black/60 text-white border border-white/20 rounded px-1.5 py-0.5">
             <Camera size={10} />
@@ -137,9 +128,10 @@ export default function ClaimSaleCard({ listing, onClick }) {
           )}
         </div>
 
-        {/* Price — computed from multiplier */}
         <div className="pt-1 border-t border-gray-200 dark:border-dbb-tertiary/30">
-          {priceLoading ? (
+          {priceError ? (
+            <p className="text-dbb-xs text-amber-500 dark:text-amber-400">Pricing unavailable</p>
+          ) : priceLoading ? (
             <div className="h-4 skeleton rounded w-16" />
           ) : myrPrice != null ? (
             <p className="text-dbb-sm font-semibold price-green">

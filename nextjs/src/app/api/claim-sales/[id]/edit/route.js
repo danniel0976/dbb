@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient as createAuthClient } from '@/lib/supabaseServer'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { requireCompleteMerchantProfile } from '@/lib/merchantProfile'
+import { stockError } from '@/lib/stockErrors'
 
 export const runtime = 'nodejs'
 
@@ -64,10 +65,26 @@ export async function PATCH(request, { params }) {
       return NextResponse.json({ error: `Cannot edit a ${claimSale.status} claim sale` }, { status: 400 })
     }
 
-    // Only allow description editing
+    // Allow description and featured_listing_id editing
     const updates = {}
     if (body.description !== undefined) {
       updates.description = body.description?.trim() || null
+    }
+    if (body.featured_listing_id !== undefined) {
+      const nextFeaturedId = body.featured_listing_id || null
+      if (nextFeaturedId) {
+        // Validate the listing belongs to this claim sale
+        const { data: listingRow, error: listingErr } = await sc
+          .from('listings')
+          .select('id')
+          .eq('id', nextFeaturedId)
+          .eq('claim_sale_id', id)
+          .maybeSingle()
+        if (listingErr || !listingRow) {
+          return NextResponse.json({ error: 'Featured listing not found in this claim sale' }, { status: 400 })
+        }
+      }
+      updates.featured_listing_id = nextFeaturedId
     }
 
     if (Object.keys(updates).length === 0) {
@@ -84,6 +101,7 @@ export async function PATCH(request, { params }) {
     return NextResponse.json({ success: true })
   } catch (err) {
     console.error('[PATCH /api/claim-sales/[id]/edit]', err?.message || err)
-    return NextResponse.json({ error: err?.message || 'Failed to edit claim sale' }, { status: 500 })
+    const safe = stockError(err, 'CLAIM_SALE_EDIT_FAILED')
+    return NextResponse.json({ error: safe.error, code: safe.code }, { status: safe.status })
   }
 }

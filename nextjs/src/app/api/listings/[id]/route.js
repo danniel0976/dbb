@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { requireCompleteMerchantProfile } from '@/lib/merchantProfile'
+import { stockError } from '@/lib/stockErrors'
 
 export const runtime = 'nodejs'
 
@@ -35,7 +36,8 @@ export async function DELETE(request, { params }) {
 
   if (error) {
     console.error('[DELETE /api/listings/[id]]', error.message)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    const safe = stockError(error, 'LISTING_DELETE_FAILED')
+    return NextResponse.json({ error: safe.error, code: safe.code }, { status: safe.status })
   }
 
   // Phase 18: Photo self-destruct REMOVED from unlist.
@@ -164,6 +166,9 @@ export async function PATCH(request, { params }) {
     }
   }
 
-  if (result.error) return NextResponse.json({ error: result.error.message }, { status: 500 })
+  if (result.error) {
+    const safe = stockError(result.error, 'LISTING_UPDATE_FAILED')
+    return NextResponse.json({ error: safe.error, code: safe.code }, { status: safe.status })
+  }
   return NextResponse.json({ listing: result.data })
 }

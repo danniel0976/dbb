@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import ShowcaseRow from '@/components/ShowcaseRow'
 import BazaarDetailModal from '@/components/BazaarDetailModal'
 import { useToast } from '@/components/Toast'
+import { notifyCartChanged } from '@/lib/cartBadge.mjs'
 
 export default function HomeView({ hotListings = [], latestListings = [], userId }) {
   const [selectedListing, setSelectedListing] = useState(null)
@@ -63,6 +64,7 @@ export default function HomeView({ hotListings = [], latestListings = [], userId
       } else {
         toast('Added to cart!', 'success')
       }
+      notifyCartChanged()
     } catch {
       toast('Failed to add to cart', 'error')
     }

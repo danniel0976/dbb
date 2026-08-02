@@ -26,6 +26,20 @@ export async function POST(request, { params }) {
     p_actor_id: user.id,
     p_reason: body.reason.trim(),
   })
-  if (error) return NextResponse.json({ error: error.message }, { status: 409 })
+  if (error) {
+    const message = String(error?.message || '')
+    const mappings = [
+      ['ORDER_NOT_FOUND', 'ORDER_NOT_FOUND', 404],
+      ['ORDER_CANCELLATION_NOT_AUTHORIZED', 'ORDER_CANCELLATION_NOT_AUTHORIZED', 403],
+      ['ORDER_ALREADY_FINAL', 'ORDER_ALREADY_FINAL', 409],
+      ['INVALID_CANCELLATION_REASON', 'INVALID_CANCELLATION_REASON', 400],
+    ]
+    const hit = mappings.find(([needle]) => message.includes(needle))
+    if (hit) {
+      return NextResponse.json({ error: hit[1], code: hit[1] }, { status: hit[2] })
+    }
+    console.error('[POST /api/orders/[id]/cancellation-request]', error.message)
+    return NextResponse.json({ error: 'ORDER_CANCELLATION_REQUEST_FAILED', code: 'ORDER_CANCELLATION_REQUEST_FAILED' }, { status: 500 })
+  }
   return NextResponse.json({ request: data }, { status: 201 })
 }

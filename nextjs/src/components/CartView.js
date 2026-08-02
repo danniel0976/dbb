@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback } from 'react'
 import { Trash2, Loader2, ShoppingCart, AlertTriangle, ExternalLink, Landmark, MapPin, CheckCircle2 } from 'lucide-react'
 import Link from 'next/link'
 import { useToast } from '@/components/Toast'
+import { createClientUuid } from '@/lib/clientUuid.mjs'
+import { notifyCartChanged } from '@/lib/cartBadge.mjs'
 
 const FOIL_BADGES = {
   foil: { label: 'Foil', cls: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' },
@@ -23,8 +25,8 @@ function groupBySeller(items) {
       }
     }
     groups[key].items.push(item)
-    if (item.is_available && item.myr_price != null) {
-      groups[key].subtotal = Math.round((groups[key].subtotal + item.myr_price) * 100) / 100
+    if (item.availability_state === 'available' && item.line_myr != null) {
+      groups[key].subtotal = Math.round((groups[key].subtotal + item.line_myr) * 100) / 100
     }
   }
   return Object.values(groups)
@@ -34,10 +36,11 @@ export default function CartView() {
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [removingId, setRemovingId] = useState(null)
+  const [updatingId, setUpdatingId] = useState(null)
   const [locations, setLocations] = useState([])
   const [pickupLocationId, setPickupLocationId] = useState('')
   const [checkingOut, setCheckingOut] = useState(false)
-  const [checkoutKey, setCheckoutKey] = useState(() => crypto.randomUUID())
+  const [checkoutKey, setCheckoutKey] = useState(createClientUuid)
   const [checkoutResult, setCheckoutResult] = useState(null)
   const { toast } = useToast()
 
@@ -78,11 +81,59 @@ export default function CartView() {
       const res = await fetch(`/api/cart/${cartItemId}`, { method: 'DELETE' })
       if (!res.ok) throw new Error('Failed to remove')
       setItems(prev => prev.filter(i => i.id !== cartItemId))
+      notifyCartChanged()
       toast('Removed from cart', 'success')
     } catch {
       toast('Failed to remove item', 'error')
     } finally {
       setRemovingId(null)
+    }
+  }
+
+  const handleQuantity = async (item, quantity) => {
+    if (!Number.isInteger(quantity) || quantity < 1 || quantity > 9999 || quantity === item.requested_quantity) return
+    setUpdatingId(item.id)
+    try {
+      const res = await fetch(`/api/cart/${item.id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ quantity, expected_version: item.cart_version }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        if (data.code === 'CART_ITEM_CHANGED') await fetchCart()
+        throw new Error(data.code === 'INSUFFICIENT_STOCK'
+          ? `Only ${data.details?.available ?? 'the current amount'} available` : (data.error || 'Failed to update quantity'))
+      }
+      setItems(prev => prev.map(current => {
+        if (current.id !== item.id) return current
+        const requestedQuantity = data.item.quantity
+        const availableQuantity = Number.isInteger(data.available_quantity)
+          ? data.available_quantity : current.available_quantity
+        const isAvailable = availableQuantity >= requestedQuantity && availableQuantity > 0
+        return {
+          ...current,
+          requested_quantity: requestedQuantity,
+          quantity: availableQuantity,
+          available_quantity: availableQuantity,
+          availability_state: data.availability_state || (isAvailable ? 'available' : 'reduced'),
+          is_available: data.is_available ?? isAvailable,
+          cart_version: data.item.version,
+          line_myr: current.unit_myr == null ? null : Math.round(current.unit_myr * requestedQuantity * 100) / 100,
+        }
+      }))
+      notifyCartChanged()
+      // A successful "Update to N" resolves the rendered stale line itself;
+      // totals and the checkout gate derive from the updated state above.
+    } catch (error) {
+      toast(error.message, 'error')
+    } finally {
+      setUpdatingId(null)
+    }
+  }
+
+  const updateToAvailable = item => {
+    if (Number.isInteger(item.available_quantity) && item.available_quantity > 0) {
+      handleQuantity(item, item.available_quantity)
     }
   }
 
@@ -96,6 +147,7 @@ export default function CartView() {
         body: JSON.stringify({
           pickup_location_id: pickupLocationId,
           idempotency_key: checkoutKey,
+          items: items.map(item => ({ cart_item_id: item.id, quantity: item.requested_quantity })),
         }),
       })
       const data = await res.json()
@@ -105,6 +157,7 @@ export default function CartView() {
       }
       setCheckoutResult(data)
       setItems([])
+      notifyCartChanged()
       toast('Orders created. Bank in to each seller using the details shown.', 'success')
     } catch (error) {
       toast(error.message, 'error')
@@ -138,9 +191,10 @@ export default function CartView() {
     )
   }
 
-  const availableItems = items.filter(i => i.is_available && i.myr_price != null)
+  const availableItems = items.filter(i => i.availability_state === 'available' && i.unit_myr != null)
+  const staleItems = items.filter(i => i.availability_state !== 'available')
   const grandTotal = Math.round(
-    availableItems.reduce((sum, i) => sum + i.myr_price, 0) * 100
+    availableItems.reduce((sum, i) => sum + i.line_myr, 0) * 100
   ) / 100
 
   const groups = groupBySeller(items)
@@ -175,9 +229,12 @@ export default function CartView() {
                       <span className="text-dbb-sm font-medium text-gray-900 dark:text-white truncate">
                         {ci?.name || 'Unknown card'}
                       </span>
-                      {!item.is_available && (
+                      <span className="text-[10px] rounded px-1.5 py-0.5 bg-gray-100 dark:bg-dbb-primary text-gray-500">
+                        {item.claim_sale?.title ? `Claim Sale · ${item.claim_sale.title}` : 'Bazaar Single'}
+                      </span>
+                      {item.availability_state !== 'available' && (
                         <span className="flex items-center gap-1 text-[10px] bg-red-900/40 text-red-400 border border-red-700/40 rounded px-1.5 py-0.5">
-                          <AlertTriangle className="w-3 h-3" /> Unavailable
+                          <AlertTriangle className="w-3 h-3" /> {item.availability_state.replaceAll('_', ' ')}
                         </span>
                       )}
                       {foilBadge && (
@@ -199,16 +256,49 @@ export default function CartView() {
 
                   {/* Price */}
                   <div className="text-right flex-shrink-0">
-                    {item.is_available && item.myr_price != null ? (
+                    {item.unit_myr != null ? (
                       <>
                         <div className="text-dbb-sm font-semibold text-dbb-accent">
-                          RM {item.myr_price.toFixed(2)}
+                          RM {item.unit_myr.toFixed(2)} × {item.requested_quantity}
+                        </div>
+                        <div className="text-dbb-xs font-semibold text-gray-900 dark:text-white">
+                          Line total RM {item.line_myr == null ? '—' : item.line_myr.toFixed(2)}
+                        </div>
+                        <div className="text-[10px] text-gray-500">
+                          Available now: {item.available_quantity}
                         </div>
                         <div className="text-[10px] text-gray-600">×{item.multiplier}</div>
                       </>
                     ) : (
                       <div className="text-dbb-xs text-gray-600">—</div>
                     )}
+                  </div>
+
+                  {item.availability_state === 'reduced' && item.available_quantity > 0 && (
+                    <button
+                      onClick={() => updateToAvailable(item)}
+                      disabled={updatingId === item.id}
+                      className="text-[11px] text-dbb-accent underline disabled:opacity-50"
+                    >Update to {item.available_quantity}</button>
+                  )}
+                  {item.claim_sale?.id && item.availability_state === 'claim_sale_ended' && (
+                    <Link href={`/claim-sales/${item.claim_sale.id}`} className="text-[11px] text-dbb-accent underline">View sale</Link>
+                  )}
+
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    <button
+                      onClick={() => handleQuantity(item, item.requested_quantity - 1)}
+                      disabled={updatingId === item.id || item.requested_quantity <= 1}
+                      className="w-8 h-8 rounded border border-gray-300 dark:border-gray-600 disabled:opacity-40"
+                      aria-label="Decrease quantity"
+                    >−</button>
+                    <span className="min-w-6 text-center text-dbb-sm">{item.requested_quantity}</span>
+                    <button
+                      onClick={() => handleQuantity(item, item.requested_quantity + 1)}
+                      disabled={updatingId === item.id || item.requested_quantity >= 9999}
+                      className="w-8 h-8 rounded border border-gray-300 dark:border-gray-600 disabled:opacity-40"
+                      aria-label="Increase quantity"
+                    >+</button>
                   </div>
 
                   {/* Remove */}
@@ -263,13 +353,13 @@ export default function CartView() {
       <div className="bg-white dark:bg-dbb-primary border border-dbb-accent/30 rounded-xl px-5 py-4 flex items-center justify-between">
         <div>
           <p className="text-dbb-sm text-gray-600 dark:text-gray-400">Grand Total</p>
-          {items.some(i => !i.is_available) && (
-            <p className="text-dbb-xs text-gray-500 dark:text-gray-600 mt-0.5">Unavailable items not included</p>
+          {staleItems.length > 0 && (
+            <p className="text-dbb-xs text-amber-600 dark:text-amber-400 mt-0.5">{staleItems.length} line{staleItems.length === 1 ? '' : 's'} need attention. Update, remove, or view the sale.</p>
           )}
         </div>
         <div className="text-right">
           <p className="text-2xl font-bold text-dbb-accent">RM {grandTotal.toFixed(2)}</p>
-          <p className="text-dbb-xs text-gray-600 dark:text-gray-500">{availableItems.length} item{availableItems.length !== 1 ? 's' : ''}</p>
+          <p className="text-dbb-xs text-gray-600 dark:text-gray-500">{availableItems.reduce((sum, item) => sum + item.requested_quantity, 0)} unit{availableItems.reduce((sum, item) => sum + item.requested_quantity, 0) !== 1 ? 's' : ''}</p>
         </div>
       </div>
 

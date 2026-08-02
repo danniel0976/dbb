@@ -217,6 +217,7 @@ export default function BazaarDetailModal({ listing, onClose, onSelectListing, u
   const lc = listing.library_cards
   const ci = lc?.card_index
   const scryfallId = lc?.scryfall_id
+  const storedImage = ci?.image_uris?.normal || ci?.image_uris?.small || null
 
   const [cardData, setCardData] = useState(null)
   const [imageUrl, setImageUrl] = useState(null)
@@ -240,6 +241,13 @@ export default function BazaarDetailModal({ listing, onClose, onSelectListing, u
 
   // Fetch Scryfall card data
   useEffect(() => {
+    // Prefer the catalog image. Synthetic UAT IDs are intentionally not
+    // resolvable through Scryfall.
+    if (storedImage) {
+      setImageUrl(storedImage)
+      setCardLoading(false)
+      return
+    }
     if (!scryfallId) { setCardLoading(false); return }
     const cacheKey = `sf_card_${scryfallId}`
     const cached = sessionStorage.getItem(cacheKey)
@@ -263,7 +271,7 @@ export default function BazaarDetailModal({ listing, onClose, onSelectListing, u
       })
       .catch(() => {})
       .finally(() => setCardLoading(false))
-  }, [scryfallId])
+  }, [scryfallId, storedImage])
 
   // Fetch CKD pricing
   useEffect(() => {

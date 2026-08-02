@@ -17,6 +17,7 @@ import {
   serializeBazaarQueryState,
 } from '@/lib/bazaarSearchState'
 import { canCommitBazaarRequest } from '@/lib/bazaarShowcase'
+import { notifyCartChanged } from '@/lib/cartBadge.mjs'
 
 const SORT_OPTIONS = [
   { value: 'newest', label: 'Newest' },
@@ -75,7 +76,9 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
   const [filterOptions] = useState(initialFilterOptions || { sets: [], rarities: [], cardTypes: [] })
   const [selectedListing, setSelectedListing] = useState(null)
   const [prices, setPrices] = useState({})
-  const [bazaarSection, setBazaarSection] = useState('singles') // 'singles' | 'claim_sales'
+  const [bazaarSection, setBazaarSection] = useState(
+    () => searchParams.get('section') === 'claim_sales' ? 'claim_sales' : 'singles'
+  ) // 'singles' | 'claim_sales'
   const [filterPopoverOpen, setFilterPopoverOpen] = useState(false)
   const [mobileFilterState, sendMobileFilter] = useReducer(
     filterSheetReducer,
@@ -360,11 +363,12 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
         }
         return
       }
-      if (data?.already) {
+      if (data?.already_in_cart) {
         toast('Already in your cart', 'info')
       } else {
         toast('Added to cart!', 'success')
       }
+      notifyCartChanged()
     } catch {
       toast('Failed to add to cart', 'error')
     }
@@ -437,11 +441,6 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
       <div className="container mx-auto px-4 pt-6 pb-3">
         <div className="flex items-baseline gap-3 flex-wrap">
           <h1 className="text-dbb-xl sm:text-dbb-2xl font-bold tracking-heading text-gray-900">Bazaar</h1>
-          {!loading && bazaarSection === 'singles' && (
-            <span className="text-dbb-sm text-gray-500">
-              {total} listing{total !== 1 ? 's' : ''}
-            </span>
-          )}
         </div>
       </div>
 
@@ -664,9 +663,7 @@ export default function BazaarView({ initialData, filterOptions: initialFilterOp
                     <Loader2 className="w-4 h-4 animate-spin" /> Loading more...
                   </div>
                 )}
-                {!hasMore && (
-                  <div className="text-gray-600 text-sm">All {listings.length} listings shown</div>
-                )}
+                {!hasMore && <div aria-hidden="true" className="h-4" />}
                 {hasMore && !loadingMore && (
                   <div className="text-gray-500 text-sm">Scroll for more</div>
                 )}
