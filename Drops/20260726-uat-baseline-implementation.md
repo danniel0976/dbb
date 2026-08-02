@@ -10,9 +10,10 @@ running. A database reset was not run by this worker, per the explicit
 no-mutation boundary.
 
 The canonical baseline filename is `20260101000000_dbb_baseline.sql`, which
-sorts before the existing Phase 39–45B migrations. The CLI can therefore apply
-the dependency chain in order; the reset itself remains untried because the
-local `dbb-uat` container is not running. Existing files were not modified.
+sorts before the existing Phase 39–45B migrations. The baseline contains only
+legacy `migration-002` through `migration-015`; the later timestamped files
+remain separate CLI migrations so they are applied exactly once. The reset
+itself remains untried because the local `dbb-uat` container is not running.
 
 ## Files changed
 
@@ -45,14 +46,11 @@ The squash includes these sources, in this exact order:
 12. `supabase/migration-013-claim-sales.sql`
 13. `supabase/migration-014-listing-quantity.sql`
 14. `supabase/migration-015-card-hashes.sql`
-15. `supabase/migrations/20260716000000_phase39_orders.sql`
-16. `supabase/migrations/20260717010000_phase40_expand.sql`
-17. `supabase/migrations/20260717011500_phase40_contract.sql`
-18. `supabase/migrations/20260718000000_phase41_search_sort_hardening.sql`
-19. `supabase/migrations/20260724000000_phase45_auctions_expand.sql`
-20. `supabase/migrations/20260724000001_phase45_auctions_rpcs.sql`
-
-The obsolete `supabase/schema.sql` was excluded. The obsolete
+The later CLI migrations are deliberately not folded into the baseline:
+`20260716000000_phase39_orders.sql`, `20260717010000_phase40_expand.sql`,
+`20260717011500_phase40_contract.sql`, `20260718000000_phase41_search_sort_hardening.sql`,
+`20260724000000_phase45_auctions_expand.sql`, and
+`20260724000001_phase45_auctions_rpcs.sql` remain separate. The obsolete
 `supabase/migration-add-foil-pricing.sql` was excluded because it targets
 `public.cards` and `calculate_myr_prices`, which are not part of the current
 `public.card_index`/Phase 45 schema. Current application references to
@@ -67,9 +65,10 @@ introducing that obsolete table.
   supported sections/keys; ran `supabase status --workdir ...` read-only. The
   status probe could not inspect health because `supabase_db_dbb-uat` is not
   running; it did not mutate anything.
-- Static SQL checks: source markers are present in order; baseline contains
-  Phase 45 tables/RPCs; excluded files are absent from the new baseline; seed
-  contains no hosted project ID, hosted URL, service key, or production row ID.
+- Static SQL checks: the 14 legacy source markers are present in order; the
+  later CLI migration sources and obsolete foil-pricing SQL are absent from the
+  baseline; seed contains no hosted project ID, hosted URL, service key, or
+  production row ID.
 - Ran staged `git diff --check` before commit.
 - Did not run `supabase db reset`, `supabase db start/stop`, SQL suites,
   authenticated REST tests, or any command that mutates database/Docker state.

@@ -10,9 +10,9 @@ export async function GET() {
   if (!user) return NextResponse.json({ count: 0 })
 
   try {
-    const { count, error } = await authClient
+    const { data, error } = await authClient
       .from('cart_items')
-      .select('id', { count: 'exact', head: true })
+      .select('quantity')
       .eq('user_id', user.id)
 
     if (error) {
@@ -20,7 +20,7 @@ export async function GET() {
       return NextResponse.json({ count: 0 })
     }
 
-    return NextResponse.json({ count: count ?? 0 })
+    return NextResponse.json({ count: (data || []).reduce((sum, row) => sum + Number(row.quantity || 0), 0) })
   } catch {
     return NextResponse.json({ count: 0 })
   }

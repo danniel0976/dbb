@@ -1,10 +1,12 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Star, Clock, MapPin, Truck, Package, Heart, Edit3, X, AlertCircle, ArrowLeft } from 'lucide-react'
+import { Star, Clock, MapPin, Truck, Package, Edit3, AlertCircle, ArrowLeft, Check } from 'lucide-react'
 import Link from 'next/link'
 import ClaimSaleCard from '@/components/ClaimSaleCard'
+import ClaimSaleInspector from '@/components/ClaimSaleInspector'
 import { useToast } from '@/components/Toast'
+import { resolveListingAvailability } from '@/lib/claimSaleAvailability.mjs'
 
 const DELIVERY_LABELS = {
   pickup: { icon: MapPin, label: 'Pickup available' },
@@ -47,6 +49,7 @@ export default function ClaimSaleView({
   notFound,
   claimSaleId,
   userId,
+  featuredListingId: initialFeaturedListingId,
 }) {
   const [listings, setListings] = useState(initialListings || [])
   const [isFollowing, setIsFollowing] = useState(initialIsFollowing)
@@ -57,6 +60,11 @@ export default function ClaimSaleView({
   const [savingDescription, setSavingDescription] = useState(false)
   const [cancelling, setCancelling] = useState(false)
   const [expiryInfo, setExpiryInfo] = useState(() => formatExpiry(claimSale?.expires_at))
+  const [prices, setPrices] = useState({})
+  const [priceError, setPriceError] = useState(false)
+  const [featuredListingId, setFeaturedListingId] = useState(initialFeaturedListingId)
+  const [savingFeatured, setSavingFeatured] = useState(false)
+  const [inspectedListing, setInspectedListing] = useState(null)
   const { toast } = useToast()
 
   // Live countdown
@@ -64,9 +72,38 @@ export default function ClaimSaleView({
     if (!claimSale?.expires_at) return
     const timer = setInterval(() => {
       setExpiryInfo(formatExpiry(claimSale.expires_at))
-    }, 60000) // update every minute
+    }, 60000)
     return () => clearInterval(timer)
   }, [claimSale?.expires_at])
+
+  // Batch pricing fetch — one request for all cards on this claim sale
+  useEffect(() => {
+    const items = listings
+      .filter(l => l.library_cards?.scryfall_id)
+      .map(l => ({
+        scryfall_id: l.library_cards.scryfall_id,
+        foil: l.library_cards.foil || 'normal',
+      }))
+    // Deduplicate by scryfall_id:foil
+    const deduped = [...new Map(items.map(i => [`${i.scryfall_id}:${i.foil}`, i])).values()]
+    if (!deduped.length) return
+
+    const controller = new AbortController()
+    setPriceError(false)
+    fetch('/api/pricing/batch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items: deduped }),
+      signal: controller.signal,
+    })
+      .then(r => {
+        if (!r.ok) { setPriceError(true); return null }
+        return r.json()
+      })
+      .then(data => { if (data?.prices) setPrices(data.prices) })
+      .catch(err => { if (err?.name !== 'AbortError') setPriceError(true) })
+    return () => controller.abort()
+  }, [listings])
 
   const isExpired = claimSale?.status === 'expired' || claimSale?.status === 'cancelled' ||
     (claimSale?.expires_at && new Date(claimSale.expires_at).getTime() <= Date.now())
@@ -81,14 +118,12 @@ export default function ClaimSaleView({
     setFollowLoading(true)
     try {
       if (isFollowing) {
-        // Unfollow
         const res = await fetch(`/api/follows?claim_sale_id=${claimSaleId}`, { method: 'DELETE' })
         if (res.ok) {
           setIsFollowing(false)
           setFollowerCount(c => Math.max(0, c - 1))
         }
       } else {
-        // Follow
         const res = await fetch('/api/follows', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -134,7 +169,6 @@ export default function ClaimSaleView({
       const res = await fetch(`/api/claim-sales/${claimSaleId}/cancel`, { method: 'POST' })
       if (res.ok) {
         toast('Claim sale cancelled')
-        // Refresh page to reflect cancelled state
         window.location.reload()
       } else {
         toast('Failed to cancel claim sale')
@@ -146,7 +180,29 @@ export default function ClaimSaleView({
     }
   }, [claimSaleId, toast])
 
-  // Not found state
+  const handleSetFeatured = useCallback(async (listingId) => {
+    // Toggle off if already selected
+    const nextId = featuredListingId === listingId ? null : listingId
+    setSavingFeatured(true)
+    try {
+      const res = await fetch(`/api/claim-sales/${claimSaleId}/edit`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ featured_listing_id: nextId }),
+      })
+      if (res.ok) {
+        setFeaturedListingId(nextId)
+        toast(nextId ? 'Thumbnail card set' : 'Thumbnail cleared')
+      } else {
+        toast('Failed to update thumbnail')
+      }
+    } catch {
+      toast('Failed to update thumbnail')
+    } finally {
+      setSavingFeatured(false)
+    }
+  }, [claimSaleId, featuredListingId, toast])
+
   if (notFound || !claimSale) {
     return (
       <div className="container mx-auto px-4 py-12 max-w-2xl">
@@ -156,7 +212,7 @@ export default function ClaimSaleView({
           <p className="text-gray-500 dark:text-gray-400">
             This claim sale may have been removed or the link is incorrect.
           </p>
-          <Link href="/bazaar" className="btn btn-primary btn-md inline-flex">
+          <Link href="/bazaar?section=claim_sales" className="btn btn-primary btn-md inline-flex">
             Browse the Bazaar
           </Link>
         </div>
@@ -172,7 +228,7 @@ export default function ClaimSaleView({
     <div className="container mx-auto px-4 py-6 max-w-7xl">
       {/* Back link */}
       <Link
-        href="/bazaar"
+        href="/bazaar?section=claim_sales"
         className="inline-flex items-center gap-1.5 text-dbb-sm text-gray-500 dark:text-gray-400 hover:text-dbb-accent transition-colors mb-4"
       >
         <ArrowLeft size={16} />
@@ -314,10 +370,56 @@ export default function ClaimSaleView({
         </div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
-          {listings.map((listing) => (
-            <ClaimSaleCard key={listing.id} listing={listing} />
-          ))}
+          {listings.map((listing) => {
+            const priceKey = `${listing.library_cards?.scryfall_id}:${listing.library_cards?.foil || 'normal'}`
+            const isFeatured = featuredListingId === listing.id
+            return (
+              <div key={listing.id} className="relative">
+                {isFeatured && (
+                  <div className="absolute inset-0 rounded-dbb ring-2 ring-dbb-accent pointer-events-none z-10" />
+                )}
+                {isFeatured && (
+                  <span className="absolute top-1.5 left-1.5 z-20 flex items-center gap-0.5 text-[10px] font-semibold bg-dbb-accent text-white rounded px-1.5 py-0.5">
+                    <Check size={9} />
+                    Thumbnail
+                  </span>
+                )}
+                <ClaimSaleCard
+                  listing={listing}
+                  priceData={prices[priceKey]}
+                  priceError={priceError}
+                  onClick={() => setInspectedListing(listing)}
+                />
+              </div>
+            )
+          })}
         </div>
+      )}
+
+      {/* Card inspector */}
+      {inspectedListing && (
+        <ClaimSaleInspector
+          listing={inspectedListing}
+          priceData={(() => {
+            const key = `${inspectedListing.library_cards?.scryfall_id}:${inspectedListing.library_cards?.foil || 'normal'}`
+            return prices[key]
+          })()}
+          priceError={priceError}
+          onClose={() => setInspectedListing(null)}
+          isOwner={isOwner && !isExpired}
+          availability={resolveListingAvailability({
+            listing: inspectedListing,
+            claimSaleStatus: claimSale?.status,
+            claimSaleExpiresAt: claimSale?.expires_at,
+            isOwner,
+            isSignedIn: !!userId,
+          })}
+          sellerName={sellerName}
+          claimSaleTitle={claimSale?.title}
+          featuredListingId={featuredListingId}
+          onSetFeatured={handleSetFeatured}
+          savingFeatured={savingFeatured}
+        />
       )}
     </div>
   )

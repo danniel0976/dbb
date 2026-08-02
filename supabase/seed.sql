@@ -13,7 +13,9 @@ BEGIN;
 INSERT INTO auth.users (
   id, instance_id, aud, role, email, encrypted_password,
   email_confirmed_at, raw_app_meta_data, raw_user_meta_data,
-  created_at, updated_at, confirmation_token
+  created_at, updated_at, confirmation_token, recovery_token,
+  email_change_token_new, email_change, phone_change, phone_change_token,
+  email_change_token_current, reauthentication_token
 )
 VALUES (
   'd0000000-0000-4000-8000-000000000001',
@@ -27,6 +29,13 @@ VALUES (
   '{"username":"dan_uat","display_name":"Dan UAT"}'::jsonb,
   now(),
   now(),
+  '',
+  '',
+  '',
+  '',
+  '',
+  '',
+  '',
   ''
 )
 ON CONFLICT (id) DO UPDATE
@@ -35,6 +44,14 @@ SET email = EXCLUDED.email,
     email_confirmed_at = EXCLUDED.email_confirmed_at,
     raw_app_meta_data = EXCLUDED.raw_app_meta_data,
     raw_user_meta_data = EXCLUDED.raw_user_meta_data,
+    confirmation_token = EXCLUDED.confirmation_token,
+    recovery_token = EXCLUDED.recovery_token,
+    email_change_token_new = EXCLUDED.email_change_token_new,
+    email_change = EXCLUDED.email_change,
+    phone_change = EXCLUDED.phone_change,
+    phone_change_token = EXCLUDED.phone_change_token,
+    email_change_token_current = EXCLUDED.email_change_token_current,
+    reauthentication_token = EXCLUDED.reauthentication_token,
     updated_at = EXCLUDED.updated_at;
 
 -- Keep the trigger-created profile/binder deterministic if a prior local run
@@ -65,11 +82,24 @@ SET name = EXCLUDED.name,
 -- Minimal catalog rows used by authenticated library/auction API UAT.
 INSERT INTO public.card_index (
   scryfall_id, name, set_code, set_name, collector_number, rarity,
-  colors, type_line, cmc, mana_cost
+  colors, type_line, cmc, mana_cost, image_uris
 )
 VALUES
-  ('d2000000-0000-4000-8000-000000000001', 'UAT Lightning Bolt', 'uat', 'UAT Synthetic Set', '1', 'common', '{}', 'Instant', 1, '{R}'),
-  ('d2000000-0000-4000-8000-000000000002', 'UAT Counterspell', 'uat', 'UAT Synthetic Set', '2', 'uncommon', '{U}', 'Instant', 2, '{U}{U}')
+  -- The IDs remain synthetic so the fixture never pretends to be production
+  -- catalog data. Store deterministic public artwork separately because the
+  -- synthetic IDs cannot be looked up against Scryfall.
+  ('d2000000-0000-4000-8000-000000000001', 'UAT Lightning Bolt', 'uat', 'UAT Synthetic Set', '1', 'common', '{}', 'Instant', 1, '{R}',
+    jsonb_build_object(
+      'art_crop', 'https://cards.scryfall.io/art_crop/front/7/6/7673784e-db4b-43a1-8d55-1bb9fc1e284f.jpg?1783903008',
+      'small', 'https://cards.scryfall.io/small/front/7/6/7673784e-db4b-43a1-8d55-1bb9fc1e284f.jpg?1783903008',
+      'normal', 'https://cards.scryfall.io/normal/front/7/6/7673784e-db4b-43a1-8d55-1bb9fc1e284f.jpg?1783903008'
+    )),
+  ('d2000000-0000-4000-8000-000000000002', 'UAT Counterspell', 'uat', 'UAT Synthetic Set', '2', 'uncommon', '{U}', 'Instant', 2, '{U}{U}',
+    jsonb_build_object(
+      'art_crop', 'https://cards.scryfall.io/art_crop/front/4/f/4f616706-ec97-4923-bb1e-11a69fbaa1f8.jpg?1783909630',
+      'small', 'https://cards.scryfall.io/small/front/4/f/4f616706-ec97-4923-bb1e-11a69fbaa1f8.jpg?1783909630',
+      'normal', 'https://cards.scryfall.io/normal/front/4/f/4f616706-ec97-4923-bb1e-11a69fbaa1f8.jpg?1783909630'
+    ))
 ON CONFLICT (scryfall_id) DO UPDATE
 SET name = EXCLUDED.name,
     set_code = EXCLUDED.set_code,
@@ -79,7 +109,8 @@ SET name = EXCLUDED.name,
     colors = EXCLUDED.colors,
     type_line = EXCLUDED.type_line,
     cmc = EXCLUDED.cmc,
-    mana_cost = EXCLUDED.mana_cost;
+    mana_cost = EXCLUDED.mana_cost,
+    image_uris = EXCLUDED.image_uris;
 
 INSERT INTO public.library_cards (
   id, user_id, binder_id, scryfall_id, quantity, foil, condition, language, starred

@@ -1,25 +1,25 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabaseClient'
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter()
-  const searchParams = useSearchParams()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
 
   useEffect(() => {
+    const searchParams = new URLSearchParams(window.location.search)
     if (searchParams.get('deactivated') === '1') {
       setError('Your account has been deactivated. Contact support for assistance.')
     } else if (searchParams.get('error') === 'auth_callback_failed') {
       setError('Authentication failed. Please try again.')
     }
-  }, [searchParams])
+  }, [])
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -99,4 +99,8 @@ export default function LoginPage() {
       </p>
     </>
   )
+}
+
+export default function LoginPage() {
+  return <LoginForm />
 }
