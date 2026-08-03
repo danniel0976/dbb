@@ -13,11 +13,17 @@ const CURRENT_PATH = new URL('supabase/migrations/20260726000000_phase45c_cart_h
 const HISTORICAL_PATH = new URL('supabase/migrations/20260724000001_phase45_auctions_rpcs.sql', ROOT)
 const RECONCILIATION_PATH = new URL('supabase/migrations/20260803000001_phase45c_transition_order_reconciliation.sql', ROOT)
 const DB_CONTAINER = process.env.PHASE45C_DB_CONTAINER || 'supabase_db_dbb-uat'
-const STATIC_ONLY = process.argv.includes('--static-only')
+const args = process.argv.slice(2)
+const LOCAL_RUNTIME = args.includes('--local-runtime')
 
 function expect(condition, message) {
   if (!condition) throw new Error(message)
 }
+
+expect(
+  args.every(arg => arg === '--local-runtime'),
+  'use --local-runtime to run the Docker-backed upgrade-path sequence; the default is self-contained static verification',
+)
 
 function transitionBody(path) {
   const source = readFileSync(path, 'utf8')
@@ -56,7 +62,7 @@ expect(
   'reconciliation places terminal authorization after terminal replay',
 )
 
-if (STATIC_ONLY) {
+if (!LOCAL_RUNTIME) {
   console.log(JSON.stringify({ result: 'PHASE45C_TRANSITION_ORDER_UPGRADE_STATIC_PASS', sources: 3 }))
   process.exit(0)
 }

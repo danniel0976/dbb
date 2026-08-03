@@ -369,7 +369,10 @@ export async function POST(request) {
     return NextResponse.json({ following: true, id: data.id }, { status: 201 })
   } catch (err) {
     console.error('[POST /api/follows]', err?.message || err)
-    return NextResponse.json({ error: err?.message || 'Failed to follow' }, { status: 500 })
+    return NextResponse.json({
+      error: 'Follow request could not be completed',
+      code: 'FOLLOW_CREATE_FAILED',
+    }, { status: 500 })
   }
 }
 
@@ -413,6 +416,9 @@ export async function DELETE(request) {
     return NextResponse.json({ success: true })
   } catch (err) {
     console.error('[DELETE /api/follows]', err?.message || err)
-    return NextResponse.json({ error: err?.message || 'Failed to unfollow' }, { status: 500 })
+    return NextResponse.json({
+      error: 'Unfollow request could not be completed',
+      code: 'FOLLOW_DELETE_FAILED',
+    }, { status: 500 })
   }
 }
