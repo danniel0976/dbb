@@ -6,7 +6,12 @@ import { useToast } from '@/components/Toast'
 import FacebookSaleImage from '@/components/FacebookSaleImage'
 import PhotoSection from '@/components/library-detail/PhotoSection'
 import ListingSection from '@/components/library-detail/ListingSection'
-import { X, Star, Minus, Plus, Trash2, Check } from 'lucide-react'
+import {
+  PRICE_STATUS,
+  buildPriceSummary,
+  readCkdUsd,
+} from '@/components/library-detail/priceSummary'
+import { X, Star, Minus, Plus, Trash2, Check, Loader2 } from 'lucide-react'
 
 const CONDITIONS = ['M', 'NM', 'LP', 'MP', 'HP', 'DMG']
 const FOILS = ['normal', 'foil', 'etched']
@@ -111,6 +116,89 @@ function RemoveConfirmBar({ idPrefix, deleting, onConfirm, onCancel }) {
   )
 }
 
+// Price summary — the CardKingdom USD baseline and multiplier-adjusted MYR
+// amount shown together at the top of the Details tab. An active listing makes
+// that amount authoritative; otherwise it is explicitly a preview.
+// Rendered in both the desktop and mobile trees, so it carries no `id`
+// attributes (see the note on DetailTabBar); state lives in the parent and both
+// copies therefore stay in sync.
+function PriceSummary({ status, ckdUsd, listing, finish, finishIsUnsaved }) {
+  const summary = buildPriceSummary({ status, ckdUsd, listing })
+
+  return (
+    <div
+      data-testid="library-detail-price-summary"
+      role="group"
+      aria-label="Card pricing"
+      className="rounded-dbb-lg border border-gray-200 bg-gray-50 p-3 space-y-3"
+    >
+      <div className="flex items-end justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-dbb-xs uppercase tracking-wide text-gray-400">CardKingdom baseline</p>
+          {summary.status === PRICE_STATUS.READY ? (
+            <p data-testid="library-detail-price-usd" className="text-dbb-sm font-medium text-gray-600">
+              {summary.baselineLabel} <span className="text-gray-400">USD</span>
+            </p>
+          ) : (
+            <p data-testid="library-detail-price-usd" className="text-dbb-sm text-gray-500">—</p>
+          )}
+        </div>
+        <div className="min-w-0 text-right">
+          <p className="text-dbb-xs uppercase tracking-wide text-gray-400">
+            {summary.priceLabel} · ×{summary.multiplier}
+          </p>
+          {summary.sellStatus === PRICE_STATUS.READY ? (
+            <p
+              data-testid="library-detail-price-myr"
+              className="text-dbb-lg font-semibold tracking-heading text-gray-900"
+            >
+              {summary.sellLabel} <span className="text-dbb-sm font-medium text-gray-400">MYR</span>
+            </p>
+          ) : (
+            <p data-testid="library-detail-price-myr" className="text-dbb-lg font-semibold text-gray-400">—</p>
+          )}
+        </div>
+      </div>
+
+      {/* Honest non-ready states — never substitute another price source. */}
+      {summary.status === PRICE_STATUS.LOADING && (
+        <p data-testid="library-detail-price-note" className="flex items-center gap-1.5 text-dbb-xs text-gray-500">
+          <Loader2 className="h-3 w-3 animate-spin" /> Loading CardKingdom price...
+        </p>
+      )}
+      {summary.status === PRICE_STATUS.UNAVAILABLE && (
+        <p data-testid="library-detail-price-note" className="text-dbb-xs text-gray-500">
+          No CardKingdom price for this printing.
+        </p>
+      )}
+      {summary.status === PRICE_STATUS.ERROR && (
+        <p data-testid="library-detail-price-note" className="text-dbb-xs text-amber-600">
+          Could not load the CardKingdom price. Try again later.
+        </p>
+      )}
+      {summary.status === PRICE_STATUS.READY && summary.sellStatus === PRICE_STATUS.UNAVAILABLE && (
+        <p data-testid="library-detail-price-note" className="text-dbb-xs text-gray-500">
+          No positive MYR price is available for this printing.
+        </p>
+      )}
+      {summary.status === PRICE_STATUS.READY && !summary.authoritative && (
+        <p data-testid="library-detail-price-preview-note" className="text-dbb-xs text-gray-500">
+          Preview only — choose a multiplier when listing this card.
+        </p>
+      )}
+
+      {/* The baseline is looked up for the finish that is actually saved — the
+          same one listing and checkout price against — so an unsaved Finish
+          edit must not silently look like it has been repriced. */}
+      {finishIsUnsaved && (
+        <p data-testid="library-detail-price-finish-note" className="text-dbb-xs text-gray-500">
+          Priced for the saved finish ({finish}). Save changes to reprice.
+        </p>
+      )}
+    </div>
+  )
+}
+
 export default function CardDetailModal({ libraryRow, onClose, onSave, onDelete }) {
   const { toast } = useToast()
   const [cardData, setCardData] = useState(null)
@@ -125,6 +213,8 @@ export default function CardDetailModal({ libraryRow, onClose, onSave, onDelete 
   const [pendingPhotoAction, setPendingPhotoAction] = useState(null)
   const [activeTab, setActiveTab] = useState('details')
   const [justSaved, setJustSaved] = useState(false)
+  const [ckdUsd, setCkdUsd] = useState(null)
+  const [priceStatus, setPriceStatus] = useState(PRICE_STATUS.LOADING)
 
   const sheetRef = useRef(null)
   const closeBtnRef = useRef(null)
@@ -146,9 +236,43 @@ export default function CardDetailModal({ libraryRow, onClose, onSave, onDelete 
   const ci = libraryRow.card_index
   const storedImage = ci?.image_uris?.normal || ci?.image_uris?.small || null
 
+  // Saved finish, not the in-progress edit: the listing and checkout paths
+  // price the persisted row, so the summary has to look up the same key.
+  const pricedFoil = libraryRow.foil || 'normal'
+
+  // CKD USD baseline from the shared pricing cache (same endpoint and cache the
+  // listing picker uses). Failure and "no cached price" are distinct states and
+  // both are surfaced as-is — no Scryfall or other fallback price.
   useEffect(() => {
-    // Use the catalog image when present. Synthetic UAT IDs are not valid
-    // Scryfall IDs, so fetching them would leave the inspector blank.
+    if (!libraryRow.scryfall_id) {
+      setPriceStatus(PRICE_STATUS.UNAVAILABLE)
+      return
+    }
+    let cancelled = false
+    setPriceStatus(PRICE_STATUS.LOADING)
+    fetch('/api/pricing/batch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items: [{ scryfall_id: libraryRow.scryfall_id, foil: pricedFoil }] }),
+    })
+      .then(r => r.ok ? r.json() : Promise.reject(new Error(`Pricing request failed: ${r.status}`)))
+      .then(data => {
+        if (cancelled) return
+        const usd = readCkdUsd(data, libraryRow.scryfall_id, pricedFoil)
+        setCkdUsd(usd)
+        setPriceStatus(usd == null ? PRICE_STATUS.UNAVAILABLE : PRICE_STATUS.READY)
+      })
+      .catch(() => {
+        if (cancelled) return
+        setCkdUsd(null)
+        setPriceStatus(PRICE_STATUS.ERROR)
+      })
+    return () => { cancelled = true }
+  }, [libraryRow.scryfall_id, pricedFoil])
+
+  useEffect(() => {
+    // Preserve current-main behavior: catalog-backed synthetic/local cards
+    // render their stored image without requiring a valid Scryfall ID.
     if (storedImage) {
       setImageUrl(storedImage)
       setLoading(false)
@@ -380,7 +504,10 @@ export default function CardDetailModal({ libraryRow, onClose, onSave, onDelete 
     </div>
   )
 
-  // Tab "Details": art + metadata + editable fields + listing controls.
+  // Tab "Details": art + price summary + metadata + editable fields + listing
+  // controls. The price summary sits directly under the art so the CKD USD
+  // baseline and the current sell price (or an explicit unlisted preview) are
+  // visible without scrolling or opening the listing picker.
   // ListingSection lives here rather than a separate tab — it's
   // edit-adjacent (list/unlist/relist) and has no natural home of its own.
   // Remove-from-library now lives in the header (ModalHeader/RemoveConfirmBar
@@ -388,11 +515,20 @@ export default function CardDetailModal({ libraryRow, onClose, onSave, onDelete 
   const detailsTab = (
     <div className="space-y-5">
       {artBlock}
+      <PriceSummary
+        status={priceStatus}
+        ckdUsd={ckdUsd}
+        listing={currentListing}
+        finish={pricedFoil}
+        finishIsUnsaved={foil !== libraryRow.foil}
+      />
       {metadataBlock}
       {editableFields}
       <ListingSection
         libraryRow={libraryRow}
         hasPhoto={hasPhoto}
+        listing={currentListing}
+        onListingChange={setCurrentListing}
         onRequirePhoto={(retry) => {
           if (retry) setPendingPhotoAction(() => retry)
           setForcePhotoCamera(true)
