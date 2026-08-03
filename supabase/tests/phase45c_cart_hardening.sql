@@ -86,7 +86,16 @@ BEGIN
   END IF;
   SELECT pg_get_functiondef('public.transition_order(uuid,uuid,text,text)'::regprocedure) INTO src;
   IF src NOT LIKE '%ORDER_NOT_AUTHORIZED%' OR src NOT LIKE '%ORDER BY l.id%'
-    OR src NOT LIKE '%ORDER BY lc.id%' THEN RAISE EXCEPTION 'terminal transition lock/auth contract missing'; END IF;
+    OR src NOT LIKE '%ORDER BY lc.id%' OR src NOT LIKE '%ORDER BY m.library_card_id, m.source_id%'
+    OR src NOT LIKE '%WHERE id = p_order_id FOR UPDATE%'
+    OR src NOT LIKE '%LISTING_CARD_OWNER_MISMATCH%' OR src NOT LIKE '%phase45c_claim_sale_eligible%'
+    OR src NOT LIKE '%ORDER_NOT_FOUND%' OR src NOT LIKE '%LISTING_NOT_FOUND%'
+    OR src NOT LIKE '%INVALID_CANCELLATION_REASON%' OR src NOT LIKE '%ORDER_TRANSITION_NOT_ALLOWED%'
+    OR src NOT LIKE '%auction_bid%' OR src NOT LIKE '%auction_buyout%' OR src NOT LIKE '%relist_available%'
+    THEN RAISE EXCEPTION 'terminal transition lock/auth/auction reconciliation contract missing'; END IF;
+  IF position('ORDER_NOT_AUTHORIZED' IN src) > position('v_from = ''order_completed''' IN src) THEN
+    RAISE EXCEPTION 'terminal authorization occurs after idempotent replay';
+  END IF;
   IF to_regprocedure('public.phase45c_cancel_claim_sale(uuid,uuid)') IS NULL
     OR to_regprocedure('public.phase45c_claim_sale_status_sync()') IS NULL
     OR to_regprocedure('public.phase45c_reconcile_expired_listings(integer)') IS NULL

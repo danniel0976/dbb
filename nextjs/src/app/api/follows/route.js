@@ -1,10 +1,12 @@
 import { NextResponse } from 'next/server'
 import { createClient as createAuthClient } from '@/lib/supabaseServer'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
+import { collectInBatches, dedupeValidIds } from '@/lib/postgrestBatch'
 
 export const runtime = 'nodejs'
 
 const UNDEF_TABLE = '42P01'
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 function makeServiceClient() {
   return createServiceClient(
@@ -22,11 +24,30 @@ function makeServiceClient() {
 export async function GET(request) {
   const { searchParams } = new URL(request.url)
   const checkId = searchParams.get('check')
+  const checkAuctionId = searchParams.get('check_auction')
 
   const authClient = await createAuthClient()
   const { data: { user }, error: authError } = await authClient.auth.getUser()
   if (authError || !user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  // Single auction follow-check mode.
+  if (checkAuctionId) {
+    try {
+      const { data, error } = await authClient
+        .from('follows')
+        .select('id')
+        .eq('follower_id', user.id)
+        .eq('auction_id', checkAuctionId)
+        .limit(1)
+      if (error && (error.code === UNDEF_TABLE || error.code === '42703')) return NextResponse.json({ following: false })
+      if (error) throw error
+      return NextResponse.json({ following: (data || []).length > 0 })
+    } catch (err) {
+      console.error('[GET /api/follows check_auction]', err?.message || err)
+      return NextResponse.json({ following: false })
+    }
   }
 
   // Single follow-check mode (claim sale or user)
@@ -95,6 +116,26 @@ export async function GET(request) {
     }
   }
 
+  // Batch auction follow-check mode: auction_ids=id1,id2,...
+  const auctionIds = searchParams.get('auction_ids')
+  if (auctionIds) {
+    const ids = dedupeValidIds(auctionIds.split(',').map(s => s.trim()).filter(Boolean)) || []
+    if (!ids.length) return NextResponse.json({ followed_auction_ids: [] })
+    try {
+      const result = await collectInBatches(ids, batch => authClient
+        .from('follows')
+        .select('auction_id')
+        .eq('follower_id', user.id)
+        .in('auction_id', batch))
+      if (result.error && (result.error.code === UNDEF_TABLE || result.error.code === '42703')) return NextResponse.json({ followed_auction_ids: [] })
+      if (result.error) throw result.error
+      return NextResponse.json({ followed_auction_ids: (result.data || []).map(row => row.auction_id).filter(Boolean) })
+    } catch (err) {
+      console.error('[GET /api/follows auction batch]', err?.message || err)
+      return NextResponse.json({ followed_auction_ids: [] })
+    }
+  }
+
   const sc = makeServiceClient()
 
   try {
@@ -106,7 +147,7 @@ export async function GET(request) {
       .limit(1)
 
     if (testErr && testErr.code === UNDEF_TABLE) {
-      return NextResponse.json({ claim_sales: [], users: [], note: 'Follows table not yet migrated' })
+      return NextResponse.json({ claim_sales: [], users: [], auctions: [], note: 'Follows table not yet migrated' })
     }
 
     // Fetch followed claim sales
@@ -172,13 +213,45 @@ export async function GET(request) {
       // profiles relation might fail
     }
 
+    // Fetch followed auctions. This is optional while the auction migration is
+    // being rolled out, so an absent relation/column leaves the other lists intact.
+    let followedAuctions = []
+    try {
+      const { data: auctionFollows, error: auctionErr } = await sc
+        .from('follows')
+        .select(`
+          auction_id,
+          auctions(
+            id, title, seller_id, status, starting_bid_myr, buyout_myr,
+            current_bid_myr, bid_count, bid_increment, duration_hours,
+            soft_close_enabled, expires_at, created_at
+          )
+        `)
+        .eq('follower_id', user.id)
+        .not('auction_id', 'is', null)
+      if (!auctionErr && auctionFollows) {
+        const sellerIds = [...new Set(auctionFollows.map(row => row.auctions?.seller_id).filter(Boolean))]
+        const { data: profiles } = sellerIds.length
+          ? await sc.from('profiles').select('id, display_name').in('id', sellerIds)
+          : { data: [] }
+        const sellerMap = new Map((profiles || []).map(profile => [profile.id, profile.display_name || null]))
+        followedAuctions = auctionFollows.filter(row => row.auctions).map(row => ({
+          ...row.auctions,
+          seller_name: sellerMap.get(row.auctions.seller_id) || null,
+        }))
+      }
+    } catch {
+      // auctions table/relation might not exist yet
+    }
+
     return NextResponse.json({
       claim_sales: followedClaimSales,
       users: followedUsers,
+      auctions: followedAuctions,
     })
   } catch (err) {
     console.error('[GET /api/follows]', err?.message || err)
-    return NextResponse.json({ claim_sales: [], users: [] })
+    return NextResponse.json({ claim_sales: [], users: [], auctions: [] })
   }
 }
 
@@ -197,11 +270,17 @@ export async function POST(request) {
   } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
   }
+  body = body || {}
 
-  const { claim_sale_id, followee_id } = body
+  const { claim_sale_id, followee_id, auction_id } = body
 
-  if (!claim_sale_id && !followee_id) {
-    return NextResponse.json({ error: 'Must provide claim_sale_id or followee_id' }, { status: 400 })
+  const targets = [followee_id, claim_sale_id, auction_id].filter(value => value !== undefined && value !== null && value !== '')
+  if (targets.length !== 1) {
+    return NextResponse.json({ error: 'Must provide claim_sale_id, auction_id, or followee_id' }, { status: 400 })
+  }
+
+  if (targets.some(value => !UUID.test(value))) {
+    return NextResponse.json({ error: 'Follow target must be a valid UUID' }, { status: 400 })
   }
 
   // Prevent self-follow
@@ -214,6 +293,7 @@ export async function POST(request) {
   }
   if (claim_sale_id) insertRow.claim_sale_id = claim_sale_id
   if (followee_id) insertRow.followee_id = followee_id
+  if (auction_id) insertRow.auction_id = auction_id
 
   // Validate claim sale is active and unexpired before following
   if (claim_sale_id) {
@@ -245,6 +325,29 @@ export async function POST(request) {
     }
   }
 
+  // Validate auction is active and unexpired before following it.
+  if (auction_id) {
+    const sc = makeServiceClient()
+    try {
+      const { data: auction, error: auctionErr } = await sc
+        .from('auctions')
+        .select('seller_id, status, expires_at')
+        .eq('id', auction_id)
+        .maybeSingle()
+      if (auctionErr && auctionErr.code !== UNDEF_TABLE && auctionErr.code !== '42703') throw auctionErr
+      if (auctionErr?.code === UNDEF_TABLE || auctionErr?.code === '42703') return NextResponse.json({ error: 'Auctions are not available yet' }, { status: 503 })
+      if (!auction) return NextResponse.json({ error: 'Auction not found' }, { status: 404 })
+      if (auction.seller_id === user.id) return NextResponse.json({ error: 'Cannot follow your own auction' }, { status: 403 })
+      if (auction.status !== 'active') return NextResponse.json({ error: `Cannot follow a ${auction.status} auction` }, { status: 400 })
+      if (auction.expires_at && new Date(auction.expires_at).getTime() <= Date.now()) return NextResponse.json({ error: 'Cannot follow an expired auction' }, { status: 400 })
+    } catch (err) {
+      if (err?.code !== UNDEF_TABLE && err?.code !== '42703') {
+        console.error('[POST /api/follows] auction validation', err?.message || err)
+        return NextResponse.json({ error: 'Failed to validate auction' }, { status: 500 })
+      }
+    }
+  }
+
   try {
     const { data, error } = await authClient
       .from('follows')
@@ -266,12 +369,15 @@ export async function POST(request) {
     return NextResponse.json({ following: true, id: data.id }, { status: 201 })
   } catch (err) {
     console.error('[POST /api/follows]', err?.message || err)
-    return NextResponse.json({ error: err?.message || 'Failed to follow' }, { status: 500 })
+    return NextResponse.json({
+      error: 'Follow request could not be completed',
+      code: 'FOLLOW_CREATE_FAILED',
+    }, { status: 500 })
   }
 }
 
 // DELETE /api/follows — unfollow
-// Query param: claim_sale_id or followee_id
+// Query param: claim_sale_id, auction_id, or followee_id
 export async function DELETE(request) {
   const authClient = await createAuthClient()
   const { data: { user }, error: authError } = await authClient.auth.getUser()
@@ -281,10 +387,11 @@ export async function DELETE(request) {
 
   const { searchParams } = new URL(request.url)
   const claim_sale_id = searchParams.get('claim_sale_id')
+  const auction_id = searchParams.get('auction_id')
   const followee_id = searchParams.get('followee_id')
 
-  if (!claim_sale_id && !followee_id) {
-    return NextResponse.json({ error: 'Must provide claim_sale_id or followee_id' }, { status: 400 })
+  if (!claim_sale_id && !auction_id && !followee_id) {
+    return NextResponse.json({ error: 'Must provide claim_sale_id, auction_id, or followee_id' }, { status: 400 })
   }
 
   try {
@@ -294,6 +401,7 @@ export async function DELETE(request) {
       .eq('follower_id', user.id)
 
     if (claim_sale_id) q = q.eq('claim_sale_id', claim_sale_id)
+    if (auction_id) q = q.eq('auction_id', auction_id)
     if (followee_id) q = q.eq('followee_id', followee_id)
 
     const { error } = await q
@@ -308,6 +416,9 @@ export async function DELETE(request) {
     return NextResponse.json({ success: true })
   } catch (err) {
     console.error('[DELETE /api/follows]', err?.message || err)
-    return NextResponse.json({ error: err?.message || 'Failed to unfollow' }, { status: 500 })
+    return NextResponse.json({
+      error: 'Unfollow request could not be completed',
+      code: 'FOLLOW_DELETE_FAILED',
+    }, { status: 500 })
   }
 }
