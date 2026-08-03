@@ -190,6 +190,80 @@ DO $$ DECLARE v_id uuid; v_key uuid:='b1000000-0000-4000-8000-000000000001'; v_p
   END IF;
 END $$;
 
+-- Phase 45C Auction idempotency: only an exact immutable action/auction/pickup
+-- intent may replay.  Pickup or auction changes using the same key must make
+-- no second order or reservation write for both buyout and winner claim.
+DO $$
+DECLARE
+  v_pickup uuid;
+  v_other_pickup uuid := 'd1000000-0000-4000-8000-000000000001';
+  v_buyout_a uuid;
+  v_buyout_b uuid;
+  v_claim_a uuid;
+  v_claim_b uuid;
+  v_first jsonb;
+  v_replay jsonb;
+  v_orders integer;
+  v_reservations integer;
+BEGIN
+  SELECT id INTO v_pickup FROM public.pickup_locations WHERE active LIMIT 1;
+  INSERT INTO public.pickup_locations(id,slug,name,address,active,is_default)
+  VALUES(v_other_pickup,'phase45c-idempotency-alt','Phase 45C Alternate','Test address',true,false)
+  ON CONFLICT (id) DO UPDATE SET active=true;
+  INSERT INTO public.card_index(scryfall_id,name,set_code,collector_number) VALUES
+    ('b0000000-0000-4000-8000-000000000022','Phase 45C Idempotency One','TST','22'),
+    ('b0000000-0000-4000-8000-000000000023','Phase 45C Idempotency Two','TST','23'),
+    ('b0000000-0000-4000-8000-000000000024','Phase 45C Idempotency Three','TST','24'),
+    ('b0000000-0000-4000-8000-000000000025','Phase 45C Idempotency Four','TST','25')
+  ON CONFLICT (scryfall_id) DO NOTHING;
+  INSERT INTO public.library_cards(id,user_id,binder_id,scryfall_id,quantity) VALUES
+    ('c0000000-0000-4000-8000-000000000022','a0000000-0000-4000-8000-000000000011',(SELECT id FROM public.binders WHERE user_id='a0000000-0000-4000-8000-000000000011'),'b0000000-0000-4000-8000-000000000022',1),
+    ('c0000000-0000-4000-8000-000000000023','a0000000-0000-4000-8000-000000000011',(SELECT id FROM public.binders WHERE user_id='a0000000-0000-4000-8000-000000000011'),'b0000000-0000-4000-8000-000000000023',1),
+    ('c0000000-0000-4000-8000-000000000024','a0000000-0000-4000-8000-000000000011',(SELECT id FROM public.binders WHERE user_id='a0000000-0000-4000-8000-000000000011'),'b0000000-0000-4000-8000-000000000024',1),
+    ('c0000000-0000-4000-8000-000000000025','a0000000-0000-4000-8000-000000000011',(SELECT id FROM public.binders WHERE user_id='a0000000-0000-4000-8000-000000000011'),'b0000000-0000-4000-8000-000000000025',1)
+  ON CONFLICT (id) DO NOTHING;
+  INSERT INTO public.card_photos(user_id,library_card_id,storage_path) VALUES
+    ('a0000000-0000-4000-8000-000000000011','c0000000-0000-4000-8000-000000000022','a0000000-0000-4000-8000-000000000011/c0000000-0000-4000-8000-000000000022/00000000-0000-4000-8000-000000000022.jpg'),
+    ('a0000000-0000-4000-8000-000000000011','c0000000-0000-4000-8000-000000000023','a0000000-0000-4000-8000-000000000011/c0000000-0000-4000-8000-000000000023/00000000-0000-4000-8000-000000000023.jpg'),
+    ('a0000000-0000-4000-8000-000000000011','c0000000-0000-4000-8000-000000000024','a0000000-0000-4000-8000-000000000011/c0000000-0000-4000-8000-000000000024/00000000-0000-4000-8000-000000000024.jpg'),
+    ('a0000000-0000-4000-8000-000000000011','c0000000-0000-4000-8000-000000000025','a0000000-0000-4000-8000-000000000011/c0000000-0000-4000-8000-000000000025/00000000-0000-4000-8000-000000000025.jpg')
+  ON CONFLICT (library_card_id) DO NOTHING;
+
+  v_buyout_a:=public.create_auction_draft('a0000000-0000-4000-8000-000000000011','Idempotent Buyout A',10,'any',1,100);
+  v_buyout_b:=public.create_auction_draft('a0000000-0000-4000-8000-000000000011','Idempotent Buyout B',10,'any',1,100);
+  PERFORM public.add_auction_draft_item('a0000000-0000-4000-8000-000000000011',v_buyout_a,'c0000000-0000-4000-8000-000000000022',1);
+  PERFORM public.add_auction_draft_item('a0000000-0000-4000-8000-000000000011',v_buyout_b,'c0000000-0000-4000-8000-000000000023',1);
+  PERFORM public.publish_auction('a0000000-0000-4000-8000-000000000011',v_buyout_a);
+  PERFORM public.publish_auction('a0000000-0000-4000-8000-000000000011',v_buyout_b);
+  v_first:=public.checkout_auction_buyout('a0000000-0000-4000-8000-000000000012','b1000000-0000-4000-8000-000000000022',v_pickup,v_buyout_a);
+  v_replay:=public.checkout_auction_buyout('a0000000-0000-4000-8000-000000000012','b1000000-0000-4000-8000-000000000022',v_pickup,v_buyout_a);
+  IF v_first<>v_replay OR v_first->>'result_code'<>'CHECKOUT_COMPLETE' THEN RAISE EXCEPTION 'exact buyout replay failed'; END IF;
+  SELECT count(*) INTO v_orders FROM public.orders;
+  SELECT count(*) INTO v_reservations FROM public.marketplace_card_reservations;
+  BEGIN PERFORM public.checkout_auction_buyout('a0000000-0000-4000-8000-000000000012','b1000000-0000-4000-8000-000000000022',v_other_pickup,v_buyout_a); RAISE EXCEPTION 'changed buyout pickup replay accepted'; EXCEPTION WHEN OTHERS THEN IF SQLERRM<>'IDEMPOTENCY_KEY_REUSED' THEN RAISE; END IF; END;
+  BEGIN PERFORM public.checkout_auction_buyout('a0000000-0000-4000-8000-000000000012','b1000000-0000-4000-8000-000000000022',v_pickup,v_buyout_b); RAISE EXCEPTION 'changed buyout auction replay accepted'; EXCEPTION WHEN OTHERS THEN IF SQLERRM<>'IDEMPOTENCY_KEY_REUSED' THEN RAISE; END IF; END;
+  IF (SELECT count(*) FROM public.orders)<>v_orders OR (SELECT count(*) FROM public.marketplace_card_reservations)<>v_reservations OR EXISTS(SELECT 1 FROM public.auctions WHERE id=v_buyout_b AND status<>'active') THEN RAISE EXCEPTION 'changed buyout intent wrote rows'; END IF;
+
+  v_claim_a:=public.create_auction_draft('a0000000-0000-4000-8000-000000000011','Idempotent Claim A',10,'any',1);
+  v_claim_b:=public.create_auction_draft('a0000000-0000-4000-8000-000000000011','Idempotent Claim B',10,'any',1);
+  PERFORM public.add_auction_draft_item('a0000000-0000-4000-8000-000000000011',v_claim_a,'c0000000-0000-4000-8000-000000000024',1);
+  PERFORM public.add_auction_draft_item('a0000000-0000-4000-8000-000000000011',v_claim_b,'c0000000-0000-4000-8000-000000000025',1);
+  PERFORM public.publish_auction('a0000000-0000-4000-8000-000000000011',v_claim_a);
+  PERFORM public.publish_auction('a0000000-0000-4000-8000-000000000011',v_claim_b);
+  PERFORM public.place_auction_bid(v_claim_a,'a0000000-0000-4000-8000-000000000012',10);
+  PERFORM public.place_auction_bid(v_claim_b,'a0000000-0000-4000-8000-000000000012',10);
+  UPDATE public.auctions SET expires_at=now()-interval '1 minute' WHERE id IN (v_claim_a,v_claim_b);
+  PERFORM public.settle_expired_auctions(50,now());
+  v_first:=public.checkout_auction_claim('a0000000-0000-4000-8000-000000000012','b1000000-0000-4000-8000-000000000023',v_pickup,v_claim_a);
+  v_replay:=public.checkout_auction_claim('a0000000-0000-4000-8000-000000000012','b1000000-0000-4000-8000-000000000023',v_pickup,v_claim_a);
+  IF v_first<>v_replay OR v_first->>'result_code'<>'CHECKOUT_COMPLETE' THEN RAISE EXCEPTION 'exact claim replay failed'; END IF;
+  SELECT count(*) INTO v_orders FROM public.orders;
+  SELECT count(*) INTO v_reservations FROM public.marketplace_card_reservations;
+  BEGIN PERFORM public.checkout_auction_claim('a0000000-0000-4000-8000-000000000012','b1000000-0000-4000-8000-000000000023',v_other_pickup,v_claim_a); RAISE EXCEPTION 'changed claim pickup replay accepted'; EXCEPTION WHEN OTHERS THEN IF SQLERRM<>'IDEMPOTENCY_KEY_REUSED' THEN RAISE; END IF; END;
+  BEGIN PERFORM public.checkout_auction_claim('a0000000-0000-4000-8000-000000000012','b1000000-0000-4000-8000-000000000023',v_pickup,v_claim_b); RAISE EXCEPTION 'changed claim auction replay accepted'; EXCEPTION WHEN OTHERS THEN IF SQLERRM<>'IDEMPOTENCY_KEY_REUSED' THEN RAISE; END IF; END;
+  IF (SELECT count(*) FROM public.orders)<>v_orders OR (SELECT count(*) FROM public.marketplace_card_reservations)<>v_reservations OR EXISTS(SELECT 1 FROM public.auctions WHERE id=v_claim_b AND status<>'ended_pending_winner') THEN RAISE EXCEPTION 'changed claim intent wrote rows'; END IF;
+END $$;
+
 -- Lazy buyout expiry commits AUCTION_ENDED and replays that non-checkout
 -- result, never the generic CHECKOUT_COMPLETE marker.
 DO $$ DECLARE v_id uuid; v_pickup uuid; v_first jsonb; v_replay jsonb; v_key uuid:='b1000000-0000-4000-8000-000000000005'; BEGIN
@@ -356,6 +430,7 @@ DO $$ DECLARE v_function regprocedure; BEGIN
     'public.place_auction_bid(uuid,uuid,integer)'::regprocedure,
     'public.checkout_auction_buyout(uuid,uuid,uuid,uuid)'::regprocedure,
     'public.checkout_auction_claim(uuid,uuid,uuid,uuid)'::regprocedure,
+    'public.phase45c_auction_checkout_fingerprint(text,uuid,uuid,uuid)'::regprocedure,
     'public.extend_auction(uuid,uuid,integer,text)'::regprocedure,
     'public.relist_auction(uuid,uuid,integer)'::regprocedure,
     'public.settle_expired_auctions(integer,timestamptz)'::regprocedure,
