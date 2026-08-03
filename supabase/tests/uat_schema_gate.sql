@@ -42,7 +42,8 @@ BEGIN
     ('20260726000001'),
     ('20260727000000'),
     ('20260727000001'),
-    ('20260803000000')
+    ('20260803000000'),
+    ('20260803000001')
   ) AS expected(version)
   WHERE NOT EXISTS (
     SELECT 1
@@ -54,9 +55,44 @@ BEGIN
     RAISE EXCEPTION 'UAT schema gate: missing migration version(s): %', v_missing;
   END IF;
 
-  IF (SELECT count(*) FROM supabase_migrations.schema_migrations) <> 12 THEN
-    RAISE EXCEPTION 'UAT schema gate: expected exactly 12 migration versions, found %',
+  IF (SELECT count(*) FROM supabase_migrations.schema_migrations) <> 13 THEN
+    RAISE EXCEPTION 'UAT schema gate: expected exactly 13 migration versions, found %',
       (SELECT count(*) FROM supabase_migrations.schema_migrations);
+  END IF;
+END $$;
+
+-- A host that had Phase 45C before historical 45B must converge on the
+-- hardened shared function after the forward reconciliation migration.
+DO $$
+DECLARE
+  v_transition text;
+BEGIN
+  v_transition := regexp_replace(
+    pg_get_functiondef('public.transition_order(uuid,uuid,text,text)'::regprocedure),
+    '--[^' || chr(10) || ']*', '', 'g'
+  );
+  IF v_transition !~ 'ORDER_NOT_AUTHORIZED'
+    OR v_transition !~ 'ORDER BY l.id'
+    OR v_transition !~ 'ORDER BY lc.id'
+    OR v_transition !~ 'ORDER BY m.library_card_id, m.source_id'
+    OR v_transition !~ 'WHERE id = p_order_id FOR UPDATE'
+    OR v_transition !~ 'LISTING_CARD_OWNER_MISMATCH'
+    OR v_transition !~ 'phase45c_claim_sale_eligible'
+    OR v_transition !~ 'ORDER_NOT_FOUND'
+    OR v_transition !~ 'LISTING_NOT_FOUND'
+    OR v_transition !~ 'INVALID_CANCELLATION_REASON'
+    OR v_transition !~ 'ORDER_TRANSITION_NOT_ALLOWED'
+    OR v_transition !~ 'auction_bid'
+    OR v_transition !~ 'auction_buyout'
+    OR v_transition !~ 'relist_available' THEN
+    RAISE EXCEPTION 'UAT schema gate: transition_order reconciliation contract is missing';
+  END IF;
+  IF strpos(v_transition, 'ORDER_NOT_AUTHORIZED') > strpos(v_transition, 'v_from = ''order_completed''') THEN
+    RAISE EXCEPTION 'UAT schema gate: terminal authorization follows replay';
+  END IF;
+  IF NOT has_function_privilege('service_role', 'public.transition_order(uuid,uuid,text,text)', 'EXECUTE')
+    OR has_function_privilege('authenticated', 'public.transition_order(uuid,uuid,text,text)', 'EXECUTE') THEN
+    RAISE EXCEPTION 'UAT schema gate: transition_order execution boundary is wrong';
   END IF;
 END $$;
 
