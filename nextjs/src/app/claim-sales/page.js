@@ -2,6 +2,7 @@ import { createClient as createAuthClient } from '@/lib/supabaseServer'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import DBBNav from '@/components/DBBNav'
 import ClaimSaleList from '@/components/ClaimSaleList'
+import { indexClaimSaleListings, resolveFeaturedImageUri } from '@/lib/claimSaleThumbnails.mjs'
 
 export const metadata = { title: 'Claim Sales — DBB' }
 
@@ -28,7 +29,7 @@ export default async function ClaimSalesPage() {
       .from('claim_sales')
       .select(`
         id, title, description, set_code, user_id, expires_at,
-        delivery_option, created_at, status
+        delivery_option, created_at, status, featured_listing_id
       `, { count: 'exact' })
       .eq('status', 'active')
       .gt('expires_at', new Date().toISOString())
@@ -39,7 +40,6 @@ export default async function ClaimSalesPage() {
       const claimSaleIds = data.map(cs => cs.id)
       const userIds = [...new Set(data.map(cs => cs.user_id))]
       let sellerMap = {}
-      let cardCountMap = {}
       let followerCountMap = {}
       const [profilesResult, listingsResult, followsResult] = await Promise.all([
         userIds.length > 0
@@ -48,7 +48,12 @@ export default async function ClaimSalesPage() {
         claimSaleIds.length > 0
           ? sc
             .from('listings')
-            .select('claim_sale_id')
+            .select(`
+              id, claim_sale_id,
+              library_cards!inner(
+                card_index!inner(image_uris)
+              )
+            `)
             .in('claim_sale_id', claimSaleIds)
             .eq('status', 'active')
           : Promise.resolve({ data: [] }),
@@ -60,18 +65,22 @@ export default async function ClaimSalesPage() {
           : Promise.resolve({ data: [] }),
       ])
       for (const p of profilesResult.data || []) sellerMap[p.id] = p.display_name
-      for (const row of listingsResult.data || []) {
-        cardCountMap[row.claim_sale_id] = (cardCountMap[row.claim_sale_id] || 0) + 1
-      }
+      // Thumbnails come from the stored card_index.image_uris on the active
+      // child listings — the same resolution the Bazaar browse API uses, so a
+      // sale never shows a thumbnail on one surface and a blank tile on the
+      // other. Synthetic fixture scryfall_ids have no Scryfall record, so no
+      // client-side lookup is attempted.
+      const thumbIndex = indexClaimSaleListings(listingsResult.data || [])
       for (const row of followsResult.data || []) {
         followerCountMap[row.claim_sale_id] = (followerCountMap[row.claim_sale_id] || 0) + 1
       }
 
-      claimSales = data.map(cs => ({
+      claimSales = data.map(({ featured_listing_id: featuredListingId, ...cs }) => ({
         ...cs,
         seller_name: sellerMap[cs.user_id] || null,
-        card_count: cardCountMap[cs.id] || 0,
+        card_count: thumbIndex.cardCount[cs.id] || 0,
         follower_count: followerCountMap[cs.id] || 0,
+        featured_image_uri: resolveFeaturedImageUri(thumbIndex, cs.id, featuredListingId),
       }))
       total = count || 0
       hasMore = 20 < total

@@ -7,6 +7,10 @@
     {
       "path": "/api/pricing?refresh=true",
       "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/maintenance/phase45c-expiry",
+      "schedule": "0 * * * *"
     }
   ]
 }

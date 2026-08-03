@@ -20,6 +20,30 @@ function formatExpiry(expiresAt) {
   return `${minutes}m left`
 }
 
+// The thumbnail is decorative: the sale title sits directly beside it, so an
+// empty alt keeps screen readers from announcing a duplicate label. A broken
+// image URL collapses the whole media block rather than leaving a broken-image
+// box, matching how the tile renders when a sale has no imaged card at all.
+function ClaimSaleThumbnail({ src, title }) {
+  const [failed, setFailed] = useState(false)
+  if (!src || failed) return null
+  return (
+    <div
+      data-testid="claim-sale-thumbnail"
+      className="relative h-36 sm:h-40 -mx-4 -mt-4 mb-3 overflow-hidden rounded-t-dbb bg-gray-100 dark:bg-dbb-primary"
+    >
+      <img
+        src={src}
+        alt=""
+        title={title}
+        className="h-full w-full object-cover"
+        loading="lazy"
+        onError={() => setFailed(true)}
+      />
+    </div>
+  )
+}
+
 export default function ClaimSaleList({ claimSales: initial, hasMore, total }) {
   const [claimSales] = useState(initial || [])
 
@@ -58,8 +82,9 @@ export default function ClaimSaleList({ claimSales: initial, hasMore, total }) {
             <Link
               key={cs.id}
               href={`/claim-sales/${cs.id}`}
-              className="group rounded-dbb bg-white dark:bg-dbb-secondary border border-gray-200 dark:border-dbb-tertiary/40 p-4 card-hover block"
+              className="group rounded-dbb bg-white dark:bg-dbb-secondary border border-gray-200 dark:border-dbb-tertiary/40 p-4 card-hover block overflow-hidden"
             >
+              <ClaimSaleThumbnail src={cs.featured_image_uri} title={cs.title} />
               <div className="flex items-start justify-between gap-2 mb-2">
                 <h3 className="font-semibold text-gray-900 dark:text-white group-hover:text-dbb-accent transition-colors line-clamp-2">
                   {cs.title}

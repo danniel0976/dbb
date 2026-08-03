@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient as createAuthClient } from '@/lib/supabaseServer'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { ensurePriceCache, lookupPrice, sellPrice } from '@/lib/pricingCache'
+import { createHash } from 'crypto'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -33,6 +34,35 @@ async function signedQr(sc, path) {
   if (!path) return null
   const { data } = await sc.storage.from(QR_BUCKET).createSignedUrl(path, QR_TTL_SECONDS)
   return data?.signedUrl || null
+}
+
+function canonicalFingerprint(buyerId, pickupLocationId, items) {
+  const pairs = [...items]
+    .map(item => [String(item.cart_item_id), Number(item.quantity)])
+    .sort((a, b) => a[0].localeCompare(b[0]))
+  return createHash('sha256')
+    .update(JSON.stringify([String(buyerId), String(pickupLocationId), pairs]))
+    .digest('hex')
+}
+
+function rpcCode(error) {
+  const message = String(error?.message || '')
+  return ['INVALID_QUANTITY', 'CART_SNAPSHOT_INVALID', 'OWN_LISTING', 'LISTING_NOT_FOUND',
+    'LISTING_UNAVAILABLE', 'CLAIM_SALE_ENDED', 'INSUFFICIENT_STOCK', 'CART_ITEM_CHANGED',
+    'CART_STALE', 'IDEMPOTENCY_KEY_REUSED', 'PRICE_UNAVAILABLE', 'PICKUP_UNAVAILABLE',
+    'SELLER_INELIGIBLE', 'LISTING_CARD_OWNER_MISMATCH', 'RESERVATION_DRIFT', 'CHECKOUT_IN_PROGRESS']
+    .find(code => message.includes(code)) || null
+}
+
+function rpcResponse(error) {
+  const code = rpcCode(error) || 'CHECKOUT_CONFLICT'
+  const status = code === 'PRICE_UNAVAILABLE' ? 503
+    : ['INVALID_QUANTITY', 'CART_SNAPSHOT_INVALID'].includes(code) ? 400 : 409
+  const body = { error: code, code }
+  try {
+    if (error?.details) body.details = JSON.parse(error.details)
+  } catch { /* raw database details never cross the API boundary */ }
+  return privateJson(body, { status })
 }
 
 async function checkoutResult(sc, buyerId, orderIds, idempotentReplay) {
@@ -114,6 +144,16 @@ export async function POST(request) {
   if (!UUID.test(body.pickup_location_id || '')) {
     return privateJson({ error: 'A valid pickup_location_id UUID is required' }, { status: 400 })
   }
+  if (!Array.isArray(body.items) || body.items.length < 1 || body.items.length > 100 ||
+      body.items.some(item => !item || !UUID.test(item.cart_item_id || '') ||
+        !Number.isInteger(item.quantity) || item.quantity < 1 || item.quantity > 9999)) {
+    return privateJson({ error: 'CART_SNAPSHOT_INVALID', code: 'CART_SNAPSHOT_INVALID' }, { status: 400 })
+  }
+  const itemIds = body.items.map(item => item.cart_item_id)
+  if (new Set(itemIds).size !== itemIds.length) {
+    return privateJson({ error: 'CART_SNAPSHOT_INVALID', code: 'CART_SNAPSHOT_INVALID' }, { status: 400 })
+  }
+  const fingerprint = canonicalFingerprint(user.id, body.pickup_location_id, body.items)
 
   const sc = makeServiceClient()
 
@@ -121,15 +161,19 @@ export async function POST(request) {
   // even though the original cart rows have already been removed.
   const { data: prior } = await sc
     .from('checkout_requests')
-    .select('status, order_ids')
+    .select('status, order_ids, request_fingerprint')
     .eq('buyer_id', user.id)
     .eq('idempotency_key', body.idempotency_key)
     .maybeSingle()
+  if (prior?.status === 'completed' && prior.request_fingerprint !== fingerprint) {
+    return privateJson({ error: 'IDEMPOTENCY_KEY_REUSED', code: 'IDEMPOTENCY_KEY_REUSED' }, { status: 409 })
+  }
   if (prior?.status === 'completed' && prior.order_ids?.length) {
     try {
       return privateJson(await checkoutResult(sc, user.id, prior.order_ids, true))
     } catch (error) {
-      return privateJson({ error: error.message }, { status: 500 })
+      console.error('[POST /api/checkout] idempotent replay', error.message)
+      return privateJson({ error: 'CHECKOUT_RESULT_UNAVAILABLE', code: 'CHECKOUT_RESULT_UNAVAILABLE' }, { status: 500 })
     }
   }
 
@@ -151,9 +195,10 @@ export async function POST(request) {
   const { data: cartRows, error: cartError } = await sc
     .from('cart_items')
     .select(`
-      id, user_id, listing_id,
+      id, user_id, listing_id, quantity, version,
       listings(
         id, user_id, library_card_id, multiplier, quantity, status, expires_at,
+        claim_sale_id, claim_sales!listings_claim_sale_id_fkey(id, title, status, expires_at),
         library_cards(
           id, user_id, scryfall_id, quantity, foil, condition,
           card_index(name, set_code, set_name, collector_number)
@@ -166,18 +211,29 @@ export async function POST(request) {
   if (!cartRows?.length) return privateJson({ error: 'Cart is empty' }, { status: 400 })
   if (cartRows.length > 100) return privateJson({ error: 'Checkout is limited to 100 cart items' }, { status: 400 })
 
+  const submitted = new Map(body.items.map(item => [item.cart_item_id, item.quantity]))
+  const currentIds = new Set(cartRows.map(row => row.id))
+  const snapshotMatches = submitted.size === currentIds.size && cartRows.every(row => submitted.get(row.id) === row.quantity)
+  if (!snapshotMatches) {
+    return privateJson({ error: 'Refresh cart and preserve visible selections.', code: 'CART_SNAPSHOT_INVALID',
+      conflicts: cartRows.filter(row => !submitted.has(row.id) || submitted.get(row.id) !== row.quantity)
+        .map(row => ({ cart_item_id: row.id, requested_quantity: row.quantity })) }, { status: 400 })
+  }
+
   const now = Date.now()
   const conflicts = []
   const trustedItems = []
   for (const row of cartRows) {
     const listing = row.listings
     const card = listing?.library_cards
+    const claimSale = Array.isArray(listing?.claim_sales) ? listing.claim_sales[0] : listing?.claim_sales
     let reason = null
     if (!listing || !card) reason = 'Listing or inventory is missing'
     else if (listing.user_id === user.id) reason = 'You cannot buy your own listing'
     else if (listing.status !== 'active') reason = 'Listing is no longer active'
     else if (!listing.expires_at || new Date(listing.expires_at).getTime() <= now) reason = 'Listing has expired'
-    else if (!Number.isInteger(listing.quantity) || listing.quantity < 1 || card.quantity < 1) reason = 'Insufficient quantity'
+    else if (claimSale && (claimSale.status !== 'active' || !claimSale.expires_at || new Date(claimSale.expires_at).getTime() <= now)) reason = 'Claim Sale has ended'
+    else if (!Number.isInteger(listing.quantity) || listing.quantity < row.quantity || card.quantity < 1) reason = 'Insufficient quantity'
 
     const ckdUsd = !reason ? lookupPrice(card.scryfall_id, card.foil) : null
     const unitMyr = ckdUsd == null ? null : sellPrice(ckdUsd, Number(listing.multiplier))
@@ -190,7 +246,11 @@ export async function POST(request) {
     trustedItems.push({
       cart_item_id: row.id,
       listing_id: listing.id,
+      quantity: row.quantity,
       unit_myr: unitMyr,
+      // The RPC compares this locked listing snapshot before accepting the
+      // trusted price. A seller multiplier edit therefore fails closed.
+      multiplier: Number(listing.multiplier),
       card_name: card.card_index?.name || 'Unknown card',
       set_code: card.card_index?.set_code || null,
       set_name: card.card_index?.set_name || null,
@@ -221,10 +281,11 @@ export async function POST(request) {
     p_idempotency_key: body.idempotency_key,
     p_pickup_location_id: body.pickup_location_id,
     p_items: trustedItems,
+    p_request_fingerprint: fingerprint,
   })
   if (rpcError) {
-    console.error('[POST /api/checkout] atomic checkout', rpcError.message)
-    return privateJson({ error: rpcError.message || 'Checkout conflict; no order was created' }, { status: 409 })
+    console.error('[POST /api/checkout] atomic checkout', rpcCode(rpcError) || 'unknown')
+    return rpcResponse(rpcError)
   }
 
   const orderIds = rpcData?.order_ids || []
@@ -233,6 +294,6 @@ export async function POST(request) {
     return privateJson(await checkoutResult(sc, user.id, orderIds, Boolean(rpcData.idempotent_replay)), { status: 201 })
   } catch (error) {
     console.error('[POST /api/checkout] response', error.message)
-    return privateJson({ error: 'Orders were created, but payment details could not be displayed. Contact support before retrying payment.' }, { status: 500 })
+    return privateJson({ error: 'CHECKOUT_RESULT_UNAVAILABLE', code: 'CHECKOUT_RESULT_UNAVAILABLE' }, { status: 500 })
   }
 }

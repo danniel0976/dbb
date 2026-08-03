@@ -144,8 +144,17 @@ export default function CardDetailModal({ libraryRow, onClose, onSave, onDelete 
   }, [libraryRow.id])
 
   const ci = libraryRow.card_index
+  const storedImage = ci?.image_uris?.normal || ci?.image_uris?.small || null
 
   useEffect(() => {
+    // Use the catalog image when present. Synthetic UAT IDs are not valid
+    // Scryfall IDs, so fetching them would leave the inspector blank.
+    if (storedImage) {
+      setImageUrl(storedImage)
+      setLoading(false)
+      return
+    }
+
     getCardById(libraryRow.scryfall_id)
       .then(data => {
         setCardData(data)
@@ -153,7 +162,7 @@ export default function CardDetailModal({ libraryRow, onClose, onSave, onDelete 
         setLoading(false)
       })
       .catch(() => setLoading(false))
-  }, [libraryRow.scryfall_id])
+  }, [libraryRow.scryfall_id, storedImage])
 
   // Capture the triggering card so focus can return to it on close, and
   // autofocus whichever close button is actually visible (desktop panel vs

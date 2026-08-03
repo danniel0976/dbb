@@ -45,7 +45,7 @@ export default async function ClaimSalePage({ params }) {
       .from('claim_sales')
       .select(`
         id, title, description, set_code, user_id, duration_hours,
-        expires_at, status, delivery_option, created_at
+        expires_at, status, delivery_option, created_at, featured_listing_id
       `)
       .eq('id', id)
       .maybeSingle()
@@ -74,11 +74,11 @@ export default async function ClaimSalePage({ params }) {
         const { data: listingData, error: listErr } = await sc
           .from('listings')
           .select(`
-            id, multiplier, status, created_at, expires_at,
+            id, multiplier, quantity, status, created_at, expires_at,
             library_cards!inner(
               id, scryfall_id, foil, condition, quantity,
               card_index!inner(
-                name, set_code, set_name, collector_number, rarity, type_line, colors, cmc
+                name, set_code, set_name, collector_number, rarity, type_line, colors, cmc, image_uris
               )
             )
           `)
@@ -135,6 +135,7 @@ export default async function ClaimSalePage({ params }) {
         notFound={notFound}
         claimSaleId={id}
         userId={user?.id || null}
+        featuredListingId={claimSale?.featured_listing_id || null}
       />
     </div>
   )

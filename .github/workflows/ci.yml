@@ -32,6 +32,10 @@ jobs:
         working-directory: nextjs
         run: npm ci
 
+      - name: Build
+        working-directory: nextjs
+        run: npm run build
+
       - name: Run targeted regression tests
         working-directory: nextjs
         run: |
@@ -47,7 +51,3 @@ jobs:
             node "$test_file"
           done
           echo "All targeted tests passed."
-
-      - name: Build
-        working-directory: nextjs
-        run: npm run build

@@ -14,14 +14,28 @@ const CONDITION_COLORS = {
 }
 
 export default function LibraryCard({ libraryRow, onStar, onDelete, onOpen, dimmed, priceData }) {
-  const [imageUrl, setImageUrl] = useState(null)
+  const ci = libraryRow.card_index
+  const storedImage = ci?.image_uris?.normal || ci?.image_uris?.small || null
+  const [imageUrl, setImageUrl] = useState(storedImage)
   const [imgLoaded, setImgLoaded] = useState(false)
   const [imgError, setImgError] = useState(false)
 
-  const ci = libraryRow.card_index
   const isFoil = libraryRow.foil !== 'normal'
   useEffect(() => {
     let cancelled = false
+
+    // Catalog rows already contain their display image. This is essential for
+    // synthetic UAT IDs, which cannot be resolved through Scryfall.
+    if (storedImage) {
+      setImageUrl(storedImage)
+      setImgError(false)
+      setImgLoaded(false)
+      return () => { cancelled = true }
+    }
+
+    setImageUrl(null)
+    setImgLoaded(false)
+    setImgError(false)
     getCardById(libraryRow.scryfall_id)
       .then(data => {
         if (!cancelled) setImageUrl(getImageUrl(data))
@@ -30,7 +44,7 @@ export default function LibraryCard({ libraryRow, onStar, onDelete, onOpen, dimm
         if (!cancelled) setImgError(true)
       })
     return () => { cancelled = true }
-  }, [libraryRow.scryfall_id])
+  }, [libraryRow.scryfall_id, storedImage])
 
   const myrPrice = priceData?.myr_3_0 ?? null
 

@@ -2,7 +2,9 @@ import { NextResponse } from 'next/server'
 import { createClient as createAuthClient } from '@/lib/supabaseServer'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { requireCompleteMerchantProfile } from '@/lib/merchantProfile'
+import { stockError } from '@/lib/stockErrors'
 import { collectInBatches, dedupeValidIds } from '@/lib/postgrestBatch'
+import { indexClaimSaleListings, resolveFeaturedImageUri } from '@/lib/claimSaleThumbnails.mjs'
 
 export const runtime = 'nodejs'
 
@@ -42,7 +44,7 @@ export async function GET(request) {
       .from('claim_sales')
       .select(`
         id, title, description, set_code, user_id, expires_at,
-        delivery_option, created_at, status
+        delivery_option, created_at, status, featured_listing_id
       `, { count: 'exact' })
       .eq('status', 'active')
       .gt('expires_at', nowIso)
@@ -113,36 +115,33 @@ export async function GET(request) {
         for (const p of profiles || []) sellerMap[p.id] = p.display_name
       }
 
-      let cardCountMap = {}
-      let firstCardMap = {}  // claim_sale_id → first scryfall_id for thumbnail
+      // Pre-resolved from stored card_index.image_uris; no Scryfall needed.
+      let thumbIndex = indexClaimSaleListings([])
       if (pageIds.length > 0) {
         try {
           const { data: listingData } = await sc
             .from('listings')
             .select(`
-              claim_sale_id,
-              library_cards!inner(scryfall_id)
+              id, claim_sale_id,
+              library_cards!inner(
+                card_index!inner(image_uris)
+              )
             `)
             .in('claim_sale_id', pageIds)
             .eq('status', 'active')
-          for (const row of listingData || []) {
-            cardCountMap[row.claim_sale_id] = (cardCountMap[row.claim_sale_id] || 0) + 1
-            if (!firstCardMap[row.claim_sale_id] && row.library_cards?.scryfall_id) {
-              firstCardMap[row.claim_sale_id] = row.library_cards.scryfall_id
-            }
-          }
+          thumbIndex = indexClaimSaleListings(listingData || [])
         } catch {}
       }
 
       let results = paginatedData.map(cs => ({
         ...cs,
         seller_name: sellerMap[cs.user_id] || null,
-        card_count: cardCountMap[cs.id] || 0,
+        card_count: thumbIndex.cardCount[cs.id] || 0,
         follower_count: cs._follower_count,
-        first_card_scryfall_id: firstCardMap[cs.id] || null,
+        featured_image_uri: resolveFeaturedImageUri(thumbIndex, cs.id, cs.featured_listing_id),
       }))
       // Strip internal sort field
-      results = results.map(({ _follower_count, ...cs }) => cs)
+      results = results.map(({ _follower_count, featured_listing_id: _fid, ...cs }) => cs)
 
       return NextResponse.json({
         claim_sales: results,
@@ -184,27 +183,23 @@ export async function GET(request) {
       for (const p of profiles || []) sellerMap[p.id] = p.display_name
     }
 
-    // Get card counts + follower counts + first card thumbnail per claim sale
+    // Get card counts + follower counts + thumbnail image per claim sale
     const claimSaleIds = (data || []).map(cs => cs.id)
-    let cardCountMap = {}
     let followerCountMap = {}
-    let firstCardMap = {}
+    let thumbIndex = indexClaimSaleListings([])
     if (claimSaleIds.length > 0) {
       try {
         const { data: listingData } = await sc
           .from('listings')
           .select(`
-            claim_sale_id,
-            library_cards!inner(scryfall_id)
+            id, claim_sale_id,
+            library_cards!inner(
+              card_index!inner(image_uris)
+            )
           `)
           .in('claim_sale_id', claimSaleIds)
           .eq('status', 'active')
-        for (const row of listingData || []) {
-          cardCountMap[row.claim_sale_id] = (cardCountMap[row.claim_sale_id] || 0) + 1
-          if (!firstCardMap[row.claim_sale_id] && row.library_cards?.scryfall_id) {
-            firstCardMap[row.claim_sale_id] = row.library_cards.scryfall_id
-          }
-        }
+        thumbIndex = indexClaimSaleListings(listingData || [])
       } catch {}
 
       try {
@@ -218,13 +213,16 @@ export async function GET(request) {
       } catch {}
     }
 
-    let results = (data || []).map(cs => ({
-      ...cs,
-      seller_name: sellerMap[cs.user_id] || null,
-      card_count: cardCountMap[cs.id] || 0,
-      follower_count: followerCountMap[cs.id] || 0,
-      first_card_scryfall_id: firstCardMap[cs.id] || null,
-    }))
+    let results = (data || []).map(cs => {
+      const { featured_listing_id: featuredListingId, ...rest } = cs
+      return {
+        ...rest,
+        seller_name: sellerMap[cs.user_id] || null,
+        card_count: thumbIndex.cardCount[cs.id] || 0,
+        follower_count: followerCountMap[cs.id] || 0,
+        featured_image_uri: resolveFeaturedImageUri(thumbIndex, cs.id, featuredListingId),
+      }
+    })
 
     const total = count || 0
     return NextResponse.json({
@@ -418,7 +416,8 @@ export async function POST(request) {
     claimSale = data
   } catch (err) {
     console.error('[POST /api/claim-sales] create', err?.message || err)
-    return NextResponse.json({ error: err?.message || 'Failed to create claim sale' }, { status: 500 })
+    const safe = stockError(err, 'CLAIM_SALE_CREATE_FAILED')
+    return NextResponse.json({ error: safe.error, code: safe.code }, { status: safe.status })
   }
 
   // Create listings for each card and link to claim sale
@@ -480,10 +479,12 @@ export async function POST(request) {
   } catch (err) {
     console.error('[POST /api/claim-sales] listings', err?.message || err)
     // Claim sale was created but listings failed — still return the claim sale
+    const safe = stockError(err, 'CLAIM_SALE_LISTINGS_FAILED')
     return NextResponse.json({
       claim_sale: claimSale,
       listings: [],
-      warning: 'Claim sale created but failed to link listings. Please run migration-013 for full functionality.',
-    }, { status: 201 })
+      warning: safe.error,
+      code: safe.code,
+    }, { status: safe.status === 500 ? 503 : safe.status })
   }
 }

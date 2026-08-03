@@ -17,7 +17,7 @@ const PRIMARY_LINKS = [
 
 // Module-level cache so CartBadge fetches once per session even if DBBNav
 // remounts across page navigations (since DBBNav lives in per-page components).
-const cartCache = { count: null, fetchedAt: 0, pending: null }
+const cartCache = { count: null, fetchedAt: 0, revision: 0 }
 const CART_TTL = 60_000 // revalidate after 1 minute
 
 function useCartCount(userEmail) {
@@ -25,23 +25,33 @@ function useCartCount(userEmail) {
 
   useEffect(() => {
     if (!userEmail) return
-    const now = Date.now()
-    if (cartCache.count !== null && now - cartCache.fetchedAt < CART_TTL) {
-      setCount(cartCache.count)
-      return
-    }
-    if (!cartCache.pending) {
-      cartCache.pending = fetch('/api/cart/count')
+    let active = true
+    const refresh = (force = false) => {
+      const now = Date.now()
+      if (!force && cartCache.count !== null && now - cartCache.fetchedAt < CART_TTL) {
+        setCount(cartCache.count)
+        return
+      }
+      const revision = ++cartCache.revision
+      fetch('/api/cart/count')
         .then(r => r.ok ? r.json() : null)
         .then(data => {
+          if (!active || revision !== cartCache.revision) return
           cartCache.count = data?.count ?? 0
           cartCache.fetchedAt = Date.now()
-          cartCache.pending = null
-          return cartCache.count
+          setCount(cartCache.count)
         })
-        .catch(() => { cartCache.pending = null; return 0 })
+        .catch(() => {
+          if (active && revision === cartCache.revision) setCount(cartCache.count ?? 0)
+        })
     }
-    cartCache.pending.then(c => setCount(c))
+    const onCartUpdated = () => refresh(true)
+    refresh()
+    window.addEventListener('dbb-cart-updated', onCartUpdated)
+    return () => {
+      active = false
+      window.removeEventListener('dbb-cart-updated', onCartUpdated)
+    }
   }, [userEmail])
 
   return count
