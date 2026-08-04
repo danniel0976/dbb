@@ -122,6 +122,7 @@ check('fixture cleanup admits the full synthetic graph before its first delete',
     'library card ownership does not match',
     'photo ownership does not match',
     'listing ownership does not match',
+    'claim sale ownership does not match',
     'catalog stored image does not match',
     'does not match the synthetic fixture bytes',
   ]) {
@@ -139,6 +140,8 @@ check('storage and database absence are independently proven after cleanup', () 
   assert.ok(storageAbsence > storageRemove)
   assert.ok(authDelete > storageAbsence)
   assert.ok(finalAbsence > authDelete)
+  assert.ok(harnessSource.includes("['claim_sales', 'user_id', user.id]"), 'Claim Sale fixture row must be explicitly deleted')
+  assert.ok(harnessSource.includes("checks.push(['claim_sales', 'user_id', userId])"), 'Claim Sale fixture absence must be proven')
 })
 
 if (runtimeMode === '--mac-local-runtime') {

@@ -25,6 +25,16 @@ export const PRICE_STATUS = {
   ERROR: 'error',
 }
 
+// Owner-listing lookup is independent from the CKD price lookup. Keeping its
+// states explicit prevents a slow or failed Bazaar request from being mistaken
+// for a confirmed unlisted card and rendered as a default-tier preview.
+export const OWNER_LISTING_STATUS = {
+  LOADING: 'loading',
+  NONE: 'none',
+  READY: 'ready',
+  ERROR: 'error',
+}
+
 // /api/pricing/batch keys its response map by "<scryfall_id>:<foil>".
 export function priceCacheKey(scryfallId, foil = 'normal') {
   return `${scryfallId}:${foil || 'normal'}`
@@ -58,7 +68,7 @@ export function normalizeMultiplier(candidate) {
 }
 
 export function formatUsd(ckdUsd) {
-  return ckdUsd == null ? null : `USD $${ckdUsd.toFixed(2)}`
+  return ckdUsd == null ? null : `$${ckdUsd.toFixed(2)}`
 }
 
 export function formatMyr(myr) {
@@ -79,13 +89,39 @@ export function activeListingMultiplier(listing, now = Date.now()) {
 
 // Everything the summary renders, derived in one place so the component stays
 // a dumb view and the listing/preview contract is directly testable.
-export function buildPriceSummary({ status, ckdUsd, listing, previewMultiplier = MULTIPLIERS[0], now = Date.now() }) {
-  const listedTier = activeListingMultiplier(listing, now)
+export function buildPriceSummary({
+  status,
+  ckdUsd,
+  listingStatus = OWNER_LISTING_STATUS.ERROR,
+  listing,
+  previewMultiplier = MULTIPLIERS[0],
+  now = Date.now(),
+}) {
+  const listingStateIsValid = (
+    (listingStatus === OWNER_LISTING_STATUS.NONE && listing == null) ||
+    (listingStatus === OWNER_LISTING_STATUS.READY && listing?.id) ||
+    listingStatus === OWNER_LISTING_STATUS.LOADING ||
+    listingStatus === OWNER_LISTING_STATUS.ERROR
+  )
+  const effectiveListingStatus = listingStateIsValid ? listingStatus : OWNER_LISTING_STATUS.ERROR
+  const listedTier = effectiveListingStatus === OWNER_LISTING_STATUS.READY
+    ? activeListingMultiplier(listing, now)
+    : null
   const authoritative = listedTier != null
-  const tier = listedTier ?? normalizeMultiplier(previewMultiplier) ?? MULTIPLIERS[0]
+  const listingResolved = effectiveListingStatus === OWNER_LISTING_STATUS.NONE ||
+    effectiveListingStatus === OWNER_LISTING_STATUS.READY
+  const tier = listingResolved
+    ? listedTier ?? normalizeMultiplier(previewMultiplier) ?? MULTIPLIERS[0]
+    : null
   const presentation = {
     authoritative,
-    priceLabel: authoritative ? 'Sell price' : 'Price preview',
+    priceLabel: authoritative
+      ? 'Sell price'
+      : effectiveListingStatus === OWNER_LISTING_STATUS.LOADING
+        ? 'Checking listing status'
+        : effectiveListingStatus === OWNER_LISTING_STATUS.ERROR
+          ? 'Listing status unavailable'
+          : 'Price preview',
     multiplier: tier,
   }
 
@@ -95,6 +131,18 @@ export function buildPriceSummary({ status, ckdUsd, listing, previewMultiplier =
       status: status === PRICE_STATUS.READY ? PRICE_STATUS.UNAVAILABLE : status,
       sellStatus: status === PRICE_STATUS.READY ? PRICE_STATUS.UNAVAILABLE : status,
       baselineLabel: null,
+      sellLabel: null,
+      myr: null,
+    }
+  }
+  if (!listingResolved) {
+    return {
+      ...presentation,
+      status: PRICE_STATUS.READY,
+      sellStatus: effectiveListingStatus === OWNER_LISTING_STATUS.LOADING
+        ? PRICE_STATUS.LOADING
+        : PRICE_STATUS.ERROR,
+      baselineLabel: formatUsd(ckdUsd),
       sellLabel: null,
       myr: null,
     }

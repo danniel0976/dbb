@@ -7,6 +7,7 @@ import FacebookSaleImage from '@/components/FacebookSaleImage'
 import PhotoSection from '@/components/library-detail/PhotoSection'
 import ListingSection from '@/components/library-detail/ListingSection'
 import {
+  OWNER_LISTING_STATUS,
   PRICE_STATUS,
   buildPriceSummary,
   readCkdUsd,
@@ -122,8 +123,14 @@ function RemoveConfirmBar({ idPrefix, deleting, onConfirm, onCancel }) {
 // Rendered in both the desktop and mobile trees, so it carries no `id`
 // attributes (see the note on DetailTabBar); state lives in the parent and both
 // copies therefore stay in sync.
-function PriceSummary({ status, ckdUsd, listing, finish, finishIsUnsaved }) {
-  const summary = buildPriceSummary({ status, ckdUsd, listing })
+function PriceSummary({ status, ckdUsd, listingState, now, finish, finishIsUnsaved }) {
+  const summary = buildPriceSummary({
+    status,
+    ckdUsd,
+    listingStatus: listingState.status,
+    listing: listingState.listing,
+    now,
+  })
 
   return (
     <div
@@ -144,15 +151,15 @@ function PriceSummary({ status, ckdUsd, listing, finish, finishIsUnsaved }) {
           )}
         </div>
         <div className="min-w-0 text-right">
-          <p className="text-dbb-xs uppercase tracking-wide text-gray-400">
-            {summary.priceLabel} · ×{summary.multiplier}
+          <p data-testid="library-detail-price-heading" className="text-dbb-xs uppercase tracking-wide text-gray-400">
+            {summary.multiplier == null ? summary.priceLabel : `${summary.priceLabel} · ×${summary.multiplier}`}
           </p>
           {summary.sellStatus === PRICE_STATUS.READY ? (
             <p
               data-testid="library-detail-price-myr"
               className="text-dbb-lg font-semibold tracking-heading text-gray-900"
             >
-              {summary.sellLabel} <span className="text-dbb-sm font-medium text-gray-400">MYR</span>
+              {summary.sellLabel}
             </p>
           ) : (
             <p data-testid="library-detail-price-myr" className="text-dbb-lg font-semibold text-gray-400">—</p>
@@ -181,7 +188,17 @@ function PriceSummary({ status, ckdUsd, listing, finish, finishIsUnsaved }) {
           No positive MYR price is available for this printing.
         </p>
       )}
-      {summary.status === PRICE_STATUS.READY && !summary.authoritative && (
+      {summary.status === PRICE_STATUS.READY && summary.sellStatus === PRICE_STATUS.LOADING && (
+        <p data-testid="library-detail-listing-note" className="flex items-center gap-1.5 text-dbb-xs text-gray-500">
+          <Loader2 className="h-3 w-3 animate-spin" /> Checking Bazaar listing status...
+        </p>
+      )}
+      {summary.status === PRICE_STATUS.READY && summary.sellStatus === PRICE_STATUS.ERROR && (
+        <p data-testid="library-detail-listing-note" className="text-dbb-xs text-amber-600">
+          Could not confirm Bazaar listing status. Price preview unavailable.
+        </p>
+      )}
+      {summary.status === PRICE_STATUS.READY && summary.priceLabel === 'Price preview' && (
         <p data-testid="library-detail-price-preview-note" className="text-dbb-xs text-gray-500">
           Preview only — choose a multiplier when listing this card.
         </p>
@@ -208,7 +225,11 @@ export default function CardDetailModal({ libraryRow, onClose, onSave, onDelete 
   const [deleting, setDeleting] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [hasPhoto, setHasPhoto] = useState(false)
-  const [currentListing, setCurrentListing] = useState(undefined)
+  const [ownerListingState, setOwnerListingState] = useState({
+    status: OWNER_LISTING_STATUS.LOADING,
+    listing: null,
+  })
+  const [listingClock, setListingClock] = useState(() => Date.now())
   const [forcePhotoCamera, setForcePhotoCamera] = useState(false)
   const [pendingPhotoAction, setPendingPhotoAction] = useState(null)
   const [activeTab, setActiveTab] = useState('details')
@@ -225,13 +246,76 @@ export default function CardDetailModal({ libraryRow, onClose, onSave, onDelete 
   const [foil, setFoil] = useState(libraryRow.foil)
   const [starred, setStarred] = useState(libraryRow.starred)
 
-  // Load listing status for PhotoSection (needed to block retake while listed)
+  const handleListingChange = (listing) => {
+    if (listing == null) {
+      setOwnerListingState({ status: OWNER_LISTING_STATUS.NONE, listing: null })
+    } else if (listing?.id) {
+      setOwnerListingState({ status: OWNER_LISTING_STATUS.READY, listing })
+    } else {
+      setOwnerListingState({ status: OWNER_LISTING_STATUS.ERROR, listing: null })
+    }
+  }
+
+  const handleListingUncertain = () => {
+    setOwnerListingState({ status: OWNER_LISTING_STATUS.ERROR, listing: null })
+  }
+
+  // Load listing status for PhotoSection and the price summary. HTTP, JSON and
+  // malformed-payload failures remain errors; only an explicit null confirms
+  // that the owner has no listing for this card.
   useEffect(() => {
+    let cancelled = false
+    setOwnerListingState({ status: OWNER_LISTING_STATUS.LOADING, listing: null })
     fetch(`/api/listings?library_card_id=${libraryRow.id}`)
-      .then(r => r.ok ? r.json() : { listing: null })
-      .then(data => setCurrentListing(data.listing || null))
-      .catch(() => setCurrentListing(null))
+      .then(r => r.ok ? r.json() : Promise.reject(new Error(`Listing request failed: ${r.status}`)))
+      .then(data => {
+        if (cancelled) return
+        if (!Object.prototype.hasOwnProperty.call(data, 'listing')) {
+          throw new Error('Listing response did not include listing state')
+        }
+        handleListingChange(data.listing)
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setOwnerListingState({ status: OWNER_LISTING_STATUS.ERROR, listing: null })
+        }
+      })
+    return () => { cancelled = true }
   }, [libraryRow.id])
+
+  // An open modal must stop calling a listing authoritative at expires_at even
+  // when nothing else changes. Long delays are chunked below the browser timer
+  // ceiling; the final tick advances the pure summary's clock and rerenders the
+  // listing controls at the same boundary.
+  useEffect(() => {
+    setListingClock(Date.now())
+    const listing = ownerListingState.listing
+    if (ownerListingState.status !== OWNER_LISTING_STATUS.READY ||
+        listing?.status !== 'active' || !listing.expires_at) return undefined
+    const expiresAt = Date.parse(listing.expires_at)
+    if (!Number.isFinite(expiresAt)) return undefined
+
+    let timerId
+    const scheduleExpiryBoundary = () => {
+      const remaining = expiresAt - Date.now()
+      if (remaining <= 0) {
+        setListingClock(Date.now())
+        return
+      }
+      timerId = setTimeout(scheduleExpiryBoundary, Math.min(remaining + 25, 2_147_483_647))
+    }
+    scheduleExpiryBoundary()
+    return () => clearTimeout(timerId)
+  }, [
+    ownerListingState.status,
+    ownerListingState.listing?.id,
+    ownerListingState.listing?.status,
+    ownerListingState.listing?.expires_at,
+  ])
+
+  const currentListing = ownerListingState.status === OWNER_LISTING_STATUS.READY
+    ? ownerListingState.listing
+    : undefined
 
   const ci = libraryRow.card_index
   const storedImage = ci?.image_uris?.normal || ci?.image_uris?.small || null
@@ -518,7 +602,8 @@ export default function CardDetailModal({ libraryRow, onClose, onSave, onDelete 
       <PriceSummary
         status={priceStatus}
         ckdUsd={ckdUsd}
-        listing={currentListing}
+        listingState={ownerListingState}
+        now={listingClock}
         finish={pricedFoil}
         finishIsUnsaved={foil !== libraryRow.foil}
       />
@@ -527,8 +612,9 @@ export default function CardDetailModal({ libraryRow, onClose, onSave, onDelete 
       <ListingSection
         libraryRow={libraryRow}
         hasPhoto={hasPhoto}
-        listing={currentListing}
-        onListingChange={setCurrentListing}
+        listingState={ownerListingState}
+        onListingChange={handleListingChange}
+        onListingUncertain={handleListingUncertain}
         onRequirePhoto={(retry) => {
           if (retry) setPendingPhotoAction(() => retry)
           setForcePhotoCamera(true)

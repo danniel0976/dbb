@@ -14,6 +14,7 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import {
+  OWNER_LISTING_STATUS,
   PRICE_STATUS,
   activeListingMultiplier,
   buildPriceSummary,
@@ -29,6 +30,7 @@ import { sellPrice } from '../src/lib/pricingCache.js'
 
 const modalSource = readFileSync(new URL('../src/components/CardDetailModal.js', import.meta.url), 'utf8')
 const listingSource = readFileSync(new URL('../src/components/library-detail/ListingSection.js', import.meta.url), 'utf8')
+const claimSaleSource = readFileSync(new URL('../src/components/library-detail/ClaimSaleForm.js', import.meta.url), 'utf8')
 
 let passed = 0
 function check(name, fn) {
@@ -121,6 +123,7 @@ check('an active persisted listing controls the authoritative sell price', () =>
   const at = (m) => buildPriceSummary({
     status: PRICE_STATUS.READY,
     ckdUsd,
+    listingStatus: OWNER_LISTING_STATUS.READY,
     listing: { id: 'listing-1', status: 'active', multiplier: m, expires_at: '2099-01-01T00:00:00.000Z' },
     now: Date.parse('2026-08-03T00:00:00.000Z'),
   })
@@ -128,7 +131,7 @@ check('an active persisted listing controls the authoritative sell price', () =>
   assert.equal(at(2.8).sellLabel, 'RM 11.00')
   assert.equal(at(3.0).sellLabel, 'RM 12.00')
   for (const m of MULTIPLIERS) {
-    assert.equal(at(m).baselineLabel, 'USD $4.00', 'baseline must not change with the multiplier')
+    assert.equal(at(m).baselineLabel, '$4.00', 'baseline must not change with the multiplier')
     assert.equal(at(m).multiplier, m, 'selected tier must be reflected back')
     assert.equal(at(m).status, PRICE_STATUS.READY)
     assert.equal(at(m).authoritative, true)
@@ -140,6 +143,7 @@ check('in-modal list and relist responses immediately change the authoritative m
   const summarize = (listing) => buildPriceSummary({
     status: PRICE_STATUS.READY,
     ckdUsd: 4,
+    listingStatus: listing ? OWNER_LISTING_STATUS.READY : OWNER_LISTING_STATUS.NONE,
     listing,
     now: Date.parse('2026-08-03T00:00:00.000Z'),
   })
@@ -167,21 +171,50 @@ check('unlisted and expired cards are explicitly non-authoritative previews', ()
   const now = Date.parse('2026-08-03T00:00:00.000Z')
   for (const listing of [
     null,
-    undefined,
     { id: 'listing-1', status: 'expired', multiplier: 3.0 },
     { id: 'listing-1', status: 'active', multiplier: 3.0, expires_at: '2026-08-02T00:00:00.000Z' },
   ]) {
-    const summary = buildPriceSummary({ status: PRICE_STATUS.READY, ckdUsd: 4, listing, now })
+    const summary = buildPriceSummary({
+      status: PRICE_STATUS.READY,
+      ckdUsd: 4,
+      listingStatus: listing ? OWNER_LISTING_STATUS.READY : OWNER_LISTING_STATUS.NONE,
+      listing,
+      now,
+    })
     assert.equal(summary.authoritative, false)
     assert.equal(summary.priceLabel, 'Price preview')
     assert.equal(summary.multiplier, MULTIPLIERS[0], 'preview uses the documented default tier')
   }
 })
 
+check('loading and failed owner-listing lookups cannot manufacture a default-tier preview', () => {
+  for (const listingStatus of [OWNER_LISTING_STATUS.LOADING, OWNER_LISTING_STATUS.ERROR]) {
+    const summary = buildPriceSummary({
+      status: PRICE_STATUS.READY,
+      ckdUsd: 4.2,
+      listingStatus,
+      listing: null,
+    })
+    assert.equal(summary.baselineLabel, '$4.20')
+    assert.equal(summary.sellLabel, null)
+    assert.equal(summary.multiplier, null)
+    assert.equal(summary.authoritative, false)
+    assert.equal(summary.sellStatus, listingStatus === OWNER_LISTING_STATUS.LOADING
+      ? PRICE_STATUS.LOADING
+      : PRICE_STATUS.ERROR)
+    assert.notEqual(summary.priceLabel, 'Price preview')
+  }
+})
+
 check('zero and sub-rounding MYR values remain unavailable while preserving the CKD baseline', () => {
   for (const ckdUsd of [0, 0.01, 0.09]) {
-    const summary = buildPriceSummary({ status: PRICE_STATUS.READY, ckdUsd, listing: null })
-    assert.equal(summary.baselineLabel, `USD $${ckdUsd.toFixed(2)}`)
+    const summary = buildPriceSummary({
+      status: PRICE_STATUS.READY,
+      ckdUsd,
+      listingStatus: OWNER_LISTING_STATUS.NONE,
+      listing: null,
+    })
+    assert.equal(summary.baselineLabel, `$${ckdUsd.toFixed(2)}`)
     assert.equal(summary.sellStatus, PRICE_STATUS.UNAVAILABLE)
     assert.equal(summary.sellLabel, null)
     assert.equal(summary.myr, null)
@@ -189,7 +222,7 @@ check('zero and sub-rounding MYR values remain unavailable while preserving the 
 })
 
 check('labels are explicit about currency and are formatted to 2dp', () => {
-  assert.equal(formatUsd(1.5), 'USD $1.50')
+  assert.equal(formatUsd(1.5), '$1.50')
   assert.equal(formatMyr(4), 'RM 4.00')
   assert.equal(formatUsd(null), null)
   assert.equal(formatMyr(null), null)
@@ -212,7 +245,12 @@ check('a ready fetch with no cached baseline degrades to unavailable, not a pric
 })
 
 check('an unrecognised active multiplier becomes a preview rather than an authoritative misprice', () => {
-  const s = buildPriceSummary({ status: PRICE_STATUS.READY, ckdUsd: 4.0, listing: { id: 'listing-1', status: 'active', multiplier: 9.9 } })
+  const s = buildPriceSummary({
+    status: PRICE_STATUS.READY,
+    ckdUsd: 4.0,
+    listingStatus: OWNER_LISTING_STATUS.READY,
+    listing: { id: 'listing-1', status: 'active', multiplier: 9.9 },
+  })
   assert.equal(s.multiplier, MULTIPLIERS[0])
   assert.equal(s.sellLabel, 'RM 10.00')
   assert.equal(s.authoritative, false)
@@ -243,8 +281,9 @@ check('the summary exposes truthful authoritative and preview labels without a m
   assert.ok(modalSource.includes('data-testid="library-detail-price-myr"'), 'MYR test hook missing')
   assert.ok(modalSource.includes('CardKingdom baseline'), 'baseline must be labelled as CardKingdom')
   assert.ok(modalSource.includes('USD'), 'baseline currency must be explicit')
-  assert.ok(modalSource.includes('MYR'), 'sell currency must be explicit')
-  assert.ok(modalSource.includes('{summary.priceLabel} · ×{summary.multiplier}'), 'truthful price label and multiplier must render')
+  assert.ok(modalSource.includes('{summary.sellLabel}'), 'sell currency must render exactly once from the canonical label')
+  assert.ok(!modalSource.includes('{summary.sellLabel} <span'), 'MYR must not be appended to an RM-prefixed label')
+  assert.ok(modalSource.includes('summary.multiplier == null'), 'unresolved listing state must not render a multiplier')
   assert.ok(modalSource.includes('Preview only — choose a multiplier when listing this card.'), 'preview disclosure missing')
   assert.ok(!modalSource.includes('library-detail-price-multiplier-'), 'summary must not retain its redundant manual tier picker')
 })
@@ -279,14 +318,39 @@ check('an unsaved finish edit is disclosed rather than silently mispriced', () =
 })
 
 check('CardDetailModal owns listing state and ListingSection reports every persisted transition', () => {
-  assert.ok(modalSource.includes('listing={currentListing}'), 'listing controls must receive modal-owned state')
-  assert.ok(modalSource.includes('onListingChange={setCurrentListing}'), 'persisted transitions must update modal state')
-  assert.ok(modalSource.includes('listing={currentListing}'), 'price and photo surfaces must share listing state')
-  assert.ok(listingSource.includes('export default function ListingSection({ libraryRow, hasPhoto, onRequirePhoto, listing, onListingChange })'))
+  for (const status of ['LOADING', 'NONE', 'READY', 'ERROR']) {
+    assert.ok(modalSource.includes(`OWNER_LISTING_STATUS.${status}`), `modal must represent ${status.toLowerCase()} listing state`)
+  }
+  assert.ok(modalSource.includes('listingState={ownerListingState}'), 'price and listing controls must receive modal-owned state')
+  assert.ok(modalSource.includes('onListingChange={handleListingChange}'), 'persisted transitions must update modal state')
+  assert.match(listingSource, /listingState,\s+onListingChange/, 'ListingSection must consume explicit listing state')
   assert.ok(!listingSource.includes('const [listing, setListing]'), 'ListingSection must not retain a stale private listing copy')
   assert.equal(listingSource.match(/onListingChange\(nextListing\)/g)?.length, 2, 'list and relist success must both report the persisted listing')
   assert.ok(listingSource.includes('onListingChange(null)'), 'unlist success must clear modal listing state')
   assert.ok(!listingSource.includes('setListing('), 'all listing writes must flow through the owner callback')
+})
+
+check('Claim Sale success propagates the exact returned active listing and fails closed without it', () => {
+  assert.ok(listingSource.includes('onListingCreated={onListingChange}'), 'Claim Sale listing must flow through ListingSection')
+  assert.ok(modalSource.includes('onListingUncertain={handleListingUncertain}'), 'modal must own ambiguous Claim Sale state')
+  assert.ok(listingSource.includes('onListingUncertain={onListingUncertain}'), 'ListingSection must forward ambiguous Claim Sale state')
+  assert.ok(claimSaleSource.includes('onListingUncertain?.()'), 'partial Claim Sale success must invalidate confirmed-none state')
+  assert.ok(claimSaleSource.includes('const data = await res.json()'), 'successful Claim Sale response must be parsed')
+  assert.ok(claimSaleSource.includes('listing.library_card_id === libraryRow.id'), 'the returned listing must match the modal card')
+  assert.ok(claimSaleSource.includes("listing.status === 'active'"), 'the returned listing must be active')
+  assert.ok(claimSaleSource.includes('onListingCreated(nextListing)'), 'the exact returned listing must reach the modal owner')
+  assert.ok(claimSaleSource.includes('Claim sale was created, but its listing could not be confirmed'), 'missing-listing response must fail closed')
+  assert.ok(
+    claimSaleSource.indexOf('onListingUncertain?.()') <
+      claimSaleSource.indexOf("throw new Error('Claim sale was created, but its listing could not be confirmed')"),
+    'ambiguous state must reach the modal before the partial-response error is reported'
+  )
+})
+
+check('the modal schedules a rerender at the active listing expiry boundary', () => {
+  assert.ok(modalSource.includes('setTimeout(scheduleExpiryBoundary'), 'expiry must schedule an open-modal invalidation')
+  assert.ok(modalSource.includes('setListingClock(Date.now())'), 'expiry must advance the price-summary clock')
+  assert.ok(modalSource.includes('now={listingClock}'), 'price summary must use the invalidated clock')
 })
 
 check('the unavailable MYR state is rendered explicitly instead of RM 0.00', () => {

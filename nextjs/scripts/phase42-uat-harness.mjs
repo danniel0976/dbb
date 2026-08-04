@@ -53,6 +53,7 @@ export const FIXTURE_BINDER_ID = '42000000-0000-4000-8000-000000000044'
 export const FIXTURE_PHOTO_VERSION = '42000000-0000-4000-8000-000000000045'
 export const FIXTURE_PROFILE_MARKER = 'DBB Phase 42 rendered UAT synthetic profile'
 export const FIXTURE_CARD_IMAGE = 'data:image/gif;base64,R0lGODlhAQABAAAAACw='
+export const FIXTURE_CLAIM_SALE_TITLE = 'Phase 42 Rendered UAT Claim Sale'
 const FIXTURE_JPEG_BASE64 = '/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAf/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABBQJ//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAwEBPwF//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAgEBPwF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQAGPwJ//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPyF//9oADAMBAAIAAwAAABD/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAEDAQE/EH//xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAECAQE/EH//xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAE/EH//2Q=='
 
 export function stripEnvComments(raw) {
@@ -515,12 +516,13 @@ async function assertExactFixtureStorage(db, userId, { required = false } = {}) 
 }
 
 async function admitFixtureForCleanup(db, user) {
-  const [profiles, binders, cards, photos, listings, catalogRows] = await Promise.all([
+  const [profiles, binders, cards, photos, listings, claimSales, catalogRows] = await Promise.all([
     user ? fixtureRows(db, 'profiles', 'id', user.id, 'id, merchant_bank_name') : Promise.resolve([]),
     fixtureRows(db, 'binders', 'id', FIXTURE_BINDER_ID, 'id, user_id, name, description, is_default'),
     fixtureRows(db, 'library_cards', 'id', FIXTURE_LIBRARY_CARD_ID, 'id, user_id, binder_id, scryfall_id, quantity, foil, condition, language, purchase_price, purchase_currency'),
     fixtureRows(db, 'card_photos', 'library_card_id', FIXTURE_LIBRARY_CARD_ID, 'id, user_id, library_card_id, storage_path'),
     fixtureRows(db, 'listings', 'library_card_id', FIXTURE_LIBRARY_CARD_ID, 'id, user_id, library_card_id, multiplier, quantity, status'),
+    user ? fixtureRows(db, 'claim_sales', 'user_id', user.id, 'id, user_id, title, status') : Promise.resolve([]),
     fixtureRows(db, 'card_index', 'scryfall_id', FIXTURE_SCRYFALL_ID, 'scryfall_id, name, set_code, set_name, collector_number, rarity, type_line, image_uris'),
   ])
 
@@ -530,6 +532,7 @@ async function admitFixtureForCleanup(db, user) {
     ['library card', cards],
     ['card photo', photos],
     ['listing', listings],
+    ['claim sale', claimSales],
     ['catalog card', catalogRows],
   ]) {
     requireFixture(rows.length <= 1, `ambiguous ${label} rows`)
@@ -537,7 +540,7 @@ async function admitFixtureForCleanup(db, user) {
 
   if (!user) {
     requireFixture(
-      binders.length === 0 && cards.length === 0 && photos.length === 0 && listings.length === 0,
+      binders.length === 0 && cards.length === 0 && photos.length === 0 && listings.length === 0 && claimSales.length === 0,
       'fixed-ID rows exist without the exact synthetic auth user',
     )
   } else {
@@ -574,6 +577,11 @@ async function admitFixtureForCleanup(db, user) {
     requireFixture([2.5, 2.8, 3].includes(Number(listings[0].multiplier)), 'listing multiplier is not a Phase 42 tier')
     requireFixture(['active', 'expired'].includes(listings[0].status), 'listing status is not a Phase 42 UAT transition')
   }
+  if (claimSales[0]) {
+    requireFixture(user && claimSales[0].user_id === user.id, 'claim sale ownership does not match')
+    requireFixture(claimSales[0].title === FIXTURE_CLAIM_SALE_TITLE, 'claim sale title marker does not match')
+    requireFixture(claimSales[0].status === 'active', 'claim sale status does not match')
+  }
   if (catalogRows[0]) {
     const catalog = catalogRows[0]
     requireFixture(catalog.name === FIXTURE_CARD_NAME, 'catalog name does not match')
@@ -599,6 +607,7 @@ async function admitFixtureForCleanup(db, user) {
       libraryCard: cards.length,
       photo: photos.length,
       listing: listings.length,
+      claimSale: claimSales.length,
       catalog: catalogRows.length,
     },
   }
@@ -613,6 +622,7 @@ async function assertFixtureAbsent(db, userId = null) {
     ['card_index', 'scryfall_id', FIXTURE_SCRYFALL_ID],
   ]
   if (userId) checks.push(['profiles', 'id', userId])
+  if (userId) checks.push(['claim_sales', 'user_id', userId])
   for (const [table, column, value] of checks) {
     const { count, error } = await db.from(table).select('*', { count: 'exact', head: true }).eq(column, value)
     if (error) throw new Error(`${table} cleanup verification failed: ${error.message}`)
@@ -634,6 +644,7 @@ export async function cleanupFixture() {
     // first destructive query. Delete in dependency order and verify each row.
     for (const [table, column, value] of [
       ['listings', 'library_card_id', FIXTURE_LIBRARY_CARD_ID],
+      ['claim_sales', 'user_id', user.id],
       ['card_photos', 'library_card_id', FIXTURE_LIBRARY_CARD_ID],
       ['library_cards', 'id', FIXTURE_LIBRARY_CARD_ID],
       ['binders', 'id', FIXTURE_BINDER_ID],
@@ -780,11 +791,14 @@ async function createFixture() {
   }
 }
 
-export async function setFixtureListing({ multiplier = 2.5, expired = false } = {}) {
+export async function setFixtureListing({ multiplier = 2.5, expired = false, expiresInMs = null } = {}) {
   const db = serviceClient()
   const users = await exactFixtureUsers(db)
   if (users.length !== 1) throw new Error('Exact Phase 42 fixture user is not admitted')
-  const expiresAt = new Date(Date.now() + (expired ? -60_000 : 24 * 60 * 60 * 1000)).toISOString()
+  if (expiresInMs != null && (!Number.isFinite(expiresInMs) || expiresInMs <= 0)) {
+    throw new Error('expiresInMs must be a positive finite duration')
+  }
+  const expiresAt = new Date(Date.now() + (expired ? -60_000 : expiresInMs ?? 24 * 60 * 60 * 1000)).toISOString()
   const { data, error } = await db.from('listings').upsert({
     user_id: users[0].id,
     library_card_id: FIXTURE_LIBRARY_CARD_ID,

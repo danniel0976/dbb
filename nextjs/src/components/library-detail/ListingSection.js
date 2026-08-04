@@ -5,8 +5,16 @@ import { useToast } from '@/components/Toast'
 import { Minus, Plus, Tag, X, Loader2, Package } from 'lucide-react'
 import { MULTIPLIERS, DURATION_OPTIONS, relativeTime } from './constants'
 import ClaimSaleForm from './ClaimSaleForm'
+import { OWNER_LISTING_STATUS } from './priceSummary'
 
-export default function ListingSection({ libraryRow, hasPhoto, onRequirePhoto, listing, onListingChange }) {
+export default function ListingSection({
+  libraryRow,
+  hasPhoto,
+  onRequirePhoto,
+  listingState,
+  onListingChange,
+  onListingUncertain,
+}) {
   const { toast } = useToast()
   const [showPicker, setShowPicker] = useState(false)
   const [showListPrompt, setShowListPrompt] = useState(false) // singles vs claim sale
@@ -128,13 +136,25 @@ export default function ListingSection({ libraryRow, hasPhoto, onRequirePhoto, l
     }
   }
 
-  if (listing === undefined) {
+  if (listingState.status === OWNER_LISTING_STATUS.LOADING) {
     return (
       <div className="flex items-center gap-2 text-xs text-gray-600 pt-2 border-t border-black/5">
         <Loader2 className="w-3 h-3 animate-spin" /> Checking bazaar status...
       </div>
     )
   }
+
+  if (listingState.status === OWNER_LISTING_STATUS.ERROR) {
+    return (
+      <div data-testid="library-detail-listing-error" className="text-xs text-amber-600 pt-2 border-t border-black/5">
+        Could not check Bazaar listing status. Close and reopen to try again.
+      </div>
+    )
+  }
+
+  const listing = listingState.status === OWNER_LISTING_STATUS.READY
+    ? listingState.listing
+    : null
 
   const isExpired = listing && (
     listing.status === 'expired' ||
@@ -202,6 +222,8 @@ export default function ListingSection({ libraryRow, hasPhoto, onRequirePhoto, l
         libraryRow={libraryRow}
         onCancel={() => setShowClaimSale(false)}
         onRequirePhoto={onRequirePhoto}
+        onListingCreated={onListingChange}
+        onListingUncertain={onListingUncertain}
       />
     )
   }

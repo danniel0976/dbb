@@ -5,7 +5,13 @@ import { useToast } from '@/components/Toast'
 import { Minus, Plus, Package } from 'lucide-react'
 import { DURATION_OPTIONS } from './constants'
 
-export default function ClaimSaleForm({ libraryRow, onCancel, onRequirePhoto }) {
+export default function ClaimSaleForm({
+  libraryRow,
+  onCancel,
+  onRequirePhoto,
+  onListingCreated,
+  onListingUncertain,
+}) {
   const { toast } = useToast()
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
@@ -45,6 +51,23 @@ export default function ClaimSaleForm({ libraryRow, onCancel, onRequirePhoto }) 
         }
         throw new Error(err.error || 'Failed')
       }
+      const data = await res.json()
+      const nextListing = Array.isArray(data.listings)
+        ? data.listings.find(listing =>
+          listing?.id &&
+          listing.library_card_id === libraryRow.id &&
+          listing.status === 'active'
+        )
+        : null
+      if (!nextListing) {
+        onListingUncertain?.()
+        throw new Error('Claim sale was created, but its listing could not be confirmed')
+      }
+      if (typeof onListingCreated !== 'function') {
+        onListingUncertain?.()
+        throw new Error('Claim sale listing could not be applied')
+      }
+      onListingCreated(nextListing)
       toast('Claim sale created on Bazaar', 'success')
       onCancel()
     } catch (e) {
