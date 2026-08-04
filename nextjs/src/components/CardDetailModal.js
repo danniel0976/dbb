@@ -6,7 +6,13 @@ import { useToast } from '@/components/Toast'
 import FacebookSaleImage from '@/components/FacebookSaleImage'
 import PhotoSection from '@/components/library-detail/PhotoSection'
 import ListingSection from '@/components/library-detail/ListingSection'
-import { X, Star, Minus, Plus, Trash2, Check } from 'lucide-react'
+import {
+  OWNER_LISTING_STATUS,
+  PRICE_STATUS,
+  buildPriceSummary,
+  readCkdUsd,
+} from '@/components/library-detail/priceSummary'
+import { X, Star, Minus, Plus, Trash2, Check, Loader2 } from 'lucide-react'
 
 const CONDITIONS = ['M', 'NM', 'LP', 'MP', 'HP', 'DMG']
 const FOILS = ['normal', 'foil', 'etched']
@@ -111,6 +117,105 @@ function RemoveConfirmBar({ idPrefix, deleting, onConfirm, onCancel }) {
   )
 }
 
+// Price summary — the CardKingdom USD baseline and multiplier-adjusted MYR
+// amount shown together at the top of the Details tab. An active listing makes
+// that amount authoritative; otherwise it is explicitly a preview.
+// Rendered in both the desktop and mobile trees, so it carries no `id`
+// attributes (see the note on DetailTabBar); state lives in the parent and both
+// copies therefore stay in sync.
+function PriceSummary({ status, ckdUsd, listingState, now, finish, finishIsUnsaved }) {
+  const summary = buildPriceSummary({
+    status,
+    ckdUsd,
+    listingStatus: listingState.status,
+    listing: listingState.listing,
+    now,
+  })
+
+  return (
+    <div
+      data-testid="library-detail-price-summary"
+      role="group"
+      aria-label="Card pricing"
+      className="rounded-dbb-lg border border-gray-200 bg-gray-50 p-3 space-y-3"
+    >
+      <div className="flex items-end justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-dbb-xs uppercase tracking-wide text-gray-400">CardKingdom baseline</p>
+          {summary.status === PRICE_STATUS.READY ? (
+            <p data-testid="library-detail-price-usd" className="text-dbb-sm font-medium text-gray-600">
+              {summary.baselineLabel} <span className="text-gray-400">USD</span>
+            </p>
+          ) : (
+            <p data-testid="library-detail-price-usd" className="text-dbb-sm text-gray-500">—</p>
+          )}
+        </div>
+        <div className="min-w-0 text-right">
+          <p data-testid="library-detail-price-heading" className="text-dbb-xs uppercase tracking-wide text-gray-400">
+            {summary.multiplier == null ? summary.priceLabel : `${summary.priceLabel} · ×${summary.multiplier}`}
+          </p>
+          {summary.sellStatus === PRICE_STATUS.READY ? (
+            <p
+              data-testid="library-detail-price-myr"
+              className="text-dbb-lg font-semibold tracking-heading text-gray-900"
+            >
+              {summary.sellLabel}
+            </p>
+          ) : (
+            <p data-testid="library-detail-price-myr" className="text-dbb-lg font-semibold text-gray-400">—</p>
+          )}
+        </div>
+      </div>
+
+      {/* Honest non-ready states — never substitute another price source. */}
+      {summary.status === PRICE_STATUS.LOADING && (
+        <p data-testid="library-detail-price-note" className="flex items-center gap-1.5 text-dbb-xs text-gray-500">
+          <Loader2 className="h-3 w-3 animate-spin" /> Loading CardKingdom price...
+        </p>
+      )}
+      {summary.status === PRICE_STATUS.UNAVAILABLE && (
+        <p data-testid="library-detail-price-note" className="text-dbb-xs text-gray-500">
+          No CardKingdom price for this printing.
+        </p>
+      )}
+      {summary.status === PRICE_STATUS.ERROR && (
+        <p data-testid="library-detail-price-note" className="text-dbb-xs text-amber-600">
+          Could not load the CardKingdom price. Try again later.
+        </p>
+      )}
+      {summary.status === PRICE_STATUS.READY && summary.sellStatus === PRICE_STATUS.UNAVAILABLE && (
+        <p data-testid="library-detail-price-note" className="text-dbb-xs text-gray-500">
+          No positive MYR price is available for this printing.
+        </p>
+      )}
+      {summary.status === PRICE_STATUS.READY && summary.sellStatus === PRICE_STATUS.LOADING && (
+        <p data-testid="library-detail-listing-note" className="flex items-center gap-1.5 text-dbb-xs text-gray-500">
+          <Loader2 className="h-3 w-3 animate-spin" /> Checking Bazaar listing status...
+        </p>
+      )}
+      {summary.status === PRICE_STATUS.READY && summary.sellStatus === PRICE_STATUS.ERROR && (
+        <p data-testid="library-detail-listing-note" className="text-dbb-xs text-amber-600">
+          Could not confirm Bazaar listing status. Price preview unavailable.
+        </p>
+      )}
+      {summary.status === PRICE_STATUS.READY && summary.priceLabel === 'Price preview' && (
+        <p data-testid="library-detail-price-preview-note" className="text-dbb-xs text-gray-500">
+          Preview only — choose a multiplier when listing this card.
+        </p>
+      )}
+
+      {/* The baseline is looked up for the finish that is actually saved — the
+          same one listing and checkout price against — so an unsaved Finish
+          edit must not silently look like it has been repriced. */}
+      {finishIsUnsaved && (
+        <p data-testid="library-detail-price-finish-note" className="text-dbb-xs text-gray-500">
+          Priced for the saved finish ({finish}). Save changes to reprice.
+        </p>
+      )}
+    </div>
+  )
+}
+
 export default function CardDetailModal({ libraryRow, onClose, onSave, onDelete }) {
   const { toast } = useToast()
   const [cardData, setCardData] = useState(null)
@@ -120,11 +225,17 @@ export default function CardDetailModal({ libraryRow, onClose, onSave, onDelete 
   const [deleting, setDeleting] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [hasPhoto, setHasPhoto] = useState(false)
-  const [currentListing, setCurrentListing] = useState(undefined)
+  const [ownerListingState, setOwnerListingState] = useState({
+    status: OWNER_LISTING_STATUS.LOADING,
+    listing: null,
+  })
+  const [listingClock, setListingClock] = useState(() => Date.now())
   const [forcePhotoCamera, setForcePhotoCamera] = useState(false)
   const [pendingPhotoAction, setPendingPhotoAction] = useState(null)
   const [activeTab, setActiveTab] = useState('details')
   const [justSaved, setJustSaved] = useState(false)
+  const [ckdUsd, setCkdUsd] = useState(null)
+  const [priceStatus, setPriceStatus] = useState(PRICE_STATUS.LOADING)
 
   const sheetRef = useRef(null)
   const closeBtnRef = useRef(null)
@@ -135,20 +246,117 @@ export default function CardDetailModal({ libraryRow, onClose, onSave, onDelete 
   const [foil, setFoil] = useState(libraryRow.foil)
   const [starred, setStarred] = useState(libraryRow.starred)
 
-  // Load listing status for PhotoSection (needed to block retake while listed)
+  const handleListingChange = (listing) => {
+    if (listing == null) {
+      setOwnerListingState({ status: OWNER_LISTING_STATUS.NONE, listing: null })
+    } else if (listing?.id) {
+      setOwnerListingState({ status: OWNER_LISTING_STATUS.READY, listing })
+    } else {
+      setOwnerListingState({ status: OWNER_LISTING_STATUS.ERROR, listing: null })
+    }
+  }
+
+  const handleListingUncertain = () => {
+    setOwnerListingState({ status: OWNER_LISTING_STATUS.ERROR, listing: null })
+  }
+
+  // Load listing status for PhotoSection and the price summary. HTTP, JSON and
+  // malformed-payload failures remain errors; only an explicit null confirms
+  // that the owner has no listing for this card.
   useEffect(() => {
+    let cancelled = false
+    setOwnerListingState({ status: OWNER_LISTING_STATUS.LOADING, listing: null })
     fetch(`/api/listings?library_card_id=${libraryRow.id}`)
-      .then(r => r.ok ? r.json() : { listing: null })
-      .then(data => setCurrentListing(data.listing || null))
-      .catch(() => setCurrentListing(null))
+      .then(r => r.ok ? r.json() : Promise.reject(new Error(`Listing request failed: ${r.status}`)))
+      .then(data => {
+        if (cancelled) return
+        if (!Object.prototype.hasOwnProperty.call(data, 'listing')) {
+          throw new Error('Listing response did not include listing state')
+        }
+        handleListingChange(data.listing)
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setOwnerListingState({ status: OWNER_LISTING_STATUS.ERROR, listing: null })
+        }
+      })
+    return () => { cancelled = true }
   }, [libraryRow.id])
+
+  // An open modal must stop calling a listing authoritative at expires_at even
+  // when nothing else changes. Long delays are chunked below the browser timer
+  // ceiling; the final tick advances the pure summary's clock and rerenders the
+  // listing controls at the same boundary.
+  useEffect(() => {
+    setListingClock(Date.now())
+    const listing = ownerListingState.listing
+    if (ownerListingState.status !== OWNER_LISTING_STATUS.READY ||
+        listing?.status !== 'active' || !listing.expires_at) return undefined
+    const expiresAt = Date.parse(listing.expires_at)
+    if (!Number.isFinite(expiresAt)) return undefined
+
+    let timerId
+    const scheduleExpiryBoundary = () => {
+      const remaining = expiresAt - Date.now()
+      if (remaining <= 0) {
+        setListingClock(Date.now())
+        return
+      }
+      timerId = setTimeout(scheduleExpiryBoundary, Math.min(remaining + 25, 2_147_483_647))
+    }
+    scheduleExpiryBoundary()
+    return () => clearTimeout(timerId)
+  }, [
+    ownerListingState.status,
+    ownerListingState.listing?.id,
+    ownerListingState.listing?.status,
+    ownerListingState.listing?.expires_at,
+  ])
+
+  const currentListing = ownerListingState.status === OWNER_LISTING_STATUS.READY
+    ? ownerListingState.listing
+    : undefined
 
   const ci = libraryRow.card_index
   const storedImage = ci?.image_uris?.normal || ci?.image_uris?.small || null
 
+  // Saved finish, not the in-progress edit: the listing and checkout paths
+  // price the persisted row, so the summary has to look up the same key.
+  const pricedFoil = libraryRow.foil || 'normal'
+
+  // CKD USD baseline from the shared pricing cache (same endpoint and cache the
+  // listing picker uses). Failure and "no cached price" are distinct states and
+  // both are surfaced as-is — no Scryfall or other fallback price.
   useEffect(() => {
-    // Use the catalog image when present. Synthetic UAT IDs are not valid
-    // Scryfall IDs, so fetching them would leave the inspector blank.
+    if (!libraryRow.scryfall_id) {
+      setPriceStatus(PRICE_STATUS.UNAVAILABLE)
+      return
+    }
+    let cancelled = false
+    setPriceStatus(PRICE_STATUS.LOADING)
+    fetch('/api/pricing/batch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items: [{ scryfall_id: libraryRow.scryfall_id, foil: pricedFoil }] }),
+    })
+      .then(r => r.ok ? r.json() : Promise.reject(new Error(`Pricing request failed: ${r.status}`)))
+      .then(data => {
+        if (cancelled) return
+        const usd = readCkdUsd(data, libraryRow.scryfall_id, pricedFoil)
+        setCkdUsd(usd)
+        setPriceStatus(usd == null ? PRICE_STATUS.UNAVAILABLE : PRICE_STATUS.READY)
+      })
+      .catch(() => {
+        if (cancelled) return
+        setCkdUsd(null)
+        setPriceStatus(PRICE_STATUS.ERROR)
+      })
+    return () => { cancelled = true }
+  }, [libraryRow.scryfall_id, pricedFoil])
+
+  useEffect(() => {
+    // Preserve current-main behavior: catalog-backed synthetic/local cards
+    // render their stored image without requiring a valid Scryfall ID.
     if (storedImage) {
       setImageUrl(storedImage)
       setLoading(false)
@@ -380,7 +588,10 @@ export default function CardDetailModal({ libraryRow, onClose, onSave, onDelete 
     </div>
   )
 
-  // Tab "Details": art + metadata + editable fields + listing controls.
+  // Tab "Details": art + price summary + metadata + editable fields + listing
+  // controls. The price summary sits directly under the art so the CKD USD
+  // baseline and the current sell price (or an explicit unlisted preview) are
+  // visible without scrolling or opening the listing picker.
   // ListingSection lives here rather than a separate tab — it's
   // edit-adjacent (list/unlist/relist) and has no natural home of its own.
   // Remove-from-library now lives in the header (ModalHeader/RemoveConfirmBar
@@ -388,11 +599,22 @@ export default function CardDetailModal({ libraryRow, onClose, onSave, onDelete 
   const detailsTab = (
     <div className="space-y-5">
       {artBlock}
+      <PriceSummary
+        status={priceStatus}
+        ckdUsd={ckdUsd}
+        listingState={ownerListingState}
+        now={listingClock}
+        finish={pricedFoil}
+        finishIsUnsaved={foil !== libraryRow.foil}
+      />
       {metadataBlock}
       {editableFields}
       <ListingSection
         libraryRow={libraryRow}
         hasPhoto={hasPhoto}
+        listingState={ownerListingState}
+        onListingChange={handleListingChange}
+        onListingUncertain={handleListingUncertain}
         onRequirePhoto={(retry) => {
           if (retry) setPendingPhotoAction(() => retry)
           setForcePhotoCamera(true)

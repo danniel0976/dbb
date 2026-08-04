@@ -5,10 +5,17 @@ import { useToast } from '@/components/Toast'
 import { Minus, Plus, Tag, X, Loader2, Package } from 'lucide-react'
 import { MULTIPLIERS, DURATION_OPTIONS, relativeTime } from './constants'
 import ClaimSaleForm from './ClaimSaleForm'
+import { OWNER_LISTING_STATUS } from './priceSummary'
 
-export default function ListingSection({ libraryRow, hasPhoto, onRequirePhoto }) {
+export default function ListingSection({
+  libraryRow,
+  hasPhoto,
+  onRequirePhoto,
+  listingState,
+  onListingChange,
+  onListingUncertain,
+}) {
   const { toast } = useToast()
-  const [listing, setListing] = useState(undefined) // undefined = loading, null = not listed
   const [showPicker, setShowPicker] = useState(false)
   const [showListPrompt, setShowListPrompt] = useState(false) // singles vs claim sale
   const [showClaimSale, setShowClaimSale] = useState(false)
@@ -22,14 +29,6 @@ export default function ListingSection({ libraryRow, hasPhoto, onRequirePhoto })
   const [merchantProfileRequired, setMerchantProfileRequired] = useState(false)
 
   const ownedQty = libraryRow.quantity || 1
-
-  // Load listing status (including expired ones owned by this user)
-  useEffect(() => {
-    fetch(`/api/listings?library_card_id=${libraryRow.id}`)
-      .then(r => r.ok ? r.json() : { listing: null })
-      .then(data => setListing(data.listing || null))
-      .catch(() => setListing(null))
-  }, [libraryRow.id])
 
   // Reset listing quantity to 1 when opening a new listing picker
   useEffect(() => {
@@ -81,7 +80,8 @@ export default function ListingSection({ libraryRow, hasPhoto, onRequirePhoto })
         throw new Error(err.error || 'Failed')
       }
       const data = await res.json()
-      setListing(data.listings?.[0] || { multiplier, status: 'active' })
+      const nextListing = data.listings?.[0] || { multiplier, status: 'active' }
+      onListingChange(nextListing)
       setShowPicker(false)
       toast('Card listed on Bazaar', 'success')
     } catch (e) {
@@ -109,7 +109,8 @@ export default function ListingSection({ libraryRow, hasPhoto, onRequirePhoto })
         throw new Error(err.error || 'Failed to relist card')
       }
       const data = await res.json()
-      setListing(data.listing || { ...listing, status: 'active', multiplier })
+      const nextListing = data.listing || { ...listing, status: 'active', multiplier }
+      onListingChange(nextListing)
       setShowPicker(false)
       setIsRelist(false)
       toast('Card relisted on Bazaar', 'success')
@@ -126,7 +127,7 @@ export default function ListingSection({ libraryRow, hasPhoto, onRequirePhoto })
     try {
       const res = await fetch(`/api/listings/${listing.id}`, { method: 'DELETE' })
       if (!res.ok) throw new Error('Failed')
-      setListing(null)
+      onListingChange(null)
       toast('Card unlisted', 'success')
     } catch {
       toast('Failed to unlist card', 'error')
@@ -135,13 +136,25 @@ export default function ListingSection({ libraryRow, hasPhoto, onRequirePhoto })
     }
   }
 
-  if (listing === undefined) {
+  if (listingState.status === OWNER_LISTING_STATUS.LOADING) {
     return (
       <div className="flex items-center gap-2 text-xs text-gray-600 pt-2 border-t border-black/5">
         <Loader2 className="w-3 h-3 animate-spin" /> Checking bazaar status...
       </div>
     )
   }
+
+  if (listingState.status === OWNER_LISTING_STATUS.ERROR) {
+    return (
+      <div data-testid="library-detail-listing-error" className="text-xs text-amber-600 pt-2 border-t border-black/5">
+        Could not check Bazaar listing status. Close and reopen to try again.
+      </div>
+    )
+  }
+
+  const listing = listingState.status === OWNER_LISTING_STATUS.READY
+    ? listingState.listing
+    : null
 
   const isExpired = listing && (
     listing.status === 'expired' ||
@@ -209,6 +222,8 @@ export default function ListingSection({ libraryRow, hasPhoto, onRequirePhoto })
         libraryRow={libraryRow}
         onCancel={() => setShowClaimSale(false)}
         onRequirePhoto={onRequirePhoto}
+        onListingCreated={onListingChange}
+        onListingUncertain={onListingUncertain}
       />
     )
   }
