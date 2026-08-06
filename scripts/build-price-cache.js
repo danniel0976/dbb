@@ -21,6 +21,7 @@
 const path = require('path')
 const fs = require('fs')
 const zlib = require('zlib')
+const { fetchWithRetry } = require('./lib/fetch-with-retry')
 
 // Load env vars from nextjs/.env.local
 const envPath = path.join(__dirname, '..', 'nextjs', '.env.local')
@@ -59,9 +60,9 @@ function getLatestPrice(series) {
   return Number.isFinite(num) ? num : null
 }
 
-async function fetchGzJson(url) {
-  const res = await fetch(url, { headers: { 'User-Agent': UA } })
-  if (!res.ok) throw new Error(`${url} -> HTTP ${res.status}`)
+async function fetchGzJson(label, url, timeoutMs = 30000) {
+  const res = await fetchWithRetry(label, url, { headers: { 'User-Agent': UA } }, { timeoutMs })
+  if (!res.ok) throw new Error(`${label}: HTTP ${res.status}`)
   const buf = Buffer.from(await res.arrayBuffer())
   return JSON.parse(zlib.gunzipSync(buf).toString('utf8'))
 }
@@ -72,7 +73,7 @@ async function loadUuidMap() {
     return JSON.parse(zlib.gunzipSync(fs.readFileSync(MAP_LOCAL)).toString('utf8'))
   }
   console.log('Local uuid map missing, fetching from Supabase Storage...')
-  return fetchGzJson(MAP_STORAGE_URL)
+  return fetchGzJson('uuid-map-fallback', MAP_STORAGE_URL, 20000)
 }
 
 // Per-set fallback: for cards not covered by the UUID map, fetch the set JSON
@@ -82,7 +83,7 @@ async function fetchSetPrices(setCode, unmappedCards, prices, names) {
   const url = `${MTGJSON_BASE}/${setCode.toUpperCase()}.json`
   let setData
   try {
-    const res = await fetch(url, { headers: { 'User-Agent': UA } })
+    const res = await fetchWithRetry(`set-fallback:${setCode}`, url, { headers: { 'User-Agent': UA } }, { timeoutMs: 15000, maxAttempts: 2 })
     if (!res.ok) {
       process.stdout.write(`\n  ${setCode}: HTTP ${res.status}`)
       return 0
@@ -137,13 +138,16 @@ async function fetchSetPrices(setCode, unmappedCards, prices, names) {
   return filled
 }
 
+const STAGE = 'build-price-cache'
+
 async function main() {
+  console.log(`=== STAGE START: ${STAGE} ===`)
   // uuid -> [scryfallId, cardName], only for CK-priced cards (~97k entries)
   const uuidMap = await loadUuidMap()
   console.log(`UUID map entries: ${Object.keys(uuidMap).length}`)
 
   console.log('Downloading AllPricesToday...')
-  const priceData = await fetchGzJson(PRICES_URL)
+  const priceData = await fetchGzJson('mtgjson-all-prices', PRICES_URL, 60000)
   const entries = priceData.data || {}
   console.log(`Price entries: ${Object.keys(entries).length}`)
 
@@ -187,10 +191,13 @@ async function main() {
   console.log('Fetching DB cards for coverage check + per-set fallback...')
   const dbCards = []
   for (let offset = 0; ; offset += 1000) {
-    const res = await fetch(
+    const res = await fetchWithRetry(
+      'supabase-db-page',
       `${SUPABASE_URL}/rest/v1/cards?select=scryfall_id,card_name,set_code&limit=1000&offset=${offset}`,
-      { headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` } }
+      { headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` } },
+      { timeoutMs: 20000 }
     )
+    if (!res.ok) throw new Error(`supabase-db-page: HTTP ${res.status}`)
     const page = await res.json()
     if (!Array.isArray(page) || !page.length) break
     dbCards.push(...page)
@@ -249,16 +256,21 @@ async function main() {
   fs.writeFileSync(localPath, output)
   console.log(`Saved ${localPath}`)
 
-  // Upload to Supabase Storage
-  const uploadRes = await fetch(`${SUPABASE_URL}/storage/v1/object/${BUCKET}/${CACHE_FILE}`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${SERVICE_KEY}`,
-      'Content-Type': 'application/json',
-      'x-upsert': 'true',
+  // Upload to Supabase Storage (x-upsert makes this a safe retry target)
+  const uploadRes = await fetchWithRetry(
+    'supabase-storage-upload',
+    `${SUPABASE_URL}/storage/v1/object/${BUCKET}/${CACHE_FILE}`,
+    {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${SERVICE_KEY}`,
+        'Content-Type': 'application/json',
+        'x-upsert': 'true',
+      },
+      body: output,
     },
-    body: output,
-  })
+    { timeoutMs: 45000 }
+  )
   if (!uploadRes.ok) {
     throw new Error(`Storage upload failed: HTTP ${uploadRes.status} ${await uploadRes.text()}`)
   }
@@ -278,9 +290,10 @@ async function main() {
   if (misses.length) console.log('  missing:', misses.join(', '))
 
   console.log('Done!')
+  console.log(`=== STAGE OK: ${STAGE} ===`)
 }
 
 main().catch(err => {
-  console.error('Fatal:', err.message)
+  console.error(`=== STAGE FAILED: ${STAGE} — ${err.message} ===`)
   process.exit(1)
 })

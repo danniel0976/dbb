@@ -45,7 +45,10 @@ async function fetchScryfallBatch(identifiers) {
   return resp.json()
 }
 
+const STAGE = 'backfill-colors-types'
+
 async function main() {
+  console.log(`=== STAGE START: ${STAGE} ===`)
   const args = process.argv.slice(2)
   const dryRun = args.includes('--dry-run')
 
@@ -76,6 +79,7 @@ async function main() {
 
   if (needsUpdate.length === 0) {
     console.log('✅ All cards already have colors and card_type!')
+    console.log(`=== STAGE OK: ${STAGE} ===`)
     return
   }
 
@@ -175,9 +179,11 @@ async function main() {
   console.log(`⚠️  Not found on Scryfall: ${notFound}`)
   console.log(`❌ Failed: ${failed}`)
   console.log(`📊 Total processed: ${updated + notFound + failed}/${needsUpdate.length}`)
+  console.log(`=== STAGE OK: ${STAGE} ===`)
 }
 
 main().catch(err => {
   console.error('Fatal:', err)
+  console.error(`=== STAGE FAILED: ${STAGE} — ${err.message} ===`)
   process.exit(1)
 })
