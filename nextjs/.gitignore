@@ -53,3 +53,4 @@ test-runs/*.json
 
 # Graphify generated artifacts (regenerate with graphify extract)
 .graphify/
+.env.production
