@@ -185,7 +185,10 @@ function TabBarLink({ href, label, icon: Icon, active, badge }) {
         />
         {badge}
       </span>
-      <span className={`text-[10px] leading-none ${active ? 'font-semibold text-dbb-accent' : 'text-gray-500'}`}>
+      {/* 11px is the functional-text legibility floor; this bar is the real
+          phone-width navigation (`sm:hidden`, i.e. below 640px), so its labels
+          must not sit under it. */}
+      <span className={`text-[11px] leading-none ${active ? 'font-semibold text-dbb-accent' : 'text-gray-500'}`}>
         {label}
       </span>
     </Link>

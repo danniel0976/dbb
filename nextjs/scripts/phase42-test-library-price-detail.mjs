@@ -28,9 +28,35 @@ import {
 import { MULTIPLIERS } from '../src/components/library-detail/constants.js'
 import { sellPrice } from '../src/lib/pricingCache.js'
 
-const modalSource = readFileSync(new URL('../src/components/CardDetailModal.js', import.meta.url), 'utf8')
-const listingSource = readFileSync(new URL('../src/components/library-detail/ListingSection.js', import.meta.url), 'utf8')
-const claimSaleSource = readFileSync(new URL('../src/components/library-detail/ClaimSaleForm.js', import.meta.url), 'utf8')
+// Comments are stripped before any source assertion below. The PR #8 review
+// (F3) noted that a prose comment containing the same words would satisfy an
+// `includes()` check, so these guards now only ever match executable source.
+// This does not make them DOM assertions — the behavioural proof for the two
+// PR #8 blockers still lives in tests/phase42-library-price-rendered-uat.spec.js,
+// which needs a local Supabase and cannot run under the CI glob.
+function stripComments(source) {
+  return source
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .split('\n')
+    .map(line => {
+      const at = line.indexOf('//')
+      if (at === -1) return line
+      // Only strip a `//` that is not inside a string or a JSX attribute value.
+      const before = line.slice(0, at)
+      const quotes = (before.match(/'/g) || []).length
+      const dquotes = (before.match(/"/g) || []).length
+      const backticks = (before.match(/`/g) || []).length
+      if (quotes % 2 || dquotes % 2 || backticks % 2) return line
+      if (/[:=]\s*$/.test(before.trimEnd().slice(0, -1))) return line
+      return before
+    })
+    .join('\n')
+}
+const readSource = (rel) => stripComments(readFileSync(new URL(rel, import.meta.url), 'utf8'))
+
+const modalSource = readSource('../src/components/CardDetailModal.js')
+const listingSource = readSource('../src/components/library-detail/ListingSection.js')
+const claimSaleSource = readSource('../src/components/library-detail/ClaimSaleForm.js')
 
 let passed = 0
 function check(name, fn) {
@@ -282,7 +308,36 @@ check('the summary exposes truthful authoritative and preview labels without a m
   assert.ok(modalSource.includes('CardKingdom baseline'), 'baseline must be labelled as CardKingdom')
   assert.ok(modalSource.includes('USD'), 'baseline currency must be explicit')
   assert.ok(modalSource.includes('{summary.sellLabel}'), 'sell currency must render exactly once from the canonical label')
-  assert.ok(!modalSource.includes('{summary.sellLabel} <span'), 'MYR must not be appended to an RM-prefixed label')
+  // The original defect rendered `RM 10.50 MYR`. A byte-exact negative on one
+  // spelling of that node is not a guard — a newline, `{' '}`, or a different
+  // element would slip past it. Instead: no `MYR` designator may appear
+  // anywhere in the PriceSummary render at all, in any formatting. `formatMyr`
+  // already emits the `RM ` prefix, so a second designator is always a bug.
+  const myrNodes = [...modalSource.matchAll(/data-testid="library-detail-price-myr"/g)]
+  assert.equal(myrNodes.length, 2, 'expected exactly the ready and non-ready MYR nodes')
+  const summaryRegion = modalSource.slice(
+    modalSource.indexOf('function PriceSummary('),
+    modalSource.indexOf('export default function CardDetailModal')
+  )
+  assert.ok(summaryRegion.length > 0, 'failed to isolate the PriceSummary render')
+  // Scoped to the price rows themselves — the explanatory notes below them are
+  // prose and may legitimately name the currency.
+  const priceRows = summaryRegion.slice(0, summaryRegion.indexOf('data-testid="library-detail-price-note"'))
+  assert.ok(priceRows.includes('library-detail-price-myr'), 'failed to isolate the price rows')
+  assert.ok(
+    !/\bMYR\b/.test(priceRows),
+    'the rendered price rows must not emit any MYR designator; formatMyr already prefixes RM'
+  )
+  // The USD side keeps exactly one designator, rendered as its own element
+  // beside the bare `$x.xx` label — not baked into the label string.
+  assert.equal(
+    (priceRows.match(/\bUSD\b/g) || []).length, 1,
+    'the USD designator must be rendered exactly once'
+  )
+  assert.ok(
+    !/formatUsd[\s\S]{0,80}USD/.test(readFileSync(new URL('../src/components/library-detail/priceSummary.js', import.meta.url), 'utf8')),
+    'formatUsd must not bake a USD designator into the label'
+  )
   assert.ok(modalSource.includes('summary.multiplier == null'), 'unresolved listing state must not render a multiplier')
   assert.ok(modalSource.includes('Preview only — choose a multiplier when listing this card.'), 'preview disclosure missing')
   assert.ok(!modalSource.includes('library-detail-price-multiplier-'), 'summary must not retain its redundant manual tier picker')
@@ -335,7 +390,13 @@ check('Claim Sale success propagates the exact returned active listing and fails
   assert.ok(modalSource.includes('onListingUncertain={handleListingUncertain}'), 'modal must own ambiguous Claim Sale state')
   assert.ok(listingSource.includes('onListingUncertain={onListingUncertain}'), 'ListingSection must forward ambiguous Claim Sale state')
   assert.ok(claimSaleSource.includes('onListingUncertain?.()'), 'partial Claim Sale success must invalidate confirmed-none state')
-  assert.ok(claimSaleSource.includes('const data = await res.json()'), 'successful Claim Sale response must be parsed')
+  // The parse itself is now guarded (PR #8 review F2): a malformed 201 body is
+  // as ambiguous as a missing listing and takes the same fail-closed path.
+  assert.match(
+    claimSaleSource,
+    /try\s*\{\s*data\s*=\s*await res\.json\(\)\s*\}\s*catch\s*\{\s*onListingUncertain\?\.\(\)/,
+    'the successful Claim Sale response must be parsed inside a fail-closed guard'
+  )
   assert.ok(claimSaleSource.includes('listing.library_card_id === libraryRow.id'), 'the returned listing must match the modal card')
   assert.ok(claimSaleSource.includes("listing.status === 'active'"), 'the returned listing must be active')
   assert.ok(claimSaleSource.includes('onListingCreated(nextListing)'), 'the exact returned listing must reach the modal owner')

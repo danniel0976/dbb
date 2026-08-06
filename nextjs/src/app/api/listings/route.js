@@ -52,11 +52,29 @@ export async function GET(request) {
   const { searchParams } = new URL(request.url)
   const library_card_id = searchParams.get('library_card_id')
 
-  // Single-card listing lookup (for CardDetailModal)
+  // Single-card listing lookup (for CardDetailModal).
+  //
+  // An explicit `{listing: null}` at 200 is the *only* confirmed-absence
+  // signal, and the card-detail modal now hangs a displayed price on it. A
+  // lookup that failed for any other reason must therefore never borrow that
+  // shape: unauthenticated is 401 and a broken lookup is 503, so the client's
+  // dedicated error state engages instead of rendering a preview price as if
+  // the owner had no listing. Raw database text stays in the server log; the
+  // response carries only a stable public code.
   if (library_card_id) {
     const authClient = await createAuthClient()
     const { data: { user } } = await authClient.auth.getUser()
-    if (!user) return NextResponse.json({ listing: null })
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized', code: 'UNAUTHORIZED' }, { status: 401 })
+    }
+
+    const lookupUnavailable = (err) => {
+      console.error('[GET /api/listings single]', err?.message || err)
+      return NextResponse.json(
+        { error: 'Listing lookup unavailable', code: 'LISTING_LOOKUP_UNAVAILABLE' },
+        { status: 503 }
+      )
+    }
 
     try {
       const { data, error } = await authClient
@@ -71,7 +89,7 @@ export async function GET(request) {
     } catch (err) {
       // Fallback without expires_at AND quantity if either column doesn't exist yet
       if (err?.code !== UNDEF_COLUMN) {
-        return NextResponse.json({ listing: null })
+        return lookupUnavailable(err)
       }
       try {
         const authClient2 = await createAuthClient()
@@ -83,8 +101,8 @@ export async function GET(request) {
           .maybeSingle()
         if (err2) throw err2
         return NextResponse.json({ listing: data || null })
-      } catch {
-        return NextResponse.json({ listing: null })
+      } catch (fallbackErr) {
+        return lookupUnavailable(fallbackErr)
       }
     }
   }

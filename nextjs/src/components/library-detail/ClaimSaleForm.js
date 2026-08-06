@@ -51,7 +51,17 @@ export default function ClaimSaleForm({
         }
         throw new Error(err.error || 'Failed')
       }
-      const data = await res.json()
+      // The claim sale already exists at this point. A body that cannot be
+      // parsed is therefore just as ambiguous as one that carries no matching
+      // listing, and has to reach the modal through the same fail-closed path
+      // rather than falling through to the generic catch below.
+      let data
+      try {
+        data = await res.json()
+      } catch {
+        onListingUncertain?.()
+        throw new Error('Claim sale was created, but its listing could not be confirmed')
+      }
       const nextListing = Array.isArray(data.listings)
         ? data.listings.find(listing =>
           listing?.id &&
