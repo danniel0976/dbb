@@ -1,0 +1,78 @@
+name: Rendered UAT
+
+# The behavioural half of the Phase 42/46 guards. `ci.yml` runs the fast
+# source-level gates; this job stands the real thing up — local Supabase with
+# the full migration chain, a production Next build served on loopback, and a
+# headless Chromium driving the authenticated UI — so the two PR #8 blockers
+# and the shipped accessibility fixes are proven against the DOM rather than
+# against source text.
+#
+# It is a separate workflow because it is minutes, not seconds: keeping it out
+# of `ci.yml` preserves that job's fast feedback.
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rendered-uat-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  rendered-uat:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: nextjs/package-lock.json
+
+      - name: Install dependencies
+        working-directory: nextjs
+        run: npm ci
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.75.0
+
+      # Applies supabase/migrations in order, then supabase/seed.sql. The
+      # fixture this harness creates is disjoint from the seed's account.
+      - name: Start local Supabase
+        run: supabase start
+
+      - name: Install Chromium
+        working-directory: nextjs
+        run: npx playwright install --with-deps chromium
+
+      # Builds an isolated copy that contains none of Next's production env
+      # sources, so the only Supabase credentials reachable are the ones
+      # `supabase status` just resolved.
+      - name: Build the isolated UAT candidate
+        working-directory: nextjs
+        run: node scripts/phase46-uat-harness-ci.mjs build
+
+      - name: Run the rendered UAT
+        working-directory: nextjs
+        run: npx playwright test --config=playwright.phase46.ci.config.js
+
+      - name: Upload failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rendered-uat-artifacts
+          path: nextjs/test-results/
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Stop local Supabase
+        if: always()
+        run: supabase stop --no-backup
