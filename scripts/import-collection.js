@@ -503,7 +503,10 @@ async function importCollection(csvPath, priceLookup, dryRun = false) {
 // CLI Entry Point
 // ============================================================================
 
+const STAGE = 'import-collection'
+
 async function main() {
+  console.log(`=== STAGE START: ${STAGE} ===`)
   const args = process.argv.slice(2)
   const dryRun = args.includes('--dry-run')
   const doRefreshPrices = args.includes('--refresh-prices')
@@ -534,10 +537,12 @@ async function main() {
     }
     await importCollection(csvPath, priceLookup, dryRun)
   }
+  console.log(`=== STAGE OK: ${STAGE} ===`)
 }
 
 main().catch(error => {
   console.error('\n❌ Fatal error:', error.message)
   console.error(error.stack)
+  console.error(`=== STAGE FAILED: ${STAGE} — ${error.message} ===`)
   process.exit(1)
 })
