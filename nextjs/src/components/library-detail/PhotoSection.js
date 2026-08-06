@@ -7,7 +7,7 @@ import { X, Loader2, Camera, RotateCcw, Maximize2 } from 'lucide-react'
 
 // PhotoSection — shows current card photo + camera capture for owner.
 // Uses small variant (640px) for inline display; full-size available via lightbox.
-export default function PhotoSection({ libraryRow, listing, onPhotoChange, forceCamera, onCameraOpened, onCaptureComplete, onCaptureCancel }) {
+export default function PhotoSection({ libraryRow, onPhotoChange, forceCamera, onCameraOpened, onCaptureComplete, onCaptureCancel }) {
   const { toast } = useToast()
   const [photoUrl, setPhotoUrl] = useState(undefined) // undefined=loading, null=none, string=url
   const [showCamera, setShowCamera] = useState(false)

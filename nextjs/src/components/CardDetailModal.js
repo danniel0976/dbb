@@ -260,9 +260,11 @@ export default function CardDetailModal({ libraryRow, onClose, onSave, onDelete 
     setOwnerListingState({ status: OWNER_LISTING_STATUS.ERROR, listing: null })
   }
 
-  // Load listing status for PhotoSection and the price summary. HTTP, JSON and
-  // malformed-payload failures remain errors; only an explicit null confirms
-  // that the owner has no listing for this card.
+  // Load listing status for the price summary and the listing controls. HTTP,
+  // JSON and malformed-payload failures remain errors; only an explicit null
+  // confirms that the owner has no listing for this card. The route itself now
+  // answers 401/503 rather than an explicit null when the lookup did not
+  // actually resolve, so this invariant holds end to end.
   useEffect(() => {
     let cancelled = false
     setOwnerListingState({ status: OWNER_LISTING_STATUS.LOADING, listing: null })
@@ -312,10 +314,6 @@ export default function CardDetailModal({ libraryRow, onClose, onSave, onDelete 
     ownerListingState.listing?.status,
     ownerListingState.listing?.expires_at,
   ])
-
-  const currentListing = ownerListingState.status === OWNER_LISTING_STATUS.READY
-    ? ownerListingState.listing
-    : undefined
 
   const ci = libraryRow.card_index
   const storedImage = ci?.image_uris?.normal || ci?.image_uris?.small || null
@@ -628,7 +626,6 @@ export default function CardDetailModal({ libraryRow, onClose, onSave, onDelete 
   const photoTab = (
     <PhotoSection
       libraryRow={libraryRow}
-      listing={currentListing}
       onPhotoChange={setHasPhoto}
       forceCamera={forcePhotoCamera}
       onCameraOpened={() => setForcePhotoCamera(false)}

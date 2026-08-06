@@ -79,8 +79,31 @@ export default function ListingSection({
         }
         throw new Error(err.error || 'Failed')
       }
-      const data = await res.json()
-      const nextListing = data.listings?.[0] || { multiplier, status: 'active' }
+      // Match ClaimSaleForm: the listing exists server-side once we are here, so
+      // an unreadable or non-matching response is ambiguous, not a success. It
+      // must fail closed into the error state *and* report an error — announcing
+      // "Card listed on Bazaar" next to the amber "could not check listing
+      // status" panel told the user two contradictory things at once.
+      let data
+      try {
+        data = await res.json()
+      } catch {
+        onListingChange({ multiplier, status: 'active' })
+        setShowPicker(false)
+        throw new Error('Card was listed, but its Bazaar listing could not be confirmed')
+      }
+      const nextListing = Array.isArray(data.listings)
+        ? data.listings.find(listing =>
+          listing?.id &&
+          listing.library_card_id === libraryRow.id &&
+          listing.status === 'active'
+        )
+        : null
+      if (!nextListing) {
+        onListingChange({ multiplier, status: 'active' })
+        setShowPicker(false)
+        throw new Error('Card was listed, but its Bazaar listing could not be confirmed')
+      }
       onListingChange(nextListing)
       setShowPicker(false)
       toast('Card listed on Bazaar', 'success')

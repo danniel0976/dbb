@@ -5,8 +5,15 @@
 /* ── CSS Variables: Apple Liquid Glass Design Language ── */
 :root {
   /* Light mode ONLY — true white surfaces, elevation via subtle grays */
-  --dbb-accent-rgb: 255 59 48;       /* iOS system red #FF3B30 */
-  --dbb-accent-hov-rgb: 224 40 30;   /* darkened accent for hover */
+  /* Accent red. The resting value is the shade this design system already
+     shipped as its hover red: white text on the previous #FF3B30 measured
+     3.55:1, below the 4.5:1 WCAG AA floor that applies at .btn's real
+     14px/600 size (no large-text exemption). #E0281E measures 4.68:1 and
+     #B52018 (hover) 6.59:1, both against #FFFFFF, recomputed by
+     scripts/phase46-test-contrast-and-legibility.mjs on every CI run.
+     The price red (--dbb-price) deliberately keeps the original #FF3B30. */
+  --dbb-accent-rgb: 224 40 30;       /* #E0281E — AA-safe accent red */
+  --dbb-accent-hov-rgb: 181 32 24;   /* #B52018 — darkened accent for hover */
   --dbb-surface-rgb: 255 255 255;    /* true white */
   --dbb-bg-rgb: 255 255 255;         /* true white page bg */
   --dbb-text-rgb: 29 29 31;          /* primary text */
@@ -15,8 +22,8 @@
   --dbb-price-rgb: 255 59 48;        /* red accent for prices (domain change) */
 
   /* Non-RGB vars for direct uses */
-  --dbb-accent: #FF3B30;
-  --dbb-accent-hov: #E0281E;
+  --dbb-accent: #E0281E;
+  --dbb-accent-hov: #B52018;
   --dbb-surface: #FFFFFF;
   --dbb-surface-elevated: #FFFFFF;
   --dbb-bg: #FFFFFF;
