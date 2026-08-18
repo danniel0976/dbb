@@ -9,3 +9,7 @@ nextjs/public/ck-prices.json
 scripts/data/ck-prices.json
 supabase/backups/
 supabase/.temp/
+
+# secrets — added 2026-08-18 after finding .env.production tracked in a public repo
+nextjs/.env.production
+nextjs/.env*.local
