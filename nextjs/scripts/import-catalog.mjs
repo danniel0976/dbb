@@ -1,8 +1,9 @@
 /**
  * import-catalog.mjs
  *
- * Stream-parse Scryfall default_cards bulk data (~90MB JSON) and upsert into card_index.
- * Uses readline to process one line at a time — never JSON.parse the whole file.
+ * Stream-parse Scryfall default_cards bulk data (gzip-compressed JSONL, ~80MB
+ * compressed) and upsert into card_index. Decompresses and reads one line at a
+ * time — never buffers the whole file in memory.
  *
  * Usage:
  *   node scripts/import-catalog.mjs
@@ -20,6 +21,7 @@ import https from 'node:https'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { readFileSync } from 'node:fs'
+import zlib from 'node:zlib'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -44,7 +46,10 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
 const DRY_RUN = process.argv.includes('--dry-run')
 const BATCH_SIZE = 500
-const TEMP_FILE = '/tmp/scryfall-default-cards.json'
+// Scryfall's bulk-data API switched from a plain JSON array (`download_uri`) to
+// gzip-compressed JSONL (`jsonl_download_uri`) — see fetchBulkDataUrl(). The temp
+// file is the raw .gz; processFile() decompresses it as it streams.
+const TEMP_FILE = '/tmp/scryfall-default-cards.jsonl.gz'
 
 if (!SUPABASE_URL || !SERVICE_KEY) {
   console.error('Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY')
@@ -62,7 +67,9 @@ async function fetchBulkDataUrl() {
         res.on('end', () => {
           try {
             const json = JSON.parse(data)
-            resolve(json.download_uri)
+            // Scryfall renamed this field (was `download_uri`, a plain JSON array);
+            // it now serves gzip-compressed JSONL under `jsonl_download_uri`.
+            resolve(json.jsonl_download_uri || json.download_uri)
           } catch (e) {
             reject(e)
           }
@@ -139,7 +146,10 @@ async function upsertBatch(rows) {
 }
 
 async function processFile(filePath) {
-  const rl = createInterface({ input: createReadStream(filePath), crlfDelay: Infinity })
+  const rl = createInterface({
+    input: createReadStream(filePath).pipe(zlib.createGunzip()),
+    crlfDelay: Infinity,
+  })
   let batch = []
   let total = 0
   let skipped = 0
@@ -148,16 +158,12 @@ async function processFile(filePath) {
 
   for await (const line of rl) {
     const trimmed = line.trim()
-    // Skip the array bracket lines
-    if (trimmed === '[' || trimmed === ']' || trimmed === '') continue
+    if (trimmed === '') continue
 
-    // Each card line looks like: {"object":"card",...}, or {"object":"card",...}
-    // Strip trailing comma
-    const jsonStr = trimmed.endsWith(',') ? trimmed.slice(0, -1) : trimmed
-
+    // JSONL: one complete card object per line, no brackets or trailing commas.
     let card
     try {
-      card = JSON.parse(jsonStr)
+      card = JSON.parse(trimmed)
     } catch {
       skipped++
       continue
