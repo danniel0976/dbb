@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "hosts": [
+    {
+      "hostname": "chippy-vps",
+      "aliases": [],
+      "fingerprint": "a682ce31ebeb",
+      "roles": ["executor"]
+    },
+    {
+      "hostname": "dans-macbook-air",
+      "aliases": ["Dans-MacBook-Air-9.local"],
+      "fingerprint": "74a2043dcfd4",
+      "roles": ["publisher"]
+    }
+  ]
+}
