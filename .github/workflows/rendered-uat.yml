@@ -11,8 +11,10 @@ name: Rendered UAT
 # of `ci.yml` preserves that job's fast feedback.
 
 on:
+  push:
+    branches: [checkpoint]
   pull_request:
-    branches: [main]
+    branches: [main, checkpoint]
   workflow_dispatch:
 
 permissions:
