@@ -1,5 +1,20 @@
 {
   "installCommand": "cd nextjs && npm install",
   "buildCommand": "cd nextjs && npm run build",
-  "outputDirectory": "nextjs/.next"
+  "outputDirectory": "nextjs/.next",
+  "git": {
+    "deploymentEnabled": {
+      "**": false,
+      "main": true,
+      "checkpoint": true,
+      "feat/*": false,
+      "fix/*": false,
+      "chore/*": false,
+      "docs/*": false,
+      "test/*": false,
+      "refactor/*": false,
+      "perf/*": false,
+      "hotfix/*": false
+    }
+  }
 }
