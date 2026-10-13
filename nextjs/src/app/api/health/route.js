@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 
 // Force Node.js runtime
 export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
 
 // Health check + Supabase keep-alive endpoint
 // Called by Vercel cron every 5 days to prevent Supabase free tier pause (7-day idle timeout)
@@ -9,8 +10,9 @@ export const runtime = 'nodejs'
 export async function GET() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || supabaseAnonKey
 
-  if (!supabaseUrl || !supabaseAnonKey) {
+  if (!supabaseUrl || !supabaseKey) {
     return NextResponse.json(
       { status: 'error', error: 'Missing Supabase env vars', timestamp: new Date().toISOString() },
       { status: 500 }
@@ -20,11 +22,11 @@ export async function GET() {
   try {
     // Ping Supabase with a lightweight count query
     const response = await fetch(
-      `${supabaseUrl}/rest/v1/cards?select=id&limit=1`,
+      `${supabaseUrl}/rest/v1/card_index?select=scryfall_id&limit=1`,
       {
         headers: {
-          'apikey': supabaseAnonKey,
-          'Authorization': `Bearer ${supabaseAnonKey}`,
+          'apikey': supabaseKey,
+          'Authorization': `Bearer ${supabaseKey}`,
           'Accept': 'application/json',
         },
         // Don't cache — we want the actual DB hit for keep-alive
@@ -50,11 +52,11 @@ export async function GET() {
 
     // Also get a total count
     const countResponse = await fetch(
-      `${supabaseUrl}/rest/v1/cards?select=id&is_available=eq.true`,
+      `${supabaseUrl}/rest/v1/card_index?select=scryfall_id&limit=1`,
       {
         headers: {
-          'apikey': supabaseAnonKey,
-          'Authorization': `Bearer ${supabaseAnonKey}`,
+          'apikey': supabaseKey,
+          'Authorization': `Bearer ${supabaseKey}`,
           'Accept': 'application/json',
           'Prefer': 'count=exact',
         },
@@ -65,7 +67,9 @@ export async function GET() {
     let cardCount = null
     if (countResponse.ok) {
       const countData = await countResponse.json()
-      cardCount = Array.isArray(countData) ? countData.length : null
+      const contentRange = countResponse.headers.get('content-range')
+      const totalMatch = contentRange?.match(/\/([0-9]+)$/)
+      cardCount = totalMatch ? Number(totalMatch[1]) : (Array.isArray(countData) ? countData.length : null)
     }
 
     return NextResponse.json(

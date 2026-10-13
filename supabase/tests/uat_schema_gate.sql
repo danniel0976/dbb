@@ -15,7 +15,8 @@ BEGIN
     ('listings'), ('cart_items'), ('card_photos'), ('claim_sales'), ('follows'),
     ('orders'), ('order_items'), ('checkout_requests'), ('pickup_locations'),
     ('marketplace_card_reservations'), ('auctions'), ('auction_items'),
-    ('auction_bids'), ('fb_export_snapshots'), ('card_hashes')
+    ('auction_bids'), ('fb_export_snapshots'), ('card_hashes'),
+    ('catalog_state'), ('catalog_refresh_staging')
   ) AS expected(name)
   WHERE to_regclass('public.' || name) IS NULL;
 
@@ -43,7 +44,8 @@ BEGIN
     ('20260727000000'),
     ('20260727000001'),
     ('20260803000000'),
-    ('20260803000001')
+    ('20260803000001'),
+    ('20260930000000')
   ) AS expected(version)
   WHERE NOT EXISTS (
     SELECT 1
@@ -55,9 +57,53 @@ BEGIN
     RAISE EXCEPTION 'UAT schema gate: missing migration version(s): %', v_missing;
   END IF;
 
-  IF (SELECT count(*) FROM supabase_migrations.schema_migrations) <> 13 THEN
-    RAISE EXCEPTION 'UAT schema gate: expected exactly 13 migration versions, found %',
+  IF (SELECT count(*) FROM supabase_migrations.schema_migrations) <> 14 THEN
+    RAISE EXCEPTION 'UAT schema gate: expected exactly 14 migration versions, found %',
       (SELECT count(*) FROM supabase_migrations.schema_migrations);
+  END IF;
+END $$;
+
+DO $$
+DECLARE
+  v_signature regprocedure;
+  v_publish text;
+  v_public_execute boolean;
+BEGIN
+  v_signature := to_regprocedure('public.publish_catalog_refresh(uuid,text,text,integer,integer)');
+  IF v_signature IS NULL THEN
+    RAISE EXCEPTION 'UAT schema gate: publish_catalog_refresh completeness signature is missing';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'card_index' AND column_name = 'catalog_current'
+  ) OR NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'catalog_state' AND column_name = 'skipped_count'
+  ) THEN
+    RAISE EXCEPTION 'UAT schema gate: catalog current-state columns are missing';
+  END IF;
+
+  SELECT EXISTS (
+    SELECT 1
+    FROM pg_proc p
+    CROSS JOIN LATERAL aclexplode(COALESCE(p.proacl, acldefault('f', p.proowner))) privilege
+    WHERE p.oid = v_signature
+      AND privilege.grantee = 0
+      AND privilege.privilege_type = 'EXECUTE'
+  ) INTO v_public_execute;
+
+  IF v_public_execute
+    OR has_function_privilege('anon', v_signature, 'EXECUTE')
+    OR has_function_privilege('authenticated', v_signature, 'EXECUTE')
+    OR NOT has_function_privilege('service_role', v_signature, 'EXECUTE') THEN
+    RAISE EXCEPTION 'UAT schema gate: publish_catalog_refresh execution boundary is wrong';
+  END IF;
+
+  v_publish := regexp_replace(pg_get_functiondef(v_signature), '--[^' || chr(10) || ']*', '', 'g');
+  IF v_publish !~ 'p_row_count < 100000'
+    OR v_publish !~ 'p_row_count::numeric / \(p_row_count \+ p_skipped_count\) < 0.85' THEN
+    RAISE EXCEPTION 'UAT schema gate: catalog completeness admission is missing';
   END IF;
 END $$;
 

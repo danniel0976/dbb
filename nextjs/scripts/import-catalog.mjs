@@ -15,19 +15,27 @@
  */
 
 import { createInterface } from 'node:readline'
-import { createReadStream, unlinkSync, existsSync } from 'node:fs'
-import { createWriteStream } from 'node:fs'
+import { createReadStream, createWriteStream, mkdtempSync, renameSync, rmSync, writeFileSync, readFileSync } from 'node:fs'
+import { randomUUID } from 'node:crypto'
 import https from 'node:https'
 import path from 'node:path'
+import os from 'node:os'
 import { fileURLToPath } from 'node:url'
-import { readFileSync } from 'node:fs'
 import zlib from 'node:zlib'
+import {
+  assertCatalogCompleteness,
+  buildRefreshManifest,
+  normalizeCmc,
+  runWithFailureCleanup,
+  selectBulkDownload,
+  sourceUrlHash,
+} from './catalogRefresh.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 // Load env from .env.local
 function loadEnv() {
-  const envPath = path.join(__dirname, '..', '.env.local')
+  const envPath = process.env.CATALOG_ENV_PATH || path.join(__dirname, '..', '.env.local')
   try {
     const text = readFileSync(envPath, 'utf8')
     for (const line of text.split('\n')) {
@@ -45,13 +53,25 @@ loadEnv()
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
 const DRY_RUN = process.argv.includes('--dry-run')
+const INPUT_FILE = argValue('--input')
+const MANIFEST_PATH = process.env.CATALOG_MANIFEST_PATH || path.join(__dirname, '..', '.catalog-refresh-manifest.json')
 const BATCH_SIZE = 500
-// Scryfall's bulk-data API switched from a plain JSON array (`download_uri`) to
-// gzip-compressed JSONL (`jsonl_download_uri`) — see fetchBulkDataUrl(). The temp
-// file is the raw .gz; processFile() decompresses it as it streams.
-const TEMP_FILE = '/tmp/scryfall-default-cards.jsonl.gz'
+let refreshId = null
 
-if (!SUPABASE_URL || !SERVICE_KEY) {
+function argValue(flag) {
+  const index = process.argv.indexOf(flag)
+  if (index === -1) return null
+  const value = process.argv[index + 1]
+  if (!value || value.startsWith('--')) throw new Error(`${flag} requires a value`)
+  return value
+}
+
+// Each run gets a fresh directory so a partial download can never be mistaken
+// for a successful previous run by a scheduled invocation.
+let tempDir = null
+let tempFile = null
+
+if (!DRY_RUN && (!SUPABASE_URL || !SERVICE_KEY)) {
   console.error('Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY')
   process.exit(1)
 }
@@ -65,11 +85,12 @@ async function fetchBulkDataUrl() {
         let data = ''
         res.on('data', c => data += c)
         res.on('end', () => {
+          if (res.statusCode !== 200) {
+            reject(new Error(`Scryfall bulk-data API returned HTTP ${res.statusCode}`))
+            return
+          }
           try {
-            const json = JSON.parse(data)
-            // Scryfall renamed this field (was `download_uri`, a plain JSON array);
-            // it now serves gzip-compressed JSONL under `jsonl_download_uri`.
-            resolve(json.jsonl_download_uri || json.download_uri)
+            resolve(selectBulkDownload(JSON.parse(data)))
           } catch (e) {
             reject(e)
           }
@@ -104,6 +125,13 @@ async function downloadFile(url, dest) {
     let downloaded = 0
     httpsGet(url, { headers: { 'User-Agent': 'DansBizarreBazaar/1.0' } }, (res) => {
       if (res instanceof Error) { file.close(); reject(res); return }
+      if (res.statusCode < 200 || res.statusCode >= 300) {
+        res.resume()
+        file.close()
+        try { rmSync(dest, { force: true }) } catch {}
+        reject(new Error(`Bulk download returned HTTP ${res.statusCode}`))
+        return
+      }
       res.on('data', chunk => {
         downloaded += chunk.length
         if (downloaded % (5 * 1024 * 1024) < chunk.length) {
@@ -129,7 +157,8 @@ function extractImageUris(card) {
 }
 
 async function upsertBatch(rows) {
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/card_index`, {
+  const stagedRows = rows.map(row => ({ refresh_id: refreshId, ...row }))
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/catalog_refresh_staging`, {
     method: 'POST',
     headers: {
       'apikey': SERVICE_KEY,
@@ -137,11 +166,52 @@ async function upsertBatch(rows) {
       'Content-Type': 'application/json',
       'Prefer': 'resolution=merge-duplicates,return=minimal',
     },
-    body: JSON.stringify(rows),
+    body: JSON.stringify(stagedRows),
   })
   if (!res.ok) {
     const text = await res.text()
-    throw new Error(`Upsert failed ${res.status}: ${text.slice(0, 200)}`)
+    throw new Error(`Staging upsert failed ${res.status}: ${text.slice(0, 200)}`)
+  }
+}
+
+async function publishRefresh(source, rowCount, skippedCount) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/publish_catalog_refresh`, {
+    method: 'POST',
+    headers: {
+      'apikey': SERVICE_KEY,
+      'Authorization': `Bearer ${SERVICE_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      p_refresh_id: refreshId,
+      p_source_field: source.sourceField,
+      p_source_url_sha256: sourceUrlHash(source.url),
+      p_row_count: rowCount,
+      p_skipped_count: skippedCount,
+    }),
+  })
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(`Catalog publish failed ${res.status}: ${text.slice(0, 200)}`)
+  }
+  return res.json()
+}
+
+async function cleanupFailedRefresh() {
+  const res = await fetch(
+    `${SUPABASE_URL}/rest/v1/catalog_refresh_staging?refresh_id=eq.${encodeURIComponent(refreshId)}`,
+    {
+      method: 'DELETE',
+      headers: {
+        'apikey': SERVICE_KEY,
+        'Authorization': `Bearer ${SERVICE_KEY}`,
+        'Prefer': 'return=minimal',
+      },
+    }
+  )
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(`Staging cleanup failed ${res.status}: ${text.slice(0, 200)}`)
   }
 }
 
@@ -183,7 +253,7 @@ async function processFile(filePath) {
       rarity: card.rarity || null,
       colors: card.color_identity || [],
       type_line: card.type_line || face?.type_line || null,
-      cmc: card.cmc ?? null,
+      cmc: normalizeCmc(card.cmc),
       mana_cost: card.mana_cost || face?.mana_cost || null,
       image_uris: extractImageUris(card),
       finishes: card.finishes || [],
@@ -195,11 +265,7 @@ async function processFile(filePath) {
     if (batch.length >= BATCH_SIZE) {
       batchNum++
       if (!DRY_RUN) {
-        try {
-          await upsertBatch(batch)
-        } catch (e) {
-          console.error(`\nBatch ${batchNum} error: ${e.message}`)
-        }
+        await upsertBatch(batch)
       }
       batch = []
       const elapsed = ((Date.now() - start) / 1000).toFixed(0)
@@ -211,11 +277,7 @@ async function processFile(filePath) {
   if (batch.length > 0) {
     batchNum++
     if (!DRY_RUN) {
-      try {
-        await upsertBatch(batch)
-      } catch (e) {
-        console.error(`\nFinal batch error: ${e.message}`)
-      }
+      await upsertBatch(batch)
     }
   }
 
@@ -223,51 +285,63 @@ async function processFile(filePath) {
   console.log(`\n\nDone. ${total.toLocaleString()} cards processed (${skipped} skipped) in ${elapsed}s`)
   console.log(`Batches: ${batchNum} × ${BATCH_SIZE}`)
   if (DRY_RUN) console.log('(dry run — no data written)')
+  return { total, skipped, batchNum }
+}
+
+function writeManifest(manifest) {
+  const tempManifest = `${MANIFEST_PATH}.tmp`
+  writeFileSync(tempManifest, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8')
+  renameSync(tempManifest, MANIFEST_PATH)
 }
 
 async function main() {
   console.log('=== DBB Scryfall Catalog Import ===')
   if (DRY_RUN) console.log('DRY RUN mode')
+  if (INPUT_FILE && !DRY_RUN) throw new Error('--input is only supported with --dry-run')
+  refreshId = randomUUID()
 
-  // Fetch download URL from Scryfall bulk-data API
-  console.log('Fetching bulk data URL from Scryfall...')
-  let downloadUrl
-  try {
-    downloadUrl = await fetchBulkDataUrl()
-    console.log(`URL: ${downloadUrl}`)
-  } catch (e) {
-    console.error('Failed to fetch bulk data URL:', e.message)
-    process.exit(1)
-  }
-
-  // Download to temp file
-  const tempExists = existsSync(TEMP_FILE)
-  if (tempExists) {
-    console.log(`Reusing existing temp file: ${TEMP_FILE}`)
-    console.log('(delete /tmp/scryfall-default-cards.json to force re-download)')
+  let source = null
+  if (INPUT_FILE) {
+    tempFile = path.resolve(INPUT_FILE)
+    console.log(`Using local input: ${tempFile}`)
   } else {
-    try {
-      await downloadFile(downloadUrl, TEMP_FILE)
-    } catch (e) {
-      console.error('Download failed:', e.message)
-      process.exit(1)
-    }
+    console.log('Fetching bulk data URL from Scryfall...')
+    source = await fetchBulkDataUrl()
+    console.log(`Source field: ${source.sourceField}`)
+    console.log(`URL: ${source.url}`)
+    tempDir = mkdtempSync(path.join(os.tmpdir(), 'dbb-scryfall-'))
+    tempFile = path.join(tempDir, 'default-cards.jsonl.gz')
+    await downloadFile(source.url, tempFile)
   }
 
-  // Stream-parse and upsert
-  console.log('Stream-parsing and upserting...')
   try {
-    await processFile(TEMP_FILE)
-  } catch (e) {
-    console.error('Processing failed:', e.message)
-    process.exit(1)
-  }
-
-  // Clean up temp file
-  if (!DRY_RUN && existsSync(TEMP_FILE)) {
-    try { unlinkSync(TEMP_FILE) } catch {}
-    console.log('Temp file cleaned up.')
+    await runWithFailureCleanup(
+      async () => {
+        console.log('Stream-parsing and upserting...')
+        const stats = await processFile(tempFile)
+        if (!DRY_RUN) {
+          assertCatalogCompleteness({ rowCount: stats.total, skippedCount: stats.skipped })
+          await publishRefresh(source, stats.total, stats.skipped)
+          writeManifest(buildRefreshManifest({
+            sourceField: source.sourceField,
+            sourceUrl: source.url,
+            total: stats.total,
+            skipped: stats.skipped,
+          }))
+          console.log(`Refresh manifest written: ${MANIFEST_PATH}`)
+        }
+      },
+      async () => {
+        if (!DRY_RUN) await cleanupFailedRefresh()
+      },
+      cleanupError => console.error(`Catalog staging cleanup failed: ${cleanupError.message}`)
+    )
+  } finally {
+    if (tempDir) {
+      rmSync(tempDir, { recursive: true, force: true })
+      console.log('Temp directory cleaned up.')
+    }
   }
 }
 
-main().catch(e => { console.error(e); process.exit(1) })
+main().catch(e => { console.error(`Catalog refresh failed: ${e.message}`); process.exit(1) })

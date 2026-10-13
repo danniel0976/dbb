@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
+import { isMissingColumnError } from '@/lib/catalogSearchCompatibility.mjs'
+import { buildNameMatchPlans, buildNameOrFilter, runNameMatchPlans } from '@/lib/catalogNameSearch.mjs'
 
 const MAX_LIMIT = 40
 const DEFAULT_LIMIT = 20
@@ -56,9 +58,21 @@ const SORT_ALIASES = {
   rarity: 'rarity_high',
 }
 
-function applyFilters(query, { q, set_code, rarity, type, colorArr, cmcMin, cmcMax, foilOnly }) {
-  if (q) query = query.ilike('name', `%${q}%`)
+// Apply one name-match plan. A single pattern stays a plain ILIKE — the exact
+// filter manual search has always issued; several patterns become one bounded
+// OR of ILIKEs. An unsafe pattern set degrades to the narrowest pattern rather
+// than emitting filter text that could be reparsed as syntax.
+function applyNamePlan(query, plan) {
+  if (!plan || !plan.patterns?.length) return query
+  if (plan.patterns.length === 1) return query.ilike('name', plan.patterns[0])
+  const orFilter = buildNameOrFilter(plan.patterns)
+  return orFilter ? query.or(orFilter) : query.ilike('name', plan.patterns[0])
+}
+
+function applyFilters(query, { namePlan, set_code, collector_number, rarity, type, colorArr, cmcMin, cmcMax, foilOnly }) {
+  query = applyNamePlan(query, namePlan)
   if (set_code) query = query.eq('set_code', set_code)
+  if (collector_number) query = query.eq('collector_number', collector_number)
   if (rarity) query = query.eq('rarity', rarity)
   if (type) query = query.ilike('type_line', `%${type}%`)
   if (colorArr.length > 0) query = query.overlaps('colors', colorArr)
@@ -104,59 +118,82 @@ export async function GET(request) {
   const cmcMin = cmcMinRaw !== null && cmcMinRaw !== '' && !isNaN(parseFloat(cmcMinRaw)) ? parseFloat(cmcMinRaw) : null
   const cmcMax = cmcMaxRaw !== null && cmcMaxRaw !== '' && !isNaN(parseFloat(cmcMaxRaw)) ? parseFloat(cmcMaxRaw) : null
   const foilOnly = searchParams.get('foil_only') === '1' || searchParams.get('foil_only') === 'true'
+  // Scanner-only retrieval widening. OCR substitutions make a substring-only
+  // name filter miss a perfectly readable card, so a scan may escalate to
+  // bounded token/half-word plans. Manual search never does.
+  const scan = searchParams.get('scan') === '1' || searchParams.get('scan') === 'true'
+  const collectorRaw = (searchParams.get('collector_number') || '').trim().toLowerCase()
+  const collector_number = scan && !q && /^\d{1,4}[a-z]?$/.test(collectorRaw) ? collectorRaw : ''
   const requestedSort = (searchParams.get('sort') || 'name').trim().toLowerCase()
   const sort = SORT_ALIASES[requestedSort] || requestedSort
   const group = searchParams.get('group') !== '0' // default: group by name
   const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10))
   const limit = Math.min(MAX_LIMIT, Math.max(1, parseInt(searchParams.get('limit') || String(DEFAULT_LIMIT), 10)))
 
-  if (!q && !set_code && !rarity && !type && !colorArr.length && cmcMin === null && cmcMax === null && !foilOnly) {
+  if (!q && !set_code && !collector_number && !rarity && !type && !colorArr.length && cmcMin === null && cmcMax === null && !foilOnly) {
     return NextResponse.json({ results: [], groups: [], total: 0, page, limit })
   }
 
   const from = (page - 1) * limit
   const to = from + limit - 1
-  const filterArgs = { q, set_code, rarity, type, colorArr, cmcMin, cmcMax, foilOnly }
 
   // Select columns — try full set first (migration-007), fall back to basic
   const fullSelect = 'scryfall_id, name, set_code, set_name, collector_number, rarity, rarity_rank, colors, type_line, cmc, mana_cost, image_uris, finishes'
-  let query = applySort(
-    applyFilters(
-      supabase.from('card_index').select(fullSelect, { count: 'exact' }).range(from, to),
-      filterArgs
-    ),
-    sort
-  )
 
-  let { data, error, count } = await query
+  // One catalog query for one name-match plan, keeping the pre-migration schema
+  // fallback intact. Returns the Supabase result shape so plan escalation can
+  // stop on the first plan that matches anything, or on any error.
+  const runPlan = async (namePlan, queryPage = { from, to }) => {
+    const filterArgs = { namePlan, set_code, collector_number, rarity, type, colorArr, cmcMin, cmcMax, foilOnly }
+    const query = applySort(
+      applyFilters(
+        supabase.from('card_index').select(fullSelect, { count: 'exact' }).eq('catalog_current', true).range(queryPage.from, queryPage.to),
+        filterArgs
+      ),
+      sort
+    )
 
-  // Defensive compatibility fallback for a pre-migration catalog schema.
-  // Do not mask unrelated query failures or drop foilOnly from the retry.
-  if (error?.code === '42703') {
+    const { data, error, count } = await query
+    // Defensive compatibility fallback for a pre-migration catalog schema.
+    // Do not mask unrelated query failures or drop foilOnly from the retry.
+    if (!(error?.code === '42703')) return { data, error, count }
+
     const basicSelect = 'scryfall_id, name, set_code, set_name, collector_number, rarity, colors, type_line, cmc, mana_cost'
     const fallbackFilters = filterArgs
-    let fbQuery = applySort(
-      applyFilters(
-        supabase.from('card_index').select(basicSelect, { count: 'exact' }).range(from, to),
-        fallbackFilters
-      ),
-      sort,
-      { legacyRarity: true }
-    )
-    const fb = await fbQuery
-    if (fb.error) {
-      console.error('catalog/search error:', fb.error)
-      return NextResponse.json({ error: fb.error.message }, { status: 500 })
+    const missingCatalogCurrent = isMissingColumnError(error, 'catalog_current')
+    const runFallback = async (includeCatalogCurrent) => {
+      let fallbackBase = supabase.from('card_index').select(basicSelect, { count: 'exact' })
+      if (includeCatalogCurrent) fallbackBase = fallbackBase.eq('catalog_current', true)
+      fallbackBase = fallbackBase.range(queryPage.from, queryPage.to)
+      return applySort(
+        applyFilters(fallbackBase, fallbackFilters),
+        sort,
+        { legacyRarity: true }
+      )
     }
-    data = fb.data
-    count = fb.count
-    error = null
-  } else if (error) {
+
+    let fb = await runFallback(!missingCatalogCurrent)
+    if (fb.error && !missingCatalogCurrent && isMissingColumnError(fb.error, 'catalog_current')) {
+      fb = await runFallback(false)
+    }
+    return { data: fb.data, error: fb.error, count: fb.count }
+  }
+
+  const { data, error, count, tier } = await runNameMatchPlans(
+    buildNameMatchPlans(q, { scan }),
+    runPlan,
+    { pool: scan, page, limit }
+  )
+
+  if (error) {
     console.error('catalog/search error:', error)
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
   const rows = data || []
+  // Which name-match plan produced these rows, so a scan that only succeeded
+  // after widening is distinguishable in UAT and in the client.
+  const nameMatch = tier
 
   // Group by card name when requested (default).
   // Each group contains the card name and all matching editions/printings.
@@ -184,8 +221,8 @@ export async function GET(request) {
       })
     }
     const groups = Array.from(groupMap.values())
-    return NextResponse.json({ groups, total: count ?? 0, page, limit, has_more: (from + rows.length) < (count ?? 0) })
+    return NextResponse.json({ groups, total: count ?? 0, page, limit, has_more: (from + rows.length) < (count ?? 0), name_match: nameMatch })
   }
 
-  return NextResponse.json({ results: rows, total: count ?? 0, page, limit, has_more: (from + rows.length) < (count ?? 0) })
+  return NextResponse.json({ results: rows, total: count ?? 0, page, limit, has_more: (from + rows.length) < (count ?? 0), name_match: nameMatch })
 }
