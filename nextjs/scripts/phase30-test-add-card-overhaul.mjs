@@ -1,9 +1,10 @@
 // phase30-test-add-card-overhaul.mjs
 // Mechanical tests for Phase 30 add-card catalog search overhaul.
-// Tests source code statically (no running server required).
+// Source checks plus controlled execution of search callbacks (no server required).
 import { readFileSync } from 'fs'
 import { resolve, dirname } from 'path'
 import { fileURLToPath } from 'url'
+import { spawnSync } from 'node:child_process'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = resolve(__dirname, '../..')
@@ -354,10 +355,16 @@ test('CONCURRENCY-2: doSearch aborts previous in-flight request before starting 
   assert(doSearch.includes('new AbortController()'), 'doSearch must create new AbortController')
 })
 
-test('CONCURRENCY-3: stale fetch response is silently ignored (not set to state)', () => {
+test('CONCURRENCY-3: actual callbacks ignore stale success/errors/finally and invalidate on clear/unmount', () => {
   const src = readSrc('nextjs/src/components/AddCardModal.js')
-  // After fetch, before setting state, must check generation
+  // Retain the source guard; execution, not its mere presence, backs the claim.
   assert(src.includes('if (gen !== searchGenRef.current) return'), 'Must return early if generation is stale')
+  const result = spawnSync(process.execPath, [resolve(__dirname, 'test-card-scanner-search-concurrency.mjs')], {
+    encoding: 'utf8', timeout: 20000,
+  })
+  assert(!result.error && result.status === 0,
+    `Actual callback concurrency test failed: ${result.error?.message || ''}\n${result.stdout || ''}${result.stderr || ''}`)
+  assert(result.stdout.includes('CARD_SCANNER_SEARCH_CONCURRENCY_PASS'), 'Concurrency execution must report completion')
 })
 
 // ===========================================================================
