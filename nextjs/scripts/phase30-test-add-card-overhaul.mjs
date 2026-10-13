@@ -336,7 +336,7 @@ test('MODAL-13: AddCardModal preserves auth/binder/card validation in AddForm', 
 
 test('CONCURRENCY-1: doSearch increments generation before each search', () => {
   const src = readSrc('nextjs/src/components/AddCardModal.js')
-  const doSearchMatch = src.match(/doSearch\s*=[\s\S]*?\n  }, \[buildSearchUrl\]\)/)
+  const doSearchMatch = src.match(/doSearch\s*=[\s\S]*?\n  }, \[[^\]]*\]\)/)
   assert(doSearchMatch, 'Must find doSearch function')
   const doSearch = doSearchMatch[0]
   assert(doSearch.includes('searchGenRef.current'), 'doSearch must use generation counter')
@@ -346,7 +346,7 @@ test('CONCURRENCY-1: doSearch increments generation before each search', () => {
 
 test('CONCURRENCY-2: doSearch aborts previous in-flight request before starting new one', () => {
   const src = readSrc('nextjs/src/components/AddCardModal.js')
-  const doSearchMatch = src.match(/doSearch\s*=[\s\S]*?\n  }, \[buildSearchUrl\]\)/)
+  const doSearchMatch = src.match(/doSearch\s*=[\s\S]*?\n  }, \[[^\]]*\]\)/)
   assert(doSearchMatch, 'Must find doSearch function')
   const doSearch = doSearchMatch[0]
   assert(doSearch.includes('abortRef.current'), 'doSearch must reference abortRef')
