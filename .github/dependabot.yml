@@ -1,0 +1,22 @@
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/nextjs"
+    schedule:
+      interval: "weekly"
+    target-branch: "checkpoint"
+    open-pull-requests-limit: 5
+    groups:
+      npm-dependencies:
+        patterns:
+          - "*"
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    target-branch: "checkpoint"
+    open-pull-requests-limit: 5
+    groups:
+      action-dependencies:
+        patterns:
+          - "*"
