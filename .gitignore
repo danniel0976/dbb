@@ -13,3 +13,11 @@ supabase/.temp/
 # secrets — added 2026-08-18 after finding .env.production tracked in a public repo
 nextjs/.env.production
 nextjs/.env*.local
+
+# Keep local secrets, personal exports and deployment state out of the public tree.
+.env*
+!.env.example
+/*.csv
+failed-imports.json
+DEV_QUEUE.json
+.vercel/
