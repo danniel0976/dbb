@@ -5,6 +5,9 @@ import {
   buildNameMatchPlans,
   runNameMatchPlans,
 } from '../src/lib/catalogNameSearch.mjs'
+import { readScannerFrame, SCANNER_OCR_REGIONS } from '../src/lib/cardScannerCapture.mjs'
+import { rankScannerResults } from '../src/lib/cardScanner.mjs'
+import { routeScannerMatch, scannerRetrievalSeed } from '../src/lib/cardScannerSession.mjs'
 
 function likeRegex(pattern) {
   const body = [...pattern].map(char => {
@@ -89,5 +92,128 @@ async function searchNames(query, limit = 5) {
 
 // Repeated execution over the same local catalog fixture is deterministic.
 assert.deepEqual(await searchNames('lightnmg bolt'), await searchNames('lightnmg bolt'))
+
+// Carry separate raw OCR regions through the real capture/evidence module,
+// local name retrieval and ranker. The fake worker supplies text, not evidence.
+async function rawEvidence(titleText, infoText) {
+  const regions = []
+  const evidence = await readScannerFrame({
+    frame: {},
+    prepare: (_frame, region) => { regions.push(region); return region.role },
+    worker: {
+      async reinitialize(language) { assert.equal(language, 'eng') },
+      async setParameters() {},
+      async recognize(role) {
+        assert(['info', 'title'].includes(role))
+        return { data: { text: role === 'info' ? infoText : titleText } }
+      },
+    },
+  })
+  assert.deepEqual(regions, [SCANNER_OCR_REGIONS.info, SCANNER_OCR_REGIONS.title])
+  assert.equal(evidence.rawText, `${titleText}\n${infoText}`)
+  return evidence
+}
+
+const ocrCatalog = [
+  { ...row('correct', 'Lightning Bolt', '169'), set_code: 'mom', rarity: 'rare' },
+  { ...row('other-printing', 'Lightning Bolt', '12'), set_code: 'tst', rarity: 'common' },
+  row('other-name', 'Lightning Strike'),
+]
+
+function groupsFor(rows) {
+  const groups = new Map()
+  for (const card of rows) {
+    if (!groups.has(card.name)) groups.set(card.name, { name: card.name, editions: [] })
+    groups.get(card.name).editions.push(card)
+  }
+  return [...groups.values()]
+}
+
+async function retrieveAndRank(evidence) {
+  const seed = scannerRetrievalSeed(evidence)
+  assert(seed)
+  // Mirror the printing-only set/collector filter locally; no server/DB claim.
+  const rows = seed.query ? ocrCatalog : ocrCatalog.filter(card => (
+    card.set_code === seed.set && card.collector_number === evidence.collectorNumber
+  ))
+  const result = await runNameMatchPlans(
+    buildNameMatchPlans(seed.query, { scan: true }), fixtureQuery(rows),
+    { pool: true, page: 1, limit: 40 }
+  )
+  assert.equal(result.error, null)
+  return rankScannerResults(groupsFor(result.data), evidence)
+}
+
+for (const title of ['Lightning Bolt', 'Lightnmg Bolt']) {
+  const evidence = await rawEvidence(title, '0169 R\nMOM • EN')
+  assert.equal(evidence.nameQuery, title.toLowerCase())
+  assert.equal(evidence.setCode, 'mom')
+  assert.equal(evidence.collectorNumber, '169')
+  assert.equal(evidence.rarity, 'rare')
+  assert.deepEqual(scannerRetrievalSeed(evidence), { query: title.toLowerCase(), set: '' })
+  const ranked = await retrieveAndRank(evidence)
+  assert.equal(ranked[0].name, 'Lightning Bolt')
+  assert.equal(ranked[0].editions[0].scryfall_id, 'correct')
+  assert.deepEqual(ranked[0].editions[0].scanMatches, {
+    name: title === 'Lightning Bolt' ? 'exact' : 'fuzzy', set: true, collector: true, rarity: true,
+  })
+  if (title === 'Lightnmg Bolt') assert.equal(routeScannerMatch(ranked, evidence).kind, 'uncertain')
+}
+
+// No metadata means no score delta or invented mismatches: each printing has
+// the same exact-name-only score.
+{
+  const evidence = await rawEvidence('Lightning Bolt', '')
+  assert.equal(evidence.setCode, null)
+  assert.equal(evidence.collectorNumber, null)
+  assert.equal(evidence.rarity, null)
+  const ranked = await retrieveAndRank(evidence)
+  for (const edition of ranked.find(group => group.name === 'Lightning Bolt').editions) {
+    assert.deepEqual(edition.scanMatches, { name: 'exact', set: null, collector: null, rarity: null })
+    assert.equal(edition.scanScore, 10000)
+  }
+}
+
+// A metadata-only read must stay assisted even with an exact printing match.
+{
+  const evidence = await rawEvidence('', '0169 R\nMOM EN')
+  assert.equal(evidence.nameQuery, '')
+  const ranked = await retrieveAndRank(evidence)
+  assert.equal(ranked[0].editions[0].scryfall_id, 'correct')
+  assert.equal(ranked[0].scanMatches.name, 'none')
+  const decision = routeScannerMatch(ranked, evidence)
+  assert.equal(decision.kind, 'uncertain')
+  assert.equal(decision.reason, 'printing-only')
+}
+
+// Known limitation, NOT catalog-wide recall: all plans can miss an intended
+// row beyond the 600-row source window. Name fairness cannot rank unseen rows.
+{
+  const cap = SCAN_SOURCE_PAGE_SIZE * SCAN_SOURCE_MAX_PAGES
+  assert.equal(cap, 600)
+  const cappedCatalog = [
+    ...Array.from({ length: cap }, (_, index) => row(`early-${index}`, 'Alpha Lightning Bolt', String(index + 1))),
+    row('omitted-target', 'Lightning Bolt'),
+  ]
+  const pages = []
+  const query = fixtureQuery(cappedCatalog)
+  const result = await runNameMatchPlans(
+    buildNameMatchPlans('lightnmg bolt', { scan: true }),
+    async (plan, page) => {
+      const response = await query(plan, page)
+      pages.push({ tier: plan.tier, page: page.page, to: page.to, count: response.count })
+      return response
+    },
+    { pool: true, page: 1, limit: 40 }
+  )
+  assert.equal(cappedCatalog.length, 601)
+  assert(pages.some(page => page.count === 601))
+  assert(pages.every(page => page.page <= 3 && page.to < cap))
+  assert.equal(result.count, cap, 'reported count describes bounded deduplicated rows, not source matches')
+  assert(!result.data.some(card => card.scryfall_id === 'omitted-target'))
+  const ranked = rankScannerResults(groupsFor(result.data), { nameQuery: 'lightnmg bolt' })
+  assert(!ranked.some(group => group.name === 'Lightning Bolt'))
+  console.log('SOURCE_CAP_CHARACTERIZATION: 601 matching rows; target beyond 600 omitted; cap remains unresolved')
+}
 
 console.log('CATALOG_SCAN_RETRIEVAL_LOCAL_PASS')

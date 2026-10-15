@@ -1,9 +1,10 @@
 // phase30-test-add-card-overhaul.mjs
 // Mechanical tests for Phase 30 add-card catalog search overhaul.
-// Tests source code statically (no running server required).
+// Source checks plus controlled execution of search callbacks (no server required).
 import { readFileSync } from 'fs'
 import { resolve, dirname } from 'path'
 import { fileURLToPath } from 'url'
+import { spawnSync } from 'node:child_process'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = resolve(__dirname, '../..')
@@ -334,11 +335,42 @@ test('MODAL-13: AddCardModal preserves auth/binder/card validation in AddForm', 
 // CONCURRENCY: stale response protection
 // ===========================================================================
 
+function extractDoSearch(src) {
+  const start = 'const doSearch = useCallback('
+  const marker = '// ─── Input handler'
+  const from = src.indexOf(start)
+  assert(from >= 0 && src.indexOf(start, from + start.length) === -1, 'Must uniquely find doSearch function')
+  const to = src.indexOf(marker, from + start.length)
+  assert(to > from && src.indexOf(marker) === to && src.indexOf(marker, to + marker.length) === -1,
+    'Must uniquely find Input handler after doSearch')
+  const body = src.slice(from + start.length, to).trim()
+  const end = body.lastIndexOf('\n  },')
+  assert(end >= 0 && body.startsWith('async (') && /\)\s*$/.test(body.slice(end + '\n  },'.length)),
+    'Must find well-formed doSearch closing callback brace')
+  return body.slice(0, end + '\n  }'.length)
+}
+
+function checkedDoSearch(src) {
+  const doSearch = extractDoSearch(src)
+  // This synthetic boundary reproduces the old regex failure without editing production.
+  const from = src.indexOf('const doSearch = useCallback(')
+  const to = src.indexOf('// ─── Input handler', from)
+  const section = src.slice(from, to)
+  const end = section.lastIndexOf('\n  },')
+  const fixture = src.slice(0, from) + section.slice(0, end) + '\n  }, searchDependencies)\n\n  ' + src.slice(to)
+  assert(extractDoSearch(fixture) === doSearch, 'Dependency shape must not change callback extraction')
+  for (const invalid of ['', src + 'const doSearch = useCallback(', src.replace('// ─── Input handler', '// renamed'),
+    src + '// ─── Input handler', src.slice(0, from) + 'const doSearch = useCallback(async () => {\n' + src.slice(to)]) {
+    let threw = false
+    try { extractDoSearch(invalid) } catch { threw = true }
+    assert(threw, 'Missing, duplicate or malformed callback boundaries must fail loudly')
+  }
+  return doSearch
+}
+
 test('CONCURRENCY-1: doSearch increments generation before each search', () => {
   const src = readSrc('nextjs/src/components/AddCardModal.js')
-  const doSearchMatch = src.match(/doSearch\s*=[\s\S]*?\n  }, \[[^\]]*\]\)/)
-  assert(doSearchMatch, 'Must find doSearch function')
-  const doSearch = doSearchMatch[0]
+  const doSearch = checkedDoSearch(src)
   assert(doSearch.includes('searchGenRef.current'), 'doSearch must use generation counter')
   assert(doSearch.includes('gen !== searchGenRef.current'), 'doSearch must check for stale responses')
   assert(doSearch.includes('gen = ++searchGenRef.current'), 'doSearch must increment generation at start')
@@ -346,18 +378,22 @@ test('CONCURRENCY-1: doSearch increments generation before each search', () => {
 
 test('CONCURRENCY-2: doSearch aborts previous in-flight request before starting new one', () => {
   const src = readSrc('nextjs/src/components/AddCardModal.js')
-  const doSearchMatch = src.match(/doSearch\s*=[\s\S]*?\n  }, \[[^\]]*\]\)/)
-  assert(doSearchMatch, 'Must find doSearch function')
-  const doSearch = doSearchMatch[0]
+  const doSearch = checkedDoSearch(src)
   assert(doSearch.includes('abortRef.current'), 'doSearch must reference abortRef')
   assert(doSearch.includes('abortRef.current.abort()'), 'doSearch must abort previous request')
   assert(doSearch.includes('new AbortController()'), 'doSearch must create new AbortController')
 })
 
-test('CONCURRENCY-3: stale fetch response is silently ignored (not set to state)', () => {
+test('CONCURRENCY-3: actual callbacks ignore stale success/errors/finally and invalidate on clear/unmount', () => {
   const src = readSrc('nextjs/src/components/AddCardModal.js')
-  // After fetch, before setting state, must check generation
+  // Retain the source guard; execution, not its mere presence, backs the claim.
   assert(src.includes('if (gen !== searchGenRef.current) return'), 'Must return early if generation is stale')
+  const result = spawnSync(process.execPath, [resolve(__dirname, 'test-card-scanner-search-concurrency.mjs')], {
+    encoding: 'utf8', timeout: 20000,
+  })
+  assert(!result.error && result.status === 0,
+    `Actual callback concurrency test failed: ${result.error?.message || ''}\n${result.stdout || ''}${result.stderr || ''}`)
+  assert(result.stdout.includes('CARD_SCANNER_SEARCH_CONCURRENCY_PASS'), 'Concurrency execution must report completion')
 })
 
 // ===========================================================================
