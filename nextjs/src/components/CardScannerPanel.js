@@ -40,7 +40,7 @@ let workerPromise = null
 
 async function getScannerWorker() {
   if (!workerPromise) {
-    workerPromise = import('tesseract.js')
+    const pending = import('tesseract.js')
       .then(Tesseract => Tesseract.createWorker('eng', 1, {
         logger: () => {},
         // Tesseract still rejects the owning job promise. Suppress its default
@@ -49,9 +49,11 @@ async function getScannerWorker() {
         ...SCANNER_ASSETS.options,
       }))
       .catch(err => {
-        workerPromise = null
+        // A closed generation must not erase a newer session's creation.
+        if (workerPromise === pending) workerPromise = null
         throw err
       })
+    workerPromise = pending
   }
   return workerPromise
 }
