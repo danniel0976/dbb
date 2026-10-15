@@ -1,7 +1,28 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { X, Search, Loader2, Plus, ChevronRight, ChevronDown, Filter } from 'lucide-react'
+import { X, Search, Loader2, Plus, ChevronRight, ChevronDown, Filter, ScanLine } from 'lucide-react'
+import { rankScannerResults, isUsablePrintingEvidence } from '@/lib/cardScanner.mjs'
+import { compareScannerCandidatesVisually } from '@/lib/cardScannerVisualBrowser.mjs'
+import {
+  addScannerShelfItem,
+  buildScannerBatchPayload,
+  classifyBatchResponse,
+  createScannerBatchLifecycle,
+  editScannerShelfItem,
+  parseBatchResponseBody,
+  removeScannerShelfItem,
+  resolveScannerBatchExit,
+  resolveScannerExit,
+  shouldSweepAnotherScanPage,
+  routeCatalogSelection,
+  routeScannerMatch,
+  scannerRetrievalSeed,
+} from '@/lib/cardScannerSession.mjs'
+import { scannerSelectionReason } from '@/lib/cardScannerView.mjs'
+import CardScannerPanel, { terminateScannerWorker } from './CardScannerPanel'
+import { PrintingSelectionPanel, CandidateCardName } from './ScannerPrintingSelection'
+import { HeldScansBanner, ScannerExitPrompt } from './ScannerShelfNotices'
 
 // Focus trap + scroll lock (matches CardDetailModal Pass 4a pattern)
 function useFocusTrap(sheetRef, closeBtnRef, onClose, extraDeps = []) {
@@ -75,6 +96,9 @@ const RARITY_COLORS = {
 }
 
 const DEFAULT_LIMIT = 20
+// A scan pulls a wider candidate pool so client-side ranking has something to
+// order (LLD §5.3); the catalog route caps limit at 40.
+const SCAN_LIMIT = 40
 
 function CardImage({ card, size = 'sm' }) {
   const [src, setSrc] = useState(null)
@@ -390,14 +414,32 @@ function FilterBar({ filters, setFilters, onApply }) {
 }
 
 // ─── Edition row within a card group ──────────────────────────────────────
-function EditionRow({ edition, cardName, onSelect }) {
+// Which scan evidence this printing agreed with. `null` means the scan
+// carried no such evidence, which is neutral — never shown as a mismatch.
+function ScanEvidenceChips({ matches }) {
+  if (!matches) return null
+  const hits = []
+  if (matches.set === true) hits.push('set')
+  if (matches.collector === true) hits.push('number')
+  if (matches.rarity === true) hits.push('rarity')
+  if (hits.length === 0) return null
+  return (
+    <span className="text-xs text-dbb-accent">
+      scan match: {hits.join(' · ')}
+    </span>
+  )
+}
+
+function EditionRow({ edition, cardName, onSelect, disabled = false, showCardName = false }) {
   return (
     <button
       onClick={() => onSelect(edition, cardName)}
+      disabled={disabled}
       className="w-full flex items-center gap-2.5 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-dbb-secondary/70 border border-transparent hover:border-gray-200 dark:hover:border-gray-700 transition-colors text-left"
     >
       <CardImage card={{ scryfall_id: edition.scryfall_id, image_uris: edition.image_uris }} />
       <div className="flex-1 min-w-0">
+        {showCardName && <CandidateCardName cardName={cardName} />}
         <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
           {edition.set_name} · {edition.set_code?.toUpperCase()} #{edition.collector_number}
         </p>
@@ -412,6 +454,7 @@ function EditionRow({ edition, cardName, onSelect }) {
               {edition.finishes.join(' / ')}
             </span>
           )}
+          <ScanEvidenceChips matches={edition.scanMatches} />
         </div>
       </div>
       <ChevronRight className="w-4 h-4 text-gray-400 dark:text-gray-600 flex-shrink-0" />
@@ -420,8 +463,8 @@ function EditionRow({ edition, cardName, onSelect }) {
 }
 
 // ─── Card group (name + all editions) ─────────────────────────────────────
-function CardGroup({ group, onSelect }) {
-  const [expanded, setExpanded] = useState(false)
+function CardGroup({ group, onSelect, defaultExpanded = false }) {
+  const [expanded, setExpanded] = useState(defaultExpanded)
   const editionCount = group.editions.length
 
   // Show first edition thumbnail as the group preview
@@ -475,6 +518,25 @@ function hasActiveFilters(filters) {
   )
 }
 
+function mergeSearchGroups(previous, incoming) {
+  const map = new Map((previous || []).map(group => [
+    group.name,
+    { ...group, editions: [...(group.editions || [])] },
+  ]))
+  for (const group of incoming || []) {
+    if (!map.has(group.name)) {
+      map.set(group.name, { ...group, editions: [...(group.editions || [])] })
+      continue
+    }
+    const existing = map.get(group.name)
+    const seenIds = new Set(existing.editions.map(edition => edition.scryfall_id))
+    for (const edition of group.editions || []) {
+      if (!seenIds.has(edition.scryfall_id)) existing.editions.push(edition)
+    }
+  }
+  return [...map.values()]
+}
+
 export default function AddCardModal({ binders = [], onClose, onAdded }) {
   // ─── Search state ──────────────────────────────────────────────────────
   const [q, setQ] = useState('')                    // input value (typing — zero requests)
@@ -490,23 +552,88 @@ export default function AddCardModal({ binders = [], onClose, onAdded }) {
   const [selectedEdition, setSelectedEdition] = useState(null)  // { edition, cardName }
   const [adding, setAdding] = useState(false)
   const [error, setError] = useState(null)
+  const [showScanner, setShowScanner] = useState(false)
+  const [scanEvidence, setScanEvidence] = useState(null)
+  const [scannerDecision, setScannerDecision] = useState(null)
+  const [scannerVisualStatus, setScannerVisualStatus] = useState(null)
+  const [scannerShelf, setScannerShelf] = useState([])
+  // A close the shelf guard stopped, and scans held outside scanner mode. Both
+  // exist so a pending scan session is never lost without being shown first.
+  const [pendingExit, setPendingExit] = useState(null)
+  const [heldScans, setHeldScans] = useState(null)
+  const [scannerResumeToken, setScannerResumeToken] = useState(0)
+  const [scannerBinderId, setScannerBinderId] = useState(
+    binders.find(binder => binder.is_default)?.id || binders[0]?.id || ''
+  )
+  const [scannerCondition, setScannerCondition] = useState('NM')
 
   // ─── Refs ──────────────────────────────────────────────────────────────
   const inputRef = useRef(null)
   const abortRef = useRef(null)           // AbortController for in-flight search
   const searchGenRef = useRef(0)          // generation counter for staleness protection
+  const scannerBatchPendingRef = useRef(false)
+  const scannerBatchLifecycleRef = useRef(createScannerBatchLifecycle())
+  const scannerSessionMutable = useCallback(() => scannerBatchLifecycleRef.current.canMutate(), [])
 
   useEffect(() => {
     inputRef.current?.focus()
   }, [])
 
+  useEffect(() => {
+    if (!scannerBinderId && binders.length > 0) {
+      setScannerBinderId(binders.find(binder => binder.is_default)?.id || binders[0].id)
+    }
+  }, [binders, scannerBinderId])
+
+  const resumeScanner = useCallback(() => {
+    if (!scannerSessionMutable()) return
+    setScanEvidence(null)
+    setScannerDecision(null)
+    setScannerVisualStatus(null)
+    setGroups([])
+    setTotal(0)
+    setHasMore(false)
+    setCommittedQ('')
+    setQ('')
+    setHeldScans(null)
+    setShowScanner(true)
+    setScannerResumeToken(token => token + 1)
+  }, [scannerSessionMutable])
+
+  // Leaving scanner mode hides the shelf but never discards it. The guard says
+  // what is still held so the banner can offer it back instead of the pending
+  // scans simply disappearing from view.
+  const leaveScannerMode = useCallback((exit) => {
+    if (!scannerSessionMutable()) return
+    const outcome = resolveScannerExit({ exit, shelf: scannerShelf })
+    setHeldScans(outcome.kind === 'preserve' ? outcome : null)
+    setPendingExit(null)
+    setShowScanner(false)
+  }, [scannerSessionMutable, scannerShelf])
+
+  const acceptScannerCandidate = useCallback((candidate, source) => {
+    if (!scannerSessionMutable()) return
+    setScannerShelf(current => addScannerShelfItem(current, {
+      source,
+      cardName: candidate.cardName,
+      edition: candidate.edition,
+    }))
+    resumeScanner()
+  }, [resumeScanner, scannerSessionMutable])
+
   // ─── Build the search URL from query + filters ─────────────────────────
-  const buildSearchUrl = useCallback((searchQ, searchFilters, pageNum) => {
+  const buildSearchUrl = useCallback((searchQ, searchFilters, pageNum, limit = DEFAULT_LIMIT, scan = false, scannerEvidence = null) => {
     const params = new URLSearchParams()
     params.set('q', searchQ)
-    params.set('limit', String(DEFAULT_LIMIT))
+    params.set('limit', String(limit))
     params.set('page', String(pageNum))
     params.set('group', '1')
+    // OCR-tolerant name retrieval is scanner-only: a manual search keeps its
+    // exact substring semantics.
+    if (scan) params.set('scan', '1')
+    if (scan && !searchQ && /^\d{1,4}[a-z]?$/i.test(scannerEvidence?.collectorNumber || '')) {
+      params.set('collector_number', scannerEvidence.collectorNumber.toLowerCase())
+    }
     if (searchFilters.set) params.set('set', searchFilters.set.trim().toLowerCase())
     if (searchFilters.rarity) params.set('rarity', searchFilters.rarity)
     if (searchFilters.colors.length > 0) params.set('color', searchFilters.colors.join(''))
@@ -517,7 +644,14 @@ export default function AddCardModal({ binders = [], onClose, onAdded }) {
   }, [])
 
   // ─── Submit search (Enter or Search button) ────────────────────────────
-  const doSearch = useCallback(async (searchQ, searchFilters, pageNum = 1, append = false) => {
+  const doSearch = useCallback(async (
+    searchQ,
+    searchFilters,
+    pageNum = 1,
+    append = false,
+    evidence = null,
+    limit = DEFAULT_LIMIT
+  ) => {
     // Cancel any in-flight request
     if (abortRef.current) {
       abortRef.current.abort()
@@ -538,40 +672,120 @@ export default function AddCardModal({ binders = [], onClose, onAdded }) {
     setError(null)
 
     try {
-      const url = buildSearchUrl(searchQ, searchFilters, pageNum)
-      const res = await fetch(url, { signal: controller.signal })
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        throw new Error(data.error || 'Search failed')
+      // A scan sweeps a bounded number of pages into one candidate pool, so the
+      // printing it describes stays reachable past the first page of a broad
+      // catalog match. Ordinary and append searches fetch exactly one page.
+      let pool = append ? groups : []
+      let currentPage = pageNum
+      let pagesFetched = 0
+      let ranked = []
+      let lastTotal = 0
+      let lastHasMore = false
+      let decision = null
+      let routingEvidence = evidence
+
+      for (;;) {
+        const url = buildSearchUrl(searchQ, searchFilters, currentPage, limit, Boolean(evidence), evidence)
+        const res = await fetch(url, { signal: controller.signal })
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}))
+          throw new Error(data.error || 'Search failed')
+        }
+        const data = await res.json()
+
+        // Ignore stale responses — only accept if our generation is still current
+        if (gen !== searchGenRef.current) return
+
+        pool = mergeSearchGroups(pool, data.groups || [])
+        pagesFetched += 1
+        ranked = evidence ? rankScannerResults(pool, evidence) : pool
+        lastTotal = data.total ?? 0
+        lastHasMore = data.has_more ?? false
+
+        if (!evidence || append) break
+        decision = routeScannerMatch(ranked, evidence)
+        if (!shouldSweepAnotherScanPage({ pagesFetched, hasMore: lastHasMore, decision, evidence })) break
+        currentPage += 1
       }
-      const data = await res.json()
 
-      // Ignore stale responses — only accept if our generation is still current
-      if (gen !== searchGenRef.current) return
-
-      const newGroups = data.groups || []
-      if (append) {
-        setGroups(prev => {
-          const map = new Map(prev.map(g => [g.name, { ...g, editions: [...g.editions] }]))
-          for (const g of newGroups) {
-            if (map.has(g.name)) {
-              const existing = map.get(g.name)
-              const seenIds = new Set(existing.editions.map(e => e.scryfall_id))
-              for (const ed of g.editions) {
-                if (!seenIds.has(ed.scryfall_id)) existing.editions.push(ed)
-              }
-            } else {
-              map.set(g.name, { ...g, editions: [...g.editions] })
-            }
+      if (evidence && !append && evidence.nameQuery?.trim()) {
+        const printingEvidence = { ...evidence, nameQuery: '' }
+        const printingSeed = scannerRetrievalSeed(printingEvidence)
+        const initialDecision = routeScannerMatch(ranked, evidence)
+        if (printingSeed?.set && ['no-candidates', 'strong-name-required', 'card-name-tie'].includes(initialDecision.reason)) {
+          // A weak OCR title can retrieve unrelated names. When both printed
+          // identifiers are available, replace that broad pool with an exact
+          // set/collector lookup and keep it confirmation-only.
+          const printingFilters = { ...searchFilters, set: printingSeed.set }
+          const url = buildSearchUrl('', printingFilters, 1, limit, true, printingEvidence)
+          const res = await fetch(url, { signal: controller.signal })
+          if (!res.ok) {
+            const data = await res.json().catch(() => ({}))
+            throw new Error(data.error || 'Printing lookup failed')
           }
-          return [...map.values()]
-        })
-      } else {
-        setGroups(newGroups)
+          const data = await res.json()
+          if (gen !== searchGenRef.current) return
+          pool = mergeSearchGroups([], data.groups || [])
+          ranked = rankScannerResults(pool, printingEvidence)
+          lastTotal = data.total ?? 0
+          lastHasMore = data.has_more ?? false
+          currentPage = 1
+          routingEvidence = printingEvidence
+          setScanEvidence(printingEvidence)
+          setQ('')
+          setCommittedQ('')
+          setFilters(printingFilters)
+          setAppliedFilters(printingFilters)
+        }
       }
-      setTotal(data.total ?? 0)
-      setHasMore(data.has_more ?? false)
-      setPage(pageNum)
+
+      if (evidence) {
+        // Visual comparison is a local tie-breaker only. A unique OCR/printing
+        // decision keeps its existing path; uncertain candidates may be reordered
+        // without changing scanScore or the direct/uncertain gate.
+        decision = routeScannerMatch(ranked, routingEvidence)
+        if (decision.kind !== 'direct') {
+          setScannerVisualStatus({ status: 'checking' })
+          const visual = await compareScannerCandidatesVisually(ranked, routingEvidence.visualSignature)
+          if (gen !== searchGenRef.current) return
+          ranked = visual.groups
+          decision = routeScannerMatch(ranked, routingEvidence)
+          setScannerVisualStatus(visual)
+        }
+
+        // Auto-add stays tied to the scan-time decision over the swept pool. A
+        // user-triggered page load only widens the list they are choosing from.
+        if (!append && decision.kind === 'direct') {
+          acceptScannerCandidate(decision.candidate, 'scanner-direct')
+          return
+        }
+        if (append) {
+          // decision was just re-derived above from the widened pool via the
+          // same routeScannerMatch call the initial scan used, so its
+          // candidates are already narrowed to the identified card -- reuse
+          // them instead of re-flattening the raw, unfiltered pool, which
+          // would reintroduce unrelated cards the initial narrowing excluded.
+          //
+          // Every decision kind carries that narrowed list, including 'direct'.
+          // That matters most exactly when the page the user just loaded is the
+          // one holding the printing they scanned: the decision flips to
+          // 'direct', and skipping the update here would leave the picker on
+          // the older, narrower list with the new printing unreachable. The
+          // kind still gates auto-add above; it must not gate visibility.
+          setScannerDecision(current => (
+            current
+              ? { ...current, reason: scannerSelectionReason(decision), candidates: decision.candidates }
+              : current
+          ))
+        } else {
+          setScannerDecision(decision)
+        }
+      }
+
+      setGroups(ranked)
+      setTotal(lastTotal)
+      setHasMore(lastHasMore)
+      setPage(currentPage)
     } catch (e) {
       if (e.name === 'AbortError') return  // cancelled — ignore silently
       if (gen !== searchGenRef.current) return  // stale — ignore
@@ -590,7 +804,7 @@ export default function AddCardModal({ binders = [], onClose, onAdded }) {
         }
       }
     }
-  }, [buildSearchUrl])
+  }, [acceptScannerCandidate, buildSearchUrl, groups])
 
   // ─── Input handler — typing only, zero requests ────────────────────────
   const handleInput = (e) => {
@@ -601,6 +815,7 @@ export default function AddCardModal({ binders = [], onClose, onAdded }) {
   // ─── Submit on Enter ───────────────────────────────────────────────────
   const handleSubmit = (e) => {
     e?.preventDefault?.()
+    if (showScanner) return
     const term = q.trim()
     if (!term && !hasActiveFilters(filters)) {
       setGroups([])
@@ -611,17 +826,23 @@ export default function AddCardModal({ binders = [], onClose, onAdded }) {
     }
     setCommittedQ(term)
     setAppliedFilters({ ...filters })
-    doSearch(term, filters, 1, false)
+    setScanEvidence(null)
+    setScannerDecision(null)
+    setScannerVisualStatus(null)
+    setShowScanner(false)
+    doSearch(term, filters, 1, false, null, DEFAULT_LIMIT)
   }
 
   // ─── Load more (next page) ─────────────────────────────────────────────
   const handleLoadMore = () => {
+    if (!scannerSessionMutable()) return
     if (loadingMore || !hasMore) return
-    doSearch(committedQ, appliedFilters, page + 1, true)
+    doSearch(committedQ, appliedFilters, page + 1, true, scanEvidence, scanEvidence ? SCAN_LIMIT : DEFAULT_LIMIT)
   }
 
   // ─── Clear — resets everything and cancels in-flight ───────────────────
   const handleClear = () => {
+    if (!scannerSessionMutable()) return
     if (abortRef.current) {
       abortRef.current.abort()
       abortRef.current = null
@@ -637,13 +858,217 @@ export default function AddCardModal({ binders = [], onClose, onAdded }) {
     setHasMore(false)
     setSelectedEdition(null)
     setError(null)
+    setScanEvidence(null)
+    setScannerDecision(null)
+    setScannerVisualStatus(null)
+    leaveScannerMode('clear')
     setLoading(false)
     setLoadingMore(false)
     inputRef.current?.focus()
   }
 
+  const handleScanEvidence = (evidence) => {
+    if (!scannerSessionMutable()) return
+    const seed = scannerRetrievalSeed(evidence)
+    if (!seed) return
+    // Keep catalog retrieval broad. OCR set/rarity reads are ranking signals,
+    // not hard filters; a noisy read must not hide the correct card entirely.
+    // Only an unreadable title's set+serial fallback browses a set. Ordinary
+    // title reads keep the existing broad, clue-ranked candidate pool.
+    const nextFilters = { ...INITIAL_FILTERS, set: seed.set }
+    const term = seed.query
+    setShowScanner(true)
+    setScanEvidence(evidence)
+    setScannerDecision(null)
+    setScannerVisualStatus(evidence.visualSignature ? { status: 'checking' } : { status: 'unavailable' })
+    setQ(term)
+    setCommittedQ(term)
+    setFilters(nextFilters)
+    setAppliedFilters(nextFilters)
+    setError(null)
+    if (term || hasActiveFilters(nextFilters)) {
+      return doSearch(term, nextFilters, 1, false, evidence, SCAN_LIMIT)
+    }
+  }
+
+  const handleManualFallback = (prefill = '') => {
+    if (!scannerSessionMutable()) return
+    if (abortRef.current) {
+      abortRef.current.abort()
+      abortRef.current = null
+    }
+    searchGenRef.current++
+    setLoading(false)
+    setLoadingMore(false)
+    leaveScannerMode('manual')
+    setScanEvidence(null)
+    setScannerDecision(null)
+    setScannerVisualStatus(null)
+    setQ(prefill || '')
+    setError(null)
+    inputRef.current?.focus()
+  }
+
+  // Ends the modal outright. Only reached once the shelf is settled — either it
+  // was empty, already written, or explicitly discarded.
+  const closeNow = useCallback(() => {
+    if (abortRef.current) abortRef.current.abort()
+    searchGenRef.current++
+    setShowScanner(false)
+    setPendingExit(null)
+    setHeldScans(null)
+    terminateScannerWorker()
+    onClose()
+  }, [onClose])
+
+  // Every way out of the modal — the X button, Escape, the backdrop — arrives
+  // here. Closing destroys the temporary shelf, so a non-empty one stops the
+  // close once and asks rather than discarding a scan session silently.
+  const handleClose = useCallback(() => {
+    const outcome = resolveScannerBatchExit({
+      batchPending: scannerBatchPendingRef.current,
+      exit: 'close',
+      shelf: scannerShelf,
+    })
+    if (outcome.kind === 'blocked') return
+    if (outcome.kind === 'confirm') {
+      setPendingExit(outcome)
+      return
+    }
+    closeNow()
+  }, [closeNow, scannerShelf])
+
+  const confirmScannerDiscard = useCallback(() => {
+    const outcome = resolveScannerBatchExit({
+      batchPending: scannerBatchPendingRef.current,
+      exit: 'close',
+      shelf: scannerShelf,
+      discardConfirmed: true,
+    })
+    if (outcome.kind === 'blocked') return
+    if (outcome.kind === 'discard') setScannerShelf([])
+    closeNow()
+  }, [closeNow, scannerShelf])
+
+  const openScanner = () => {
+    if (!scannerSessionMutable()) return
+    setScanEvidence(null)
+    setScannerDecision(null)
+    setScannerVisualStatus(null)
+    setShowScanner(true)
+  }
+
+  const editScannerShelf = (shelfId, patch) => {
+    if (!scannerSessionMutable()) return
+    setScannerShelf(current => editScannerShelfItem(current, shelfId, patch))
+  }
+
+  const removeScannerShelf = (shelfId) => {
+    if (!scannerSessionMutable()) return
+    setScannerShelf(current => removeScannerShelfItem(current, shelfId))
+  }
+
+  const changeScannerBinder = (value) => {
+    if (!scannerSessionMutable()) return
+    setScannerBinderId(value)
+  }
+
+  const changeScannerCondition = (value) => {
+    if (!scannerSessionMutable()) return
+    setScannerCondition(value)
+  }
+
+  const handleScannerBatchAdd = async () => {
+    if (!scannerSessionMutable()) return
+    const payload = buildScannerBatchPayload(scannerShelf, {
+      binderId: scannerBinderId,
+      condition: scannerCondition,
+    })
+    if (!payload) {
+      setError('Choose a binder and select at least one scanned card before confirming.')
+      return
+    }
+
+    // begin() is the synchronous freeze: every other handler consults
+    // canMutate() and goes inert the instant this returns a request.
+    const request = scannerBatchLifecycleRef.current.begin()
+    if (!request) return
+
+    const count = payload.cards.length
+    scannerBatchPendingRef.current = true
+    setPendingExit(null)
+    setAdding(true)
+    setError(null)
+
+    let res
+    try {
+      // One all-or-nothing request: the server folds duplicates and writes the
+      // whole shelf in a single transaction, so a failure leaves nothing behind
+      // and the shelf the user is looking at is still the truth. Only the
+      // fetch itself can mean "nothing reached the server" -- parsing the
+      // response is handled below, after the commit boundary.
+      res = await fetch('/api/library/add/batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+    } catch (e) {
+      // Nothing reached the server: fail() releases the lock so the unchanged
+      // shelf becomes mutable and retryable again. commit() is never
+      // reachable from this branch.
+      const released = scannerBatchLifecycleRef.current.fail(request)
+      scannerBatchPendingRef.current = false
+      if (!released) return
+      setError(e.message || 'Failed to add scanned cards')
+      setAdding(false)
+      return
+    }
+
+    // The commit boundary is the HTTP status alone, never the parsed body: a
+    // truncated 2xx body must not be reported as a failure against an
+    // already-committed, non-idempotent additive write.
+    if (classifyBatchResponse({ ok: res.ok }) === 'fail') {
+      const errorData = await parseBatchResponseBody(res)
+      const released = scannerBatchLifecycleRef.current.fail(request)
+      scannerBatchPendingRef.current = false
+      if (!released) return
+      setError(errorData.error || 'Failed to add scanned cards')
+      setAdding(false)
+      return
+    }
+
+    // The server has committed the write. commit() releases the lock first —
+    // before any fallible follow-up, including parsing the response body — so
+    // nothing below can turn an already-written batch into a reported
+    // failure or a re-armed retry.
+    const committed = scannerBatchLifecycleRef.current.commit(request)
+    scannerBatchPendingRef.current = false
+    if (!committed) return
+
+    const data = await parseBatchResponseBody(res)
+
+    // These rows are in the library now, so this exit is settled: the close
+    // must not stop to ask about discarding what was just written.
+    setScannerShelf([])
+    try {
+      onAdded?.({
+        card_name: `${count} scanned printing${count === 1 ? '' : 's'}`,
+        inserted: data.inserted || 0,
+        merged: data.merged || 0,
+      })
+    } catch (err) {
+      console.error('[scanner] onAdded callback threw after a committed batch write', err)
+    }
+    try {
+      closeNow()
+    } catch (err) {
+      console.error('[scanner] closeNow threw after a committed batch write', err)
+    }
+  }
+
   // ─── Add card to library ───────────────────────────────────────────────
   const handleAdd = async (payload) => {
+    if (showScanner) return
     setAdding(true)
     setError(null)
     try {
@@ -655,7 +1080,7 @@ export default function AddCardModal({ binders = [], onClose, onAdded }) {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to add card')
       onAdded?.({ ...payload, card_name: data.card_name, inserted: data.inserted, merged: data.merged })
-      onClose()
+      handleClose()
     } catch (e) {
       setError(e.message)
       setAdding(false)
@@ -664,6 +1089,17 @@ export default function AddCardModal({ binders = [], onClose, onAdded }) {
 
   // ─── Select an edition ─────────────────────────────────────────────────
   const handleSelectEdition = (edition, cardName) => {
+    if (!scannerSessionMutable()) return
+    const destination = routeCatalogSelection({
+      scannerOpen: showScanner,
+      hasScanEvidence: Boolean(scanEvidence),
+    })
+    if (destination === 'scanner-shelf') {
+      acceptScannerCandidate({ edition, cardName }, 'scanner-confirmed')
+      setError(null)
+      return
+    }
+    if (destination === 'blocked') return
     setSelectedEdition({ edition, cardName })
     setError(null)
   }
@@ -687,22 +1123,31 @@ export default function AddCardModal({ binders = [], onClose, onAdded }) {
 
   // ─── Cleanup on unmount ────────────────────────────────────────────────
   useEffect(() => {
+    // arm() re-mounts the lifecycle on every mount of this effect. React
+    // StrictMode double-invokes it (mount -> cleanup -> mount) in dev, and
+    // the lifecycle lives in a useRef that survives that, so without this the
+    // simulated unmount's invalidate() below would leave it permanently
+    // unmounted after the second mount.
+    scannerBatchLifecycleRef.current.arm()
     return () => {
       if (abortRef.current) {
         abortRef.current.abort()
       }
+      searchGenRef.current++
+      scannerBatchLifecycleRef.current.invalidate()
+      terminateScannerWorker()
     }
   }, [])
 
   const sheetRef = useRef(null)
   const closeBtnRef = useRef(null)
 
-  useFocusTrap(sheetRef, closeBtnRef, onClose, [selectedEdition])
+  useFocusTrap(sheetRef, closeBtnRef, handleClose, [selectedEdition])
 
   return (
     <div
       className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 sm:items-center sm:p-4"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
+      onClick={(e) => { if (e.target === e.currentTarget) handleClose() }}
       role="presentation"
     >
       {/* Mobile: full-height bottom sheet. Desktop: centered panel.
@@ -721,7 +1166,7 @@ export default function AddCardModal({ binders = [], onClose, onAdded }) {
           </h2>
           <button
             ref={closeBtnRef}
-            onClick={onClose}
+            onClick={handleClose}
             aria-label="Close"
             className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-black/5 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-white/10 dark:hover:text-white"
           >
@@ -731,10 +1176,20 @@ export default function AddCardModal({ binders = [], onClose, onAdded }) {
 
         {/* Scrollable solid body */}
         <div className="flex-1 overflow-y-auto overscroll-contain p-4">
+          {pendingExit && !adding && (
+            <ScannerExitPrompt
+              rows={pendingExit.rows}
+              quantity={pendingExit.quantity}
+              onKeep={() => setPendingExit(null)}
+              onDiscard={confirmScannerDiscard}
+            />
+          )}
           {!selectedEdition ? (
             <div className="space-y-3">
-              {/* Search input — explicit submit only */}
-              <form onSubmit={handleSubmit} className="relative">
+              {!showScanner && (
+                <>
+                  {/* Search input — explicit submit only */}
+                  <form onSubmit={handleSubmit} className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500" />
                 <input
                   ref={inputRef}
@@ -763,22 +1218,98 @@ export default function AddCardModal({ binders = [], onClose, onAdded }) {
                     Search
                   </button>
                 </div>
-              </form>
+                  </form>
 
-              {/* Filters */}
-              <FilterBar filters={filters} setFilters={setFilters} onApply={handleSubmit} />
+                  <button
+                    type="button"
+                    onClick={openScanner}
+                    className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-dbb-md border border-dbb-accent/50 text-dbb-sm text-dbb-accent transition-colors hover:bg-dbb-accent/10"
+                  >
+                    <ScanLine className="h-4 w-4" />
+                    Scan card
+                  </button>
+                </>
+              )}
+
+              {!showScanner && heldScans && (
+                <HeldScansBanner
+                  rows={heldScans.rows}
+                  quantity={heldScans.quantity}
+                  onResume={resumeScanner}
+                />
+              )}
+
+              {showScanner && (
+                <CardScannerPanel
+                  onEvidence={handleScanEvidence}
+                  onManual={handleManualFallback}
+                  shelf={scannerShelf}
+                  onEditShelfItem={editScannerShelf}
+                  onRemoveShelfItem={removeScannerShelf}
+                  binders={binders}
+                  binderId={scannerBinderId}
+                  onBinderChange={changeScannerBinder}
+                  condition={scannerCondition}
+                  conditions={CONDITIONS}
+                  onConditionChange={changeScannerCondition}
+                  onConfirmBatch={handleScannerBatchAdd}
+                  confirming={adding}
+                  resumeToken={scannerResumeToken}
+                  visualStatus={scannerVisualStatus}
+                >
+                  {loading && scanEvidence && (
+                    <div className="flex items-center justify-center gap-2 rounded-dbb-md border border-dbb-accent/30 p-3 text-dbb-xs text-dbb-accent">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Matching scan to catalog…
+                    </div>
+                  )}
+                  {scannerDecision?.kind === 'uncertain' && (
+                    <PrintingSelectionPanel
+                      reason={scannerDecision.reason}
+                      count={scannerDecision.candidates.length}
+                      hasMore={hasMore}
+                      loadingMore={loadingMore}
+                      onLoadMore={handleLoadMore}
+                    >
+                      {scannerDecision.candidates.map(candidate => (
+                        <EditionRow
+                          key={candidate.edition.scryfall_id}
+                          showCardName={new Set(scannerDecision.candidates.map(c => c.cardName)).size > 1}
+                          edition={candidate.edition}
+                          cardName={candidate.cardName}
+                          onSelect={handleSelectEdition}
+                          disabled={adding}
+                        />
+                      ))}
+                    </PrintingSelectionPanel>
+                  )}
+                </CardScannerPanel>
+              )}
+
+              {!showScanner && (
+                <>
+                  {/* Filters */}
+                  <FilterBar filters={filters} setFilters={setFilters} onApply={handleSubmit} />
+                </>
+              )}
+
+              {scanEvidence && !showScanner && (
+                <p className="text-xs text-dbb-accent">
+                  Scan-ranked results — {isUsablePrintingEvidence(scanEvidence) ? 'printing clues detected' : 'name match only; confirm the printing'}.
+                </p>
+              )}
 
               {error && <p className="text-sm text-red-500 dark:text-red-400">{error}</p>}
 
               {/* Results — grouped by card name */}
-              {groups.length > 0 && (
+              {!showScanner && groups.length > 0 && (
                 <>
                   <p className="text-xs text-gray-500 dark:text-gray-400">
                     {total} result{total !== 1 ? 's' : ''} for &ldquo;{committedQ}&rdquo;
                   </p>
                   <div className="space-y-2">
                     {groups.map(group => (
-                      <CardGroup key={group.name} group={group} onSelect={handleSelectEdition} />
+                      <CardGroup key={group.name} group={group} onSelect={handleSelectEdition} defaultExpanded={Boolean(scanEvidence)} />
                     ))}
                   </div>
 
@@ -796,13 +1327,13 @@ export default function AddCardModal({ binders = [], onClose, onAdded }) {
                 </>
               )}
 
-              {!loading && committedQ && groups.length === 0 && !error && (
+              {!showScanner && !loading && committedQ && groups.length === 0 && !error && (
                 <p className="text-sm text-gray-500 text-center py-6">
                   No cards found for &ldquo;{committedQ}&rdquo;
                 </p>
               )}
 
-              {!committedQ && (
+              {!showScanner && !committedQ && (
                 <p className="text-sm text-gray-400 dark:text-gray-600 text-center py-6">
                   Type a card name, then press Enter or click Search to find cards in the catalog
                 </p>

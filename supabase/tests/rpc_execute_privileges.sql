@@ -18,6 +18,7 @@ BEGIN
     ('public.handle_new_profile()', true),
     ('public.handle_new_user()', true),
     ('public.import_library_cards(uuid,uuid,jsonb)', false),
+    ('public.publish_catalog_refresh(uuid,text,text,integer,integer)', false),
     ('public.invalidate_fb_export_snapshot_on_card_details_change()', true),
     ('public.move_library_cards(uuid,uuid,uuid[])', false),
     ('public.phase45_allocate_auction_lines(uuid,integer)', false),

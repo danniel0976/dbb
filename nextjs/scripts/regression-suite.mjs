@@ -121,6 +121,195 @@ async function fetchJson(path, opts = {}) {
 
 const journeys = [
   {
+    name: 'Browser-local card scanner checks',
+    description: 'Pure scanner parsing and ranking tests pass without network access',
+    async run() {
+      const start = performance.now();
+      try {
+        const output = execSync('node scripts/test-card-scanner.mjs', {
+          cwd: REPO_DIR,
+          encoding: 'utf8',
+          stdio: ['ignore', 'pipe', 'pipe'],
+        }).trim();
+        if (output !== 'CARD_SCANNER_PASS') {
+          return { passed: false, details: `unexpected output: ${output.slice(0, 200)}`, timing_ms: Math.round(performance.now() - start) };
+        }
+        return { passed: true, details: output, timing_ms: Math.round(performance.now() - start) };
+      } catch (err) {
+        return { passed: false, details: `scanner tests failed: ${err.message}`, timing_ms: Math.round(performance.now() - start) };
+      }
+    },
+  },
+
+  {
+    name: 'Browser-local scanner visual checks',
+    description: 'Perceptual signatures and conservative visual tie-breaking pass without camera, canvas, or network access',
+    async run() {
+      const start = performance.now();
+      try {
+        const output = execSync('node scripts/test-card-scanner-visual.mjs', {
+          cwd: REPO_DIR,
+          encoding: 'utf8',
+          stdio: ['ignore', 'pipe', 'pipe'],
+        }).trim();
+        if (output !== 'CARD_SCANNER_VISUAL_PASS') {
+          return { passed: false, details: `unexpected output: ${output.slice(0, 200)}`, timing_ms: Math.round(performance.now() - start) };
+        }
+        return { passed: true, details: output, timing_ms: Math.round(performance.now() - start) };
+      } catch (err) {
+        return { passed: false, details: `scanner visual tests failed: ${err.message}`, timing_ms: Math.round(performance.now() - start) };
+      }
+    },
+  },
+
+  {
+    name: 'Card scanner state checks',
+    description: 'Camera permission, missing-device, and unreadable-OCR recovery states are deterministic',
+    async run() {
+      const start = performance.now();
+      try {
+        const output = execSync('node scripts/test-card-scanner-state.mjs', {
+          cwd: REPO_DIR,
+          encoding: 'utf8',
+          stdio: ['ignore', 'pipe', 'pipe'],
+        }).trim();
+        if (output !== 'CARD_SCANNER_STATE_PASS') {
+          return { passed: false, details: `unexpected output: ${output.slice(0, 200)}`, timing_ms: Math.round(performance.now() - start) };
+        }
+        return { passed: true, details: output, timing_ms: Math.round(performance.now() - start) };
+      } catch (err) {
+        return { passed: false, details: `scanner state tests failed: ${err.message}`, timing_ms: Math.round(performance.now() - start) };
+      }
+    },
+  },
+
+  {
+    name: 'Card scanner session checks',
+    description: 'Scanner paging, candidate routing, shelf safety, and batch behavior stay deterministic',
+    async run() {
+      const start = performance.now();
+      try {
+        const output = execSync('node scripts/test-card-scanner-session.mjs', {
+          cwd: REPO_DIR,
+          encoding: 'utf8',
+          stdio: ['ignore', 'pipe', 'pipe'],
+        }).trim();
+        if (output !== 'CARD_SCANNER_SESSION_PASS') {
+          return { passed: false, details: `unexpected output: ${output.slice(0, 200)}`, timing_ms: Math.round(performance.now() - start) };
+        }
+        return { passed: true, details: output, timing_ms: Math.round(performance.now() - start) };
+      } catch (err) {
+        return { passed: false, details: `scanner session tests failed: ${err.message}`, timing_ms: Math.round(performance.now() - start) };
+      }
+    },
+  },
+
+  {
+    name: 'Catalog scanner name retrieval checks',
+    description: 'Scanner-only tolerant name plans, pooling, and paging stay bounded and deterministic',
+    async run() {
+      const start = performance.now();
+      try {
+        const output = execSync('node scripts/test-catalog-name-search.mjs', {
+          cwd: REPO_DIR,
+          encoding: 'utf8',
+          stdio: ['ignore', 'pipe', 'pipe'],
+        }).trim();
+        if (output !== 'CATALOG_NAME_SEARCH_PASS') {
+          return { passed: false, details: `unexpected output: ${output.slice(0, 200)}`, timing_ms: Math.round(performance.now() - start) };
+        }
+        return { passed: true, details: output, timing_ms: Math.round(performance.now() - start) };
+      } catch (err) {
+        return { passed: false, details: `catalog name retrieval tests failed: ${err.message}`, timing_ms: Math.round(performance.now() - start) };
+      }
+    },
+  },
+
+  {
+    name: 'Local catalog scanner retrieval fixture',
+    description: 'Executable fixture proves typo, short-token, incidental-hit, and print-heavy top-five retrieval',
+    async run() {
+      const start = performance.now();
+      try {
+        const output = execSync('node scripts/test-catalog-scan-retrieval-local.mjs', {
+          cwd: REPO_DIR,
+          encoding: 'utf8',
+          stdio: ['ignore', 'pipe', 'pipe'],
+        }).trim();
+        if (output !== 'CATALOG_SCAN_RETRIEVAL_LOCAL_PASS') {
+          return { passed: false, details: `unexpected output: ${output.slice(0, 200)}`, timing_ms: Math.round(performance.now() - start) };
+        }
+        return { passed: true, details: output, timing_ms: Math.round(performance.now() - start) };
+      } catch (err) {
+        return { passed: false, details: `local catalog retrieval fixture failed: ${err.message}`, timing_ms: Math.round(performance.now() - start) };
+      }
+    },
+  },
+
+  {
+    name: 'Catalog refresh helper checks',
+    description: 'Source selection and manifest helpers pass without network or database access',
+    async run() {
+      const start = performance.now();
+      try {
+        const output = execSync('node scripts/test-catalog-refresh.mjs', {
+          cwd: REPO_DIR,
+          encoding: 'utf8',
+          stdio: ['ignore', 'pipe', 'pipe'],
+        }).trim();
+        if (output !== 'CATALOG_REFRESH_PASS') {
+          return { passed: false, details: `unexpected output: ${output.slice(0, 200)}`, timing_ms: Math.round(performance.now() - start) };
+        }
+        return { passed: true, details: output, timing_ms: Math.round(performance.now() - start) };
+      } catch (err) {
+        return { passed: false, details: `catalog refresh tests failed: ${err.message}`, timing_ms: Math.round(performance.now() - start) };
+      }
+    },
+  },
+
+  {
+    name: 'UAT summary helper checks',
+    description: 'Physical-card UAT rows summarize into the BRD metrics without network access',
+    async run() {
+      const start = performance.now();
+      try {
+        const output = execSync('node scripts/test-card-scanner-uat.mjs', {
+          cwd: REPO_DIR,
+          encoding: 'utf8',
+          stdio: ['ignore', 'pipe', 'pipe'],
+        }).trim();
+        if (output !== 'UAT_SUMMARY_PASS') {
+          return { passed: false, details: `unexpected output: ${output.slice(0, 200)}`, timing_ms: Math.round(performance.now() - start) };
+        }
+        return { passed: true, details: output, timing_ms: Math.round(performance.now() - start) };
+      } catch (err) {
+        return { passed: false, details: `UAT summary tests failed: ${err.message}`, timing_ms: Math.round(performance.now() - start) };
+      }
+    },
+  },
+
+  {
+    name: 'Catalog freshness helper checks',
+    description: 'Freshness policy marks stale or missing manifests before release',
+    async run() {
+      const start = performance.now();
+      try {
+        const output = execSync('node scripts/test-catalog-freshness.mjs', {
+          cwd: REPO_DIR,
+          encoding: 'utf8',
+          stdio: ['ignore', 'pipe', 'pipe'],
+        }).trim();
+        if (output !== 'CATALOG_FRESHNESS_PASS') {
+          return { passed: false, details: `unexpected output: ${output.slice(0, 200)}`, timing_ms: Math.round(performance.now() - start) };
+        }
+        return { passed: true, details: output, timing_ms: Math.round(performance.now() - start) };
+      } catch (err) {
+        return { passed: false, details: `catalog freshness tests failed: ${err.message}`, timing_ms: Math.round(performance.now() - start) };
+      }
+    },
+  },
+
+  {
     name: 'Health check',
     description: 'GET /api/health returns 200 with status ok',
     async run() {
