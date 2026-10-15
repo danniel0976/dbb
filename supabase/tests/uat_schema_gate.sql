@@ -16,7 +16,7 @@ BEGIN
     ('orders'), ('order_items'), ('checkout_requests'), ('pickup_locations'),
     ('marketplace_card_reservations'), ('auctions'), ('auction_items'),
     ('auction_bids'), ('fb_export_snapshots'), ('card_hashes'),
-    ('catalog_state'), ('catalog_refresh_staging')
+    ('catalog_state'), ('catalog_refresh_staging'), ('library_batch_receipts')
   ) AS expected(name)
   WHERE to_regclass('public.' || name) IS NULL;
 
@@ -46,7 +46,8 @@ BEGIN
     ('20260803000000'),
     ('20260803000001'),
     ('20260930000000'),
-    ('20261015000000')
+    ('20261015000000'),
+    ('20261016000000')
   ) AS expected(version)
   WHERE NOT EXISTS (
     SELECT 1
@@ -58,8 +59,8 @@ BEGIN
     RAISE EXCEPTION 'UAT schema gate: missing migration version(s): %', v_missing;
   END IF;
 
-  IF (SELECT count(*) FROM supabase_migrations.schema_migrations) <> 15 THEN
-    RAISE EXCEPTION 'UAT schema gate: expected exactly 15 migration versions, found %',
+  IF (SELECT count(*) FROM supabase_migrations.schema_migrations) <> 16 THEN
+    RAISE EXCEPTION 'UAT schema gate: expected exactly 16 migration versions, found %',
       (SELECT count(*) FROM supabase_migrations.schema_migrations);
   END IF;
 END $$;
@@ -168,7 +169,8 @@ BEGIN
     ('public.phase45c_cart_add(uuid,uuid,integer)'),
     ('public.phase45c_cart_update(uuid,uuid,integer,bigint)'),
     ('public.phase45c_cart_delete(uuid,uuid)'),
-    ('public.checkout_orders(uuid,uuid,uuid,jsonb,text)')
+    ('public.checkout_orders(uuid,uuid,uuid,jsonb,text)'),
+    ('public.import_library_cards_once(uuid,uuid,uuid,jsonb)')
   ) AS expected(signature)
   WHERE to_regprocedure(expected.signature) IS NULL;
 

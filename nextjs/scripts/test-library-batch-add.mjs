@@ -272,7 +272,7 @@ assert.equal(MAX_QUANTITY, 9999)
   assert.equal(routeSource.match(/from\('card_index'\)/g)?.length, 1)
   assert.match(routeSource, /\.in\('scryfall_id', .*scryfallIds\)/)
   assert.equal(routeSource.match(/\.rpc\(/g)?.length, 1)
-  assert.match(routeSource, /rpc\('import_library_cards'/)
+  assert.match(routeSource, /rpc\('import_library_cards_once'/)
 
   // The batch is one transactional RPC call, not a loop of them.
   assert.doesNotMatch(routeSource, /for\s*\([^)]*\)\s*\{[\s\S]*?\.rpc\(/)

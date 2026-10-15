@@ -613,6 +613,7 @@ export default function AddCardModal({ binders = [], onClose, onAdded }) {
 
   const acceptScannerCandidate = useCallback((candidate, source) => {
     if (!scannerSessionMutable()) return
+    scannerBatchLifecycleRef.current.resetAttempt()
     setScannerShelf(current => addScannerShelfItem(current, {
       source,
       cardName: candidate.cardName,
@@ -946,7 +947,10 @@ export default function AddCardModal({ binders = [], onClose, onAdded }) {
       discardConfirmed: true,
     })
     if (outcome.kind === 'blocked') return
-    if (outcome.kind === 'discard') setScannerShelf([])
+    if (outcome.kind === 'discard') {
+      scannerBatchLifecycleRef.current.resetAttempt()
+      setScannerShelf([])
+    }
     closeNow()
   }, [closeNow, scannerShelf])
 
@@ -960,21 +964,25 @@ export default function AddCardModal({ binders = [], onClose, onAdded }) {
 
   const editScannerShelf = (shelfId, patch) => {
     if (!scannerSessionMutable()) return
+    scannerBatchLifecycleRef.current.resetAttempt()
     setScannerShelf(current => editScannerShelfItem(current, shelfId, patch))
   }
 
   const removeScannerShelf = (shelfId) => {
     if (!scannerSessionMutable()) return
+    scannerBatchLifecycleRef.current.resetAttempt()
     setScannerShelf(current => removeScannerShelfItem(current, shelfId))
   }
 
   const changeScannerBinder = (value) => {
     if (!scannerSessionMutable()) return
+    scannerBatchLifecycleRef.current.resetAttempt()
     setScannerBinderId(value)
   }
 
   const changeScannerCondition = (value) => {
     if (!scannerSessionMutable()) return
+    scannerBatchLifecycleRef.current.resetAttempt()
     setScannerCondition(value)
   }
 
@@ -991,7 +999,7 @@ export default function AddCardModal({ binders = [], onClose, onAdded }) {
 
     // begin() is the synchronous freeze: every other handler consults
     // canMutate() and goes inert the instant this returns a request.
-    const request = scannerBatchLifecycleRef.current.begin()
+    const request = scannerBatchLifecycleRef.current.begin(payload)
     if (!request) return
 
     const count = payload.cards.length
@@ -1002,20 +1010,16 @@ export default function AddCardModal({ binders = [], onClose, onAdded }) {
 
     let res
     try {
-      // One all-or-nothing request: the server folds duplicates and writes the
-      // whole shelf in a single transaction, so a failure leaves nothing behind
-      // and the shelf the user is looking at is still the truth. Only the
-      // fetch itself can mean "nothing reached the server" -- parsing the
-      // response is handled below, after the commit boundary.
+      // A lost reply does not prove a failed write. The retained batchId makes
+      // resending this unchanged shelf safe even if the first write committed.
       res = await fetch('/api/library/add/batch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ ...payload, batchId: request.batchId }),
       })
     } catch (e) {
-      // Nothing reached the server: fail() releases the lock so the unchanged
-      // shelf becomes mutable and retryable again. commit() is never
-      // reachable from this branch.
+      // Preserve the attempt's id: the server may already have committed. A
+      // retry of this unchanged shelf replays its receipt instead of adding twice.
       const released = scannerBatchLifecycleRef.current.fail(request)
       scannerBatchPendingRef.current = false
       if (!released) return

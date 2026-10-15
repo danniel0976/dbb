@@ -1088,7 +1088,7 @@ assert.deepEqual(shelf, [])
   assert.match(batchAdd, /fetch\('\/api\/library\/add\/batch'/)
   assert.equal(batchAdd.match(/await fetch\(/g)?.length, 1)
   assert.doesNotMatch(batchAdd, /for\s*\(|\.map\([\s\S]*fetch|Promise\.all/)
-  assert.match(batchAdd, /body: JSON\.stringify\(payload\)/)
+  assert.match(batchAdd, /body: JSON\.stringify\(\{ \.\.\.payload, batchId: request\.batchId \}\)/)
 
   // Ordinary manual adds keep using the existing single-card route.
   assert.match(modalSource, /const handleAdd = async \(payload\) => \{[\s\S]*?fetch\('\/api\/library\/add'/)
@@ -1320,7 +1320,7 @@ const pending = (overrides = {}) => ({
   assert.match(closeNow, /onClose\(\)/)
   assert.match(closeNow, /terminateScannerWorker\(\)/)
   assert.match(closeNow, /searchGenRef\.current\+\+/)
-  assert.match(modalSource, /setScannerShelf\(\[\]\)\s*\n\s*closeNow\(\)/)
+  assert.match(modalSource, /setScannerShelf\(\[\]\)\s*\}\s*closeNow\(\)/)
 
   const batchAdd = modalSource.match(/const handleScannerBatchAdd = async \(\) => \{[\s\S]*?\n  \}/)?.[0]
   assert.ok(batchAdd, 'handleScannerBatchAdd not found')
@@ -1331,7 +1331,7 @@ const pending = (overrides = {}) => ({
   // Submitting takes synchronous ownership through the lifecycle, not just the
   // boolean ref: begin() is what freezes every other control, and a race that
   // slips past the ref check still finds begin() returning null.
-  assert.match(batchAdd, /const request = scannerBatchLifecycleRef\.current\.begin\(\)/)
+  assert.match(batchAdd, /const request = scannerBatchLifecycleRef\.current\.begin\(payload\)/)
   assert.match(batchAdd, /if \(!request\) return/)
 
   // A pre-commit failure releases the lock via fail(), never commit() — a

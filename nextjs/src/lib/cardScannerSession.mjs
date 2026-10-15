@@ -1,4 +1,5 @@
 import { hasUsableCollector, hasUsableSetCode } from './cardScanner.mjs'
+import { createClientUuid } from './clientUuid.mjs'
 
 const SCANNER_SOURCES = new Set(['scanner-direct', 'scanner-confirmed'])
 
@@ -281,13 +282,18 @@ export function createScannerBatchLifecycle() {
   let generation = 0
   let activeRequest = null
   let mounted = true
+  let attempt = null
 
   const owns = request => mounted && activeRequest === request
 
   return {
-    begin() {
+    begin(payload) {
       if (!mounted || activeRequest) return null
-      activeRequest = { generation: ++generation }
+      if (payload) {
+        const fingerprint = JSON.stringify(payload)
+        if (attempt?.fingerprint !== fingerprint) attempt = { fingerprint, batchId: createClientUuid() }
+      }
+      activeRequest = { generation: ++generation, ...(payload ? { batchId: attempt.batchId } : {}) }
       return activeRequest
     },
     canMutate() {
@@ -307,10 +313,17 @@ export function createScannerBatchLifecycle() {
     commit(request) {
       if (!owns(request)) return false
       activeRequest = null
+      attempt = null
+      return true
+    },
+    resetAttempt() {
+      if (!mounted || activeRequest) return false
+      attempt = null
       return true
     },
     invalidate() {
       mounted = false
+      attempt = null
       activeRequest = null
       generation += 1
     },

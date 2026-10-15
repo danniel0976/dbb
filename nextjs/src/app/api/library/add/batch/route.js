@@ -12,9 +12,10 @@ function makeServiceClient() {
 
 // Batch add — the scanner shelf confirms through here.
 //
-// The whole shelf goes to import_library_cards in a single RPC call, which is
-// one INSERT ... ON CONFLICT inside one transaction: either every scanned row
-// lands or none does. The per-row POST loop this replaced could fail halfway
+// The whole shelf goes to import_library_cards_once in one transaction. A
+// service-only receipt serializes duplicate batchIds and replays stored counts
+// without incrementing inventory again: every scanned row lands or none does.
+// The per-row POST loop this replaced could fail halfway
 // and leave a partial scan session in the library with no record of how far it
 // got. /api/library/add stays as-is for ordinary one-off manual adds.
 export async function POST(request) {
@@ -31,7 +32,7 @@ export async function POST(request) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
   }
 
-  const parsed = normalizeBatchRequest(body)
+  const parsed = normalizeBatchRequest(body, { requireBatchId: true })
   if (parsed.error) {
     const { message, status, index } = parsed.error
     return NextResponse.json({ error: message, index }, { status })
@@ -81,9 +82,10 @@ export async function POST(request) {
   // p_rows must be a real JSON array, not a stringified one — the RPC parameter
   // is jsonb and jsonb_array_elements() rejects a scalar text value. The
   // Supabase client serialises the array for us.
-  const { data: result, error: rpcErr } = await db.rpc('import_library_cards', {
+  const { data: result, error: rpcErr } = await db.rpc('import_library_cards_once', {
     p_user_id: user.id,
     p_binder_id: binderId,
+    p_batch_id: body.batchId,
     p_rows: rows,
   })
 
@@ -92,11 +94,12 @@ export async function POST(request) {
     return NextResponse.json({ error: 'Could not add scanned cards' }, { status: 500 })
   }
 
-  const { inserted = 0, merged = 0 } = result?.[0] ?? {}
+  const { inserted = 0, merged = 0, replayed = false } = result?.[0] ?? {}
   return NextResponse.json({
     ok: true,
     inserted,
     merged,
+    replayed,
     requested: requestedCount,
     rows: rows.length,
   })
