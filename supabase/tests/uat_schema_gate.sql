@@ -43,7 +43,8 @@ BEGIN
     ('20260727000000'),
     ('20260727000001'),
     ('20260803000000'),
-    ('20260803000001')
+    ('20260803000001'),
+    ('20261015000000')
   ) AS expected(version)
   WHERE NOT EXISTS (
     SELECT 1
@@ -55,8 +56,8 @@ BEGIN
     RAISE EXCEPTION 'UAT schema gate: missing migration version(s): %', v_missing;
   END IF;
 
-  IF (SELECT count(*) FROM supabase_migrations.schema_migrations) <> 13 THEN
-    RAISE EXCEPTION 'UAT schema gate: expected exactly 13 migration versions, found %',
+  IF (SELECT count(*) FROM supabase_migrations.schema_migrations) <> 14 THEN
+    RAISE EXCEPTION 'UAT schema gate: expected exactly 14 migration versions, found %',
       (SELECT count(*) FROM supabase_migrations.schema_migrations);
   END IF;
 END $$;
@@ -209,6 +210,23 @@ BEGIN
   IF v_code !~ 'Listing is reserved by an active order' THEN
     RAISE EXCEPTION 'UAT schema gate: protect_reserved_listing lost its active-order guard';
   END IF;
+END $$;
+
+-- Effective privileges include inherited PUBLIC grants. Check every privileged
+-- function (including trigger functions), not just the two original findings.
+DO $$
+DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid, oid::regprocedure AS signature, proacl, proowner FROM pg_proc
+    WHERE pronamespace='public'::regnamespace AND prosecdef LOOP
+    IF has_function_privilege('anon', r.oid, 'EXECUTE')
+      OR has_function_privilege('authenticated', r.oid, 'EXECUTE')
+      OR NOT has_function_privilege('service_role', r.oid, 'EXECUTE')
+      OR EXISTS (SELECT 1 FROM aclexplode(coalesce(r.proacl, acldefault('f',r.proowner)))
+        WHERE grantee=0 AND privilege_type='EXECUTE') THEN
+      RAISE EXCEPTION 'UAT schema gate: SECURITY DEFINER execution boundary failed: %', r.signature;
+    END IF;
+  END LOOP;
 END $$;
 
 ROLLBACK;
