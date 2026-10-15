@@ -1,6 +1,14 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
 import { dedupeValidIds, runSequentialBatches } from '@/lib/postgrestBatch'
+import { createClient as createServiceClient } from '@supabase/supabase-js'
+
+function makeServiceClient() {
+  return createServiceClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY
+  )
+}
 
 export async function PATCH(request) {
   const supabase = await createClient()
@@ -50,8 +58,9 @@ export async function PATCH(request) {
       return NextResponse.json({ error: 'Binder not found' }, { status: 404 })
     }
 
-    // Use RPC to handle merge on conflict
-    const { data, error } = await supabase
+    // Authenticate and check ownership above; privileged writers are service-only.
+    const db = makeServiceClient()
+    const { data, error } = await db
       .rpc('move_library_cards', {
         p_user_id: user.id,
         p_target_binder_id: binder_id,
