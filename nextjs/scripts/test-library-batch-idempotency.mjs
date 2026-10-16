@@ -64,4 +64,21 @@ for (const batchId of [undefined, null, '', 'not-a-uuid', BATCH.replace('-4000-'
     cases++
   } finally { console.error = old }
 }
+for (const [rpcError, status, message] of [
+  [{ message: 'BINDER_NOT_OWNED', code: '42501' }, 404, 'Binder not found'],
+  [{ message: 'private denied detail', code: '42501' }, 404, 'Binder not found'],
+  [{ message: 'BINDER_NOT_OWNED' }, 404, 'Binder not found'],
+  [{ message: 'BATCH_ID_REUSED', code: '22023' }, 409, 'Batch ID reused with different contents'],
+  [{ message: 'INVALID_BATCH_ID', code: '22023' }, 400, 'Invalid scanner batch'],
+  [{ message: 'INVALID_BATCH_ROWS' }, 400, 'Invalid scanner batch'],
+  [{ message: 'private invalid parameter', code: '22023' }, 400, 'Invalid scanner batch'],
+]) {
+  const old = console.error
+  console.error = () => {}
+  try {
+    const { response } = await invoke(valid, { rpcError })
+    assert.deepEqual(response, { status, data: { error: message } })
+    cases++
+  } finally { console.error = old }
+}
 console.log(`LIBRARY_BATCH_IDEMPOTENCY_ROUTE_PASS ${cases} cases`)

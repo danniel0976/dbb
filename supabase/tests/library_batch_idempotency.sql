@@ -44,9 +44,14 @@ BEGIN
  SELECT * INTO r FROM public.import_library_cards_once(u,b,k,rows);
  IF r.inserted<>1 OR r.merged<>0 OR r.replayed THEN RAISE EXCEPTION 'first insert counts wrong'; END IF;
  IF (SELECT quantity FROM public.library_cards WHERE user_id=u AND binder_id=b)<>3 THEN RAISE EXCEPTION 'first write missing'; END IF;
- SELECT * INTO r FROM public.import_library_cards_once(u,b,k,
-  '[{"scryfall_id":"e8200000-0000-4000-8000-000000000001","quantity":99}]');
+ SELECT * INTO r FROM public.import_library_cards_once(u,b,k,rows);
  IF r.inserted<>1 OR r.merged<>0 OR NOT r.replayed THEN RAISE EXCEPTION 'stored insert counts not replayed'; END IF;
+ denied := false;
+ BEGIN PERFORM public.import_library_cards_once(u,b,k,
+  '[{"scryfall_id":"e8200000-0000-4000-8000-000000000001","quantity":99}]');
+ EXCEPTION WHEN invalid_parameter_value THEN
+  IF SQLERRM <> 'BATCH_ID_REUSED' THEN RAISE; END IF; denied := true; END;
+ IF NOT denied THEN RAISE EXCEPTION 'same batch id accepted different rows'; END IF;
  IF (SELECT quantity FROM public.library_cards WHERE user_id=u AND binder_id=b)<>3 THEN RAISE EXCEPTION 'replay changed inventory'; END IF;
  SELECT * INTO r FROM public.import_library_cards_once(u,b,'e8400000-0000-4000-8000-000000000002',rows);
  IF r.inserted<>0 OR r.merged<>1 OR r.replayed THEN RAISE EXCEPTION 'new key merge counts wrong'; END IF;

@@ -958,7 +958,7 @@ assert.deepEqual(shelf, [])
 {
   const panelSource = readFileSync(new URL('../src/components/CardScannerPanel.js', import.meta.url), 'utf8')
   assert.match(panelSource, /type="checkbox"[\s\S]*checked=\{item\.selected\}[\s\S]*selected: event\.target\.checked/)
-  assert.match(panelSource, /selectedQuantity[\s\S]*disabled=\{confirming \|\| !binderId \|\| selectedQuantity === 0\}/)
+  assert.match(panelSource, /selectedQuantity[\s\S]*disabled=\{confirming \|\| recovery \|\| !binderId \|\| selectedQuantity === 0\}/)
 }
 
 // ─── Candidate pool beyond the first catalog page ─────────────────────────
@@ -1083,12 +1083,15 @@ assert.deepEqual(shelf, [])
   // Confirming the shelf is one all-or-nothing request, not a per-row loop: a
   // mid-loop failure used to leave part of a scan session in the library with
   // no record of which rows landed.
-  const batchAdd = modalSource.match(/const handleScannerBatchAdd = async \(\) => \{[\s\S]*?\n  \}/)?.[0]
+  const batchStart = modalSource.indexOf('  const handleScannerBatchAdd = async (')
+  const batchEnd = modalSource.indexOf('  const acknowledgeScannerLibraryCheck', batchStart)
+  assert.ok(batchStart >= 0 && batchEnd > batchStart)
+  const batchAdd = modalSource.slice(batchStart, batchEnd)
   assert.ok(batchAdd, 'handleScannerBatchAdd not found')
   assert.match(batchAdd, /fetch\('\/api\/library\/add\/batch'/)
   assert.equal(batchAdd.match(/await fetch\(/g)?.length, 1)
   assert.doesNotMatch(batchAdd, /for\s*\(|\.map\([\s\S]*fetch|Promise\.all/)
-  assert.match(batchAdd, /body: JSON\.stringify\(\{ \.\.\.payload, batchId: request\.batchId \}\)/)
+  assert.match(batchAdd, /body: JSON\.stringify\(\{ \.\.\.request.snapshot, batchId: request.batchId \}\)/)
 
   // Ordinary manual adds keep using the existing single-card route.
   assert.match(modalSource, /const handleAdd = async \(payload\) => \{[\s\S]*?fetch\('\/api\/library\/add'/)
@@ -1106,108 +1109,73 @@ const pending = (overrides = {}) => ({
   ...overrides,
 });
 
-// Submitting a batch takes synchronous ownership of the exact scanner session.
-// Nothing may mutate it until a pre-commit failure releases that ownership, and
-// a duplicate confirmation cannot create a second request while it is held.
+// Submitting takes synchronous ownership; uncertain failure is never retry consent.
 {
-  assert.equal(typeof scannerSession.createScannerBatchLifecycle, 'function', 'scanner batch lifecycle must exist')
   const lifecycle = createScannerBatchLifecycle()
-  const request = lifecycle.begin()
-  assert.ok(request, 'the first confirmation must own a request generation')
+  const payload = buildScannerBatchPayload([pending()], { binderId: 'binder-1' })
+  const request = lifecycle.begin(payload)
+  assert.ok(request)
   assert.equal(lifecycle.canMutate(), false)
-  assert.equal(lifecycle.begin(), null, 'a pending confirmation must reject duplicate confirmation')
-
+  assert.equal(lifecycle.begin(payload), null)
+  assert.equal(Object.isFrozen(request.snapshot), true)
+  assert.equal(Object.isFrozen(request.snapshot.cards), true)
+  assert.equal(Object.isFrozen(request.snapshot.cards[0]), true)
+  assert.notEqual(request.snapshot.cards[0], payload.cards[0])
   let shelfQuantity = 2
   if (lifecycle.canMutate()) shelfQuantity = 9
-  assert.equal(shelfQuantity, 2, 'the submitted shelf must remain frozen while pending')
-
+  assert.equal(shelfQuantity, 2)
   assert.equal(lifecycle.fail(request), true)
-  assert.equal(lifecycle.canMutate(), true, 'a pre-commit failure must unlock the unchanged shelf')
+  assert.equal(lifecycle.canMutate(), false, 'uncertain failure keeps the shelf frozen')
+  assert.equal(lifecycle.begin(payload), null)
+  assert.equal(lifecycle.commit(request), false, 'unknown outcome cannot become a late success')
+  assert.deepEqual(lifecycle.unknownSnapshot(), payload)
+  assert.equal(lifecycle.continueAfterCheck(), true)
+  assert.equal(lifecycle.canMutate(), true)
 }
 
-// A server-confirmed write releases the lock through commit(), the same shape
-// as fail() but naming the success boundary a post-commit callback failure
-// must never be able to reopen for retry.
+// Known acknowledgement and local settlement release ownership exactly once.
 {
   const lifecycle = createScannerBatchLifecycle()
   const request = lifecycle.begin()
-  assert.equal(lifecycle.commit(request), true, 'a server-confirmed write must release the lock as a commit')
-  assert.equal(lifecycle.canMutate(), true, 'a committed write must unlock the shelf for the next scan session')
-  assert.equal(lifecycle.commit(request), false, 'a request may only be settled once')
+  assert.equal(lifecycle.commit(request), true)
+  assert.equal(lifecycle.canMutate(), true)
+  assert.equal(lifecycle.commit(request), false)
 }
 
-// Unmounting mid-flight invalidates the lifecycle, so a late fetch settlement
-// (success or failure) finds no owned request left to release.
+// Unmount invalidates continuations, not the fact that a request was submitted.
 {
   const lifecycle = createScannerBatchLifecycle()
   const request = lifecycle.begin()
   lifecycle.invalidate()
   assert.equal(lifecycle.isMounted(), false)
-  assert.equal(lifecycle.commit(request), false, 'an unmounted lifecycle must reject a late commit')
-  assert.equal(lifecycle.fail(request), false, 'an unmounted lifecycle must reject a late failure')
-}
-
-// React StrictMode double-invokes an effect's mount -> cleanup -> mount in
-// dev, and useRef's value survives that, so a terminal invalidate() would
-// leave the one lifecycle instance permanently unmounted after the second
-// mount. arm() must put it back into a fully usable state so the scanner is
-// not permanently inert in dev.
-{
-  assert.equal(typeof createScannerBatchLifecycle().arm, 'function', 'lifecycle must expose arm()')
-
-  const lifecycle = createScannerBatchLifecycle()
-  const firstRequest = lifecycle.begin()
-  assert.ok(firstRequest, 'the first mount must be able to begin a request')
-
-  // Simulated StrictMode mount -> cleanup -> mount:
-  lifecycle.invalidate()
-  assert.equal(lifecycle.isMounted(), false, 'simulated unmount must invalidate the lifecycle')
+  assert.equal(lifecycle.commit(request), false)
+  assert.equal(lifecycle.fail(request), false)
   lifecycle.arm()
-
-  assert.equal(lifecycle.isMounted(), true, 'arm() must re-mount the lifecycle for the next mount')
-  assert.equal(lifecycle.canMutate(), true, 'a re-armed lifecycle must be usable again')
-  const secondRequest = lifecycle.begin()
-  assert.ok(secondRequest, 'begin() after arm() must return a truthy request, not stay permanently inert')
-  assert.notEqual(secondRequest, firstRequest, 'the re-armed lifecycle must mint a fresh request, not reuse the invalidated one')
+  assert.equal(lifecycle.isMounted(), true)
+  assert.equal(lifecycle.canMutate(), false, 'StrictMode rearm retains the freeze')
+  assert.equal(lifecycle.begin(), null)
+  assert.equal(lifecycle.commit(request), false, 'old generation remains inert after rearm')
+  const idle = createScannerBatchLifecycle()
+  idle.invalidate(); idle.arm()
+  assert.equal(idle.canMutate(), true, 'idle StrictMode rearm stays usable')
+  assert.ok(idle.begin())
 }
 
-// The commit boundary must be the HTTP status alone, never the parsed body:
-// classifyBatchResponse decides commit-vs-fail from `ok` with no awareness of
-// whether the body can be parsed at all.
+// HTTP status alone is not a usable acknowledgement. Match the existing contract.
 {
-  assert.equal(typeof classifyBatchResponse, 'function', 'classifyBatchResponse must exist')
-  assert.equal(classifyBatchResponse({ ok: true }), 'commit', 'a 2xx response must classify as committed')
-  assert.equal(classifyBatchResponse({ ok: false }), 'fail', 'a non-2xx response must classify as failed')
-}
-
-// parseBatchResponseBody must never throw: a truncated/malformed body on an
-// otherwise-ok response falls back to {} rather than rejecting.
-{
-  assert.equal(typeof parseBatchResponseBody, 'function', 'parseBatchResponseBody must exist')
-  const ok = { inserted: 3, merged: 1 }
-  assert.deepEqual(await parseBatchResponseBody({ json: async () => ok }), ok)
-  const truncated = { json: () => Promise.reject(new Error('Unexpected end of JSON input')) }
-  assert.deepEqual(
-    await parseBatchResponseBody(truncated),
-    {},
-    'a rejected .json() call must resolve to {} instead of throwing'
-  )
-}
-
-// The exact adversarial scenario: a fetch resolves with res.ok === true, but
-// its .json() call rejects (e.g. a truncated body on a flaky connection).
-// classification must still be 'commit' -- reached from `ok` alone, before
-// the body is ever parsed -- and parsing the (unparsable) body afterward must
-// not throw or change that outcome.
-{
-  const truncatedOkResponse = {
-    ok: true,
-    json: () => Promise.reject(new Error('Unexpected end of JSON input')),
+  const data = { ok: true, inserted: 2, merged: 1, requested: 3, rows: 3 }
+  assert.equal(classifyBatchResponse({ ok: true, data, requested: 3 }), 'commit')
+  assert.equal(classifyBatchResponse({ ok: true }), 'unknown')
+  assert.equal(classifyBatchResponse({ ok: false, data, requested: 3 }), 'unknown')
+  for (const patch of [{ ok: false }, { requested: 2 }, { rows: 2 }, { inserted: -1 },
+    { merged: '1' }, { inserted: 1 }, { inserted: 1.5 }]) {
+    assert.equal(classifyBatchResponse({ ok: true, data: { ...data, ...patch }, requested: 3 }), 'unknown')
   }
-  const outcome = classifyBatchResponse({ ok: truncatedOkResponse.ok })
-  assert.equal(outcome, 'commit', 'a truncated 2xx body must still classify as committed, not failed')
-  const data = await parseBatchResponseBody(truncatedOkResponse)
-  assert.deepEqual(data, {}, 'the unparsable body must not be able to turn the commit back into a failure')
+  assert.deepEqual(await parseBatchResponseBody({ json: async () => data }), data)
+  const truncated = { ok: true, json: () => Promise.reject(new Error('Unexpected end of JSON input')) }
+  const unreadable = await parseBatchResponseBody(truncated)
+  assert.deepEqual(unreadable, {})
+  assert.equal(classifyBatchResponse({ ok: truncated.ok, data: unreadable, requested: 3 }), 'unknown')
 }
 
 // Once the transactional batch write starts, every destructive modal exit is
@@ -1297,7 +1265,7 @@ const pending = (overrides = {}) => ({
   // or when the transactional batch request still owns the session.
   const handleClose = modalSource.match(/const handleClose = useCallback\(\(\) => \{[\s\S]*?\n  \}, \[[^\]]*\]\)/)?.[0]
   assert.ok(handleClose, 'handleClose not found')
-  assert.match(handleClose, /resolveScannerBatchExit\(\{[\s\S]*batchPending: scannerBatchPendingRef\.current[\s\S]*exit: 'close'[\s\S]*shelf: scannerShelf/)
+  assert.match(handleClose, /resolveScannerBatchExit\(\{[\s\S]*batchPending: scannerBatchPendingRef\.current[\s\S]*exit: 'close'[\s\S]*shelf: scannerShelfRef\.current/)
   assert.match(handleClose, /=== 'confirm'/)
   assert.match(handleClose, /=== 'blocked'/)
   assert.doesNotMatch(handleClose, /onClose\(\)/)
@@ -1320,74 +1288,43 @@ const pending = (overrides = {}) => ({
   assert.match(closeNow, /onClose\(\)/)
   assert.match(closeNow, /terminateScannerWorker\(\)/)
   assert.match(closeNow, /searchGenRef\.current\+\+/)
-  assert.match(modalSource, /setScannerShelf\(\[\]\)\s*\}\s*closeNow\(\)/)
+  assert.match(modalSource, /setScannerShelf\(\[\]\)\s*\n\s*closeNow\(\)/)
 
-  const batchAdd = modalSource.match(/const handleScannerBatchAdd = async \(\) => \{[\s\S]*?\n  \}/)?.[0]
+  const batchStart = modalSource.indexOf('  const handleScannerBatchAdd = async (')
+  const batchEnd = modalSource.indexOf('  const acknowledgeScannerLibraryCheck', batchStart)
+  assert.ok(batchStart >= 0 && batchEnd > batchStart)
+  const batchAdd = modalSource.slice(batchStart, batchEnd)
   assert.ok(batchAdd, 'handleScannerBatchAdd not found')
-  assert.match(batchAdd, /if \(!scannerSessionMutable\(\)\) return/, 'duplicate confirmation must be rejected synchronously')
+  assert.match(batchAdd, /if \(retry !== true && !scannerSessionMutable\(\)\) return/, 'normal confirmation must reject duplicate activation synchronously')
   assert.match(batchAdd, /scannerBatchPendingRef\.current = true[\s\S]*setPendingExit\(null\)[\s\S]*await fetch/)
   assert.match(batchAdd, /catch \(e\) \{[\s\S]*scannerBatchPendingRef\.current = false[\s\S]*setError/)
 
-  // Submitting takes synchronous ownership through the lifecycle, not just the
-  // boolean ref: begin() is what freezes every other control, and a race that
-  // slips past the ref check still finds begin() returning null.
-  assert.match(batchAdd, /const request = scannerBatchLifecycleRef\.current\.begin\(payload\)/)
-  assert.match(batchAdd, /if \(!request\) return/)
-
-  // A pre-commit failure releases the lock via fail(), never commit() — a
-  // write that never reached the server must stay retryable.
+  // Transport failures retain ownership as unknown; no status-only unlock.
   const catchBlock = batchAdd.match(/catch \(e\) \{[\s\S]*?\n    \}/)?.[0]
   assert.ok(catchBlock, 'handleScannerBatchAdd catch block not found')
   assert.match(catchBlock, /scannerBatchLifecycleRef\.current\.fail\(request\)/)
+  assert.match(catchBlock, /setScannerRecovery\(true\)/)
+  assert.match(catchBlock, /Inventory may already have changed/)
   assert.doesNotMatch(catchBlock, /\.commit\(/)
-
-  // Everything after the fetch resolves successfully is split from that catch:
-  // commit happens first — before any fallible follow-up — and the follow-up is
-  // wrapped so it can never fall back into the pre-commit failure path, re-arm
-  // the pending ref, or present a false failure message for an already-written
-  // batch.
+  assert.match(batchAdd, /const request = retry === true \? scannerBatchLifecycleRef\.current\.retry\(\) : scannerBatchLifecycleRef\.current\.begin\(payload\)/)
+  assert.match(batchAdd, /if \(!request\) return/)
+  assert.match(batchAdd, /buildScannerBatchPayload\(scannerShelfRef\.current/)
   const postCatch = batchAdd.slice(batchAdd.indexOf(catchBlock) + catchBlock.length)
-  assert.match(postCatch, /const committed = scannerBatchLifecycleRef\.current\.commit\(request\)/)
-  assert.match(postCatch, /if \(!committed\) return/)
-  assert.doesNotMatch(postCatch, /scannerBatchPendingRef\.current = true/, 'a committed write must never be re-armed for retry')
-
-  // The commit boundary is the HTTP status alone, never the parsed body: a
-  // truncated 2xx body must not be reported as a failure against an
-  // already-committed, non-idempotent additive write. res.ok is classified
-  // before any attempt to parse the body, and commit() runs the instant that
-  // classification is 'commit' -- it is never gated on a successful parse.
-  assert.match(
-    postCatch,
-    /if \(classifyBatchResponse\(\{ ok: res\.ok \}\) === 'fail'\) \{[\s\S]*?scannerBatchLifecycleRef\.current\.fail\(request\)[\s\S]*?setError\([\s\S]*?\n    \}/,
-    'a non-ok response must classify as fail and release the lock via fail(), not commit()'
-  )
+  assert.match(postCatch, /isCurrent\(request\)[\s\S]*await parseBatchResponseBody\(res\)[\s\S]*isCurrent\(request\)/)
+  assert.match(postCatch, /classifyBatchResponse\(\{ ok: res\.ok, data, requested: payload\.cards\.length \}\) !== 'commit'/)
+  const parseIndex = postCatch.indexOf('await parseBatchResponseBody')
   const classifyIndex = postCatch.indexOf('classifyBatchResponse')
+  const settleIndex = postCatch.indexOf('removeSubmittedScannerRows')
+  const callbackIndex = postCatch.indexOf('onAdded?.(')
   const commitIndex = postCatch.indexOf('commit(request)')
-  assert.ok(
-    classifyIndex !== -1 && commitIndex !== -1 && classifyIndex < commitIndex,
-    'res.ok must be classified before commit() runs'
-  )
-  // The fail branch (classifyBatchResponse(...) === 'fail') may legitimately
-  // parse the error body -- that path is pre-commit and never calls commit().
-  // What must never happen is a body parse on the *success* path before
-  // commit() runs, so check only the code between the fail-branch's close and
-  // the commit() call.
-  const failBranchEnd = postCatch.indexOf('\n    }', classifyIndex) + '\n    }'.length
-  assert.doesNotMatch(
-    postCatch.slice(failBranchEnd, commitIndex),
-    /await res\.json\(\)|parseBatchResponseBody/,
-    'on the success path, the response body must not be parsed before commit() runs'
-  )
-
-  const afterCommit = postCatch.slice(postCatch.indexOf('commit(request)'))
-  assert.match(
-    afterCommit,
-    /if \(!committed\) return[\s\S]*const data = await parseBatchResponseBody\(res\)[\s\S]*onAdded\?\.\(/,
-    'the response body must only be parsed after commit() succeeds'
-  )
-  assert.match(afterCommit, /try \{[\s\S]*onAdded\?\.\([\s\S]*\} catch/, 'onAdded must not be able to fall into the pre-commit catch')
-  assert.match(afterCommit, /try \{[\s\S]*closeNow\(\)[\s\S]*\} catch/, 'closeNow must not be able to fall into the pre-commit catch')
-  assert.doesNotMatch(afterCommit, /setError\(/, 'a post-commit callback failure must never present a false failure message')
+  assert.ok(parseIndex >= 0 && parseIndex < classifyIndex && classifyIndex < settleIndex &&
+    settleIndex < callbackIndex && callbackIndex < commitIndex,
+  'ownership must span parsing, contract validation, selected-only settlement, and callback')
+  assert.match(postCatch, /removeSubmittedScannerRows\(current, request\.snapshot\)/)
+  assert.match(postCatch, /try \{[\s\S]*onAdded\?\.\([\s\S]*\} catch/)
+  assert.doesNotMatch(postCatch, /closeNow\(|setScannerShelf\(\[\]\)/, 'success must not drop unchecked rows or close their modal')
+  assert.doesNotMatch(postCatch.slice(commitIndex), /setError\(/, 'callback failure must never claim the write failed')
+  assert.doesNotMatch(postCatch, /scannerBatchPendingRef\.current = true/, 'settlement cannot re-arm a retry')
 
   // Every path that can alter the submitted scanner session shares the same
   // synchronous lifecycle guard; disabling controls alone is not enough because
@@ -1413,12 +1350,12 @@ const pending = (overrides = {}) => ({
     const snippet = modalSource.slice(start, start + 500)
     assert.match(snippet, /if \(!scannerSessionMutable\(\)\) return/, `${handler} must freeze during batch confirmation`)
   }
-  assert.match(modalSource, /<PrintingSelectionPanel[\s\S]*disabled=\{adding\}/)
-  assert.match(modalSource, /<EditionRow[\s\S]*disabled=\{adding\}/)
+  assert.match(modalSource, /<PrintingSelectionPanel[\s\S]*disabled=\{adding \|\| scannerRecovery\}/)
+  assert.match(modalSource, /<EditionRow[\s\S]*disabled=\{adding \|\| scannerRecovery\}/)
 
   // The old "nothing written" discard prompt must not remain visible after a
   // write starts, even during the render where the pending state is changing.
-  assert.match(modalSource, /\{pendingExit && !adding && \(/)
+  assert.match(modalSource, /\{pendingExit && !adding && !scannerRecovery && \(/)
 
   // Manual fallback and Clear leave scanner mode; neither may drop the shelf.
   const manualFallback = modalSource.match(/const handleManualFallback = \([\s\S]*?\n  \}/)?.[0]
@@ -1447,7 +1384,7 @@ const pending = (overrides = {}) => ({
   assert.ok(unmountCleanup, 'modal unmount cleanup not found')
   assert.match(
     unmountCleanup,
-    /useEffect\(\(\) => \{[\s\S]*?scannerBatchLifecycleRef\.current\.arm\(\)\s*return \(\) => \{/,
+    /useEffect\(\(\) => \{[\s\S]*?scannerBatchLifecycleRef\.current\.arm\(\)[\s\S]*return \(\) => \{/,
     'the effect body (setup side) must call scannerBatchLifecycleRef.current.arm() before the teardown, so a StrictMode remount re-arms the lifecycle'
   )
   assert.match(unmountCleanup, /searchGenRef\.current\+\+/)

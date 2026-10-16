@@ -163,6 +163,7 @@ export default function CardScannerPanel({
   onConditionChange,
   onConfirmBatch,
   confirming = false,
+  recovery = false,
   resumeToken = 0,
   visualStatus = null,
   children,
@@ -453,7 +454,7 @@ export default function CardScannerPanel({
               cameraFailedRef.current = false
               startCamera()
             }}
-            disabled={confirming}
+            disabled={confirming || recovery}
             className="flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-dbb-md bg-dbb-accent text-dbb-sm font-semibold text-white transition-colors hover:bg-dbb-accent-hov disabled:opacity-50"
           >
             <Camera className="h-4 w-4" />
@@ -463,7 +464,7 @@ export default function CardScannerPanel({
         <button
           type="button"
           onClick={handleScan}
-          disabled={status !== 'live' || confirming}
+          disabled={status !== 'live' || confirming || recovery}
           className="flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-dbb-md bg-dbb-accent text-dbb-sm font-semibold text-white transition-colors hover:bg-dbb-accent-hov disabled:opacity-50"
         >
           {status === 'reading' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
@@ -472,7 +473,7 @@ export default function CardScannerPanel({
         <button
           type="button"
           onClick={handleManual}
-          disabled={confirming}
+          disabled={confirming || recovery}
           className="flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-dbb-md border border-gray-200 text-dbb-sm text-gray-600 transition-colors hover:border-dbb-accent hover:text-dbb-accent dark:border-gray-700 dark:text-gray-400 disabled:opacity-50"
         >
           <Search className="h-4 w-4" />
@@ -488,7 +489,7 @@ export default function CardScannerPanel({
             Scan shelf ({shelf.filter(item => item.selected === true).length}/{shelf.length} selected)
           </p>
           <span className="text-[11px] text-gray-400">
-            {confirming ? 'Saving submitted shelf' : 'Temporary until confirmed'}
+            {recovery ? 'Inventory may already have changed — shelf frozen' : confirming ? 'Saving submitted shelf' : 'Temporary until confirmed'}
           </span>
         </div>
 
@@ -512,7 +513,7 @@ export default function CardScannerPanel({
                       type="checkbox"
                       checked={item.selected}
                       onChange={event => onEditShelfItem?.(item.shelfId, { selected: event.target.checked })}
-                      disabled={confirming}
+                      disabled={confirming || recovery}
                       aria-label={`Select ${item.cardName} for batch confirmation`}
                       className="rounded border-gray-300 text-dbb-accent focus:ring-dbb-accent dark:border-gray-700"
                     />
@@ -544,7 +545,7 @@ export default function CardScannerPanel({
                   <button
                     type="button"
                     onClick={() => onRemoveShelfItem?.(item.shelfId)}
-                    disabled={confirming}
+                    disabled={confirming || recovery}
                     aria-label={`Remove ${item.cardName} from scan shelf`}
                     className="flex h-9 w-9 shrink-0 items-center justify-center rounded-dbb-md text-gray-400 hover:bg-red-500/10 hover:text-red-500 disabled:opacity-50"
                   >
@@ -560,7 +561,7 @@ export default function CardScannerPanel({
                       max="9999"
                       value={item.quantity}
                       onChange={event => onEditShelfItem?.(item.shelfId, { quantity: event.target.value })}
-                      disabled={confirming}
+                      disabled={confirming || recovery}
                       className="mt-1 h-9 w-full rounded-dbb-md border border-gray-200 bg-white px-2 text-dbb-xs dark:border-gray-700 dark:bg-dbb-secondary disabled:opacity-50"
                     />
                   </label>
@@ -569,7 +570,7 @@ export default function CardScannerPanel({
                     <select
                       value={item.finish}
                       onChange={event => onEditShelfItem?.(item.shelfId, { finish: event.target.value })}
-                      disabled={confirming}
+                      disabled={confirming || recovery}
                       className="mt-1 h-9 w-full rounded-dbb-md border border-gray-200 bg-white px-2 text-dbb-xs dark:border-gray-700 dark:bg-dbb-secondary disabled:opacity-50"
                     >
                       {item.finishes.map(finish => (
@@ -588,7 +589,7 @@ export default function CardScannerPanel({
                 <select
                   value={binderId}
                   onChange={event => onBinderChange?.(event.target.value)}
-                  disabled={confirming}
+                  disabled={confirming || recovery}
                   className="mt-1 h-9 w-full rounded-dbb-md border border-gray-200 bg-white px-2 text-dbb-xs dark:border-gray-700 dark:bg-dbb-secondary disabled:opacity-50"
                 >
                   {binders.map(binder => (
@@ -601,7 +602,7 @@ export default function CardScannerPanel({
                 <select
                   value={condition}
                   onChange={event => onConditionChange?.(event.target.value)}
-                  disabled={confirming}
+                  disabled={confirming || recovery}
                   className="mt-1 h-9 w-full rounded-dbb-md border border-gray-200 bg-white px-2 text-dbb-xs dark:border-gray-700 dark:bg-dbb-secondary disabled:opacity-50"
                 >
                   {conditions.map(option => (
@@ -614,7 +615,7 @@ export default function CardScannerPanel({
             <button
               type="button"
               onClick={onConfirmBatch}
-              disabled={confirming || !binderId || selectedQuantity === 0}
+              disabled={confirming || recovery || !binderId || selectedQuantity === 0}
               className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-dbb-md bg-dbb-accent text-dbb-sm font-semibold text-white hover:bg-dbb-accent-hov disabled:opacity-50"
             >
               {confirming && <Loader2 className="h-4 w-4 animate-spin" />}

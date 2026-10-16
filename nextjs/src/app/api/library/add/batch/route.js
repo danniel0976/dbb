@@ -91,6 +91,15 @@ export async function POST(request) {
 
   if (rpcErr) {
     console.error('library/add/batch rpc error:', rpcErr)
+    if (rpcErr.message === 'BINDER_NOT_OWNED' || rpcErr.code === '42501') {
+      return NextResponse.json({ error: 'Binder not found' }, { status: 404 })
+    }
+    if (rpcErr.message === 'BATCH_ID_REUSED') {
+      return NextResponse.json({ error: 'Batch ID reused with different contents' }, { status: 409 })
+    }
+    if (rpcErr.message?.startsWith('INVALID_BATCH_') || rpcErr.code === '22023') {
+      return NextResponse.json({ error: 'Invalid scanner batch' }, { status: 400 })
+    }
     return NextResponse.json({ error: 'Could not add scanned cards' }, { status: 500 })
   }
 
