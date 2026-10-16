@@ -1045,7 +1045,7 @@ export default function AddCardModal({ binders = [], onClose, onAdded }) {
       if (!scannerBatchLifecycleRef.current.fail(request)) return
       scannerBatchPendingRef.current = false
       setScannerRecovery(true)
-      setError('Inventory may already have changed. Check your library manually before continuing; do not resend these submitted cards.')
+      setError('Inventory may already have changed. This shelf is frozen. Retry the identical batch safely, or check your library manually before continuing.')
       setAdding(false)
       return
     }
@@ -1064,7 +1064,7 @@ export default function AddCardModal({ binders = [], onClose, onAdded }) {
       if (!scannerBatchLifecycleRef.current.fail(request)) return
       scannerBatchPendingRef.current = false
       setScannerRecovery(true)
-      setError('Inventory may already have changed. Check your library manually before continuing; do not resend these submitted cards.')
+      setError('Inventory may already have changed. This shelf is frozen. Retry the identical batch safely, or check your library manually before continuing.')
       setAdding(false)
       return
     }
@@ -1183,7 +1183,7 @@ export default function AddCardModal({ binders = [], onClose, onAdded }) {
       scannerBatchPendingRef.current = false
       setAdding(false)
       setScannerRecovery(true)
-      setError('Inventory may already have changed. Check your library manually before continuing; do not resend these submitted cards.')
+      setError('Inventory may already have changed. This shelf is frozen. Retry the identical batch safely, or check your library manually before continuing.')
     }
     return () => {
       if (abortRef.current) {
