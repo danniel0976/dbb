@@ -4,12 +4,17 @@ import * as parser from '../src/lib/cardScanner.mjs'
 import * as session from '../src/lib/cardScannerSession.mjs'
 import * as view from '../src/lib/cardScannerView.mjs'
 import { settleScanEvidence } from '../src/lib/cardScannerState.mjs'
+import * as viewport from '../src/lib/scannerViewport.mjs'
 
 const stub = name => Object.assign(() => null, { displayName: name })
 const props = { binders: [], onClose() {}, onAdded() { throw new Error('scanner matching cannot write collection state') } }
 const before = { document: globalThis.document, fetch: globalThis.fetch }
 globalThis.document = { body: { style: {} }, addEventListener() {}, removeEventListener() {} }
 const dependencies = {
+  // Portal target ownership/layout is exercised in the real browser; the hook
+  // host keeps the returned tree traversable and runs the real viewport helper.
+  'react-dom': { createPortal: node => node },
+  '@/lib/scannerViewport.mjs': viewport,
   '@/lib/cardScanner.mjs': parser,
   '@/lib/cardScannerSession.mjs': session,
   '@/lib/cardScannerView.mjs': view,

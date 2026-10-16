@@ -398,15 +398,11 @@ export default function CardScannerPanel({
   }, [stopStream, onManual, lastText])
 
   return (
-    <div className="space-y-2 rounded-dbb-md border border-gray-200 p-3 dark:border-gray-700/50">
-      <div className="flex items-start gap-2 text-dbb-xs text-gray-500 dark:text-gray-400">
-        <ScanLine className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-        <span>{scannerPrivacyNotice(SCANNER_ASSETS)}</span>
-      </div>
-
+    <div data-scanner-panel="" className="flex h-full min-h-0 flex-col gap-2">
+      <div data-scanner-camera="" className="relative flex shrink-0 justify-center overflow-hidden rounded-dbb-md bg-black" style={{ height: 'min(42%, 320px)' }}>
       {status !== 'error' && (
         <>
-          <div className="relative mx-auto w-full max-w-[260px] overflow-hidden rounded-dbb-md bg-black" style={{ aspectRatio: '0.716' }}>
+          <div className="relative h-full max-w-full overflow-hidden rounded-dbb-md bg-black" style={{ aspectRatio: '0.716' }}>
             <video
               ref={videoRef}
               autoPlay
@@ -417,7 +413,7 @@ export default function CardScannerPanel({
               onCanPlay={handleVideoReady}
               className="h-full w-full object-cover"
             />
-            <div className="pointer-events-none absolute inset-[2%] rounded border border-dashed border-white/70" />
+            <div data-scanner-guide="" className="pointer-events-none absolute inset-[2%] rounded border border-dashed border-white/70" />
             {status === 'reading' && (
               <div className="absolute inset-0 flex items-center justify-center bg-black/50 text-dbb-xs text-white">
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -425,28 +421,14 @@ export default function CardScannerPanel({
               </div>
             )}
           </div>
-          <p className="text-center text-[11px] text-gray-500 dark:text-gray-400">
-            Fill the frame, hold steady, and tilt away from glare before scanning.
-          </p>
         </>
       )}
+      </div>
+      <p className="shrink-0 text-center text-[11px] text-gray-500 dark:text-gray-400">
+        Fill the frame, hold steady, and tilt away from glare before scanning.
+      </p>
 
-      {message && <p className="text-dbb-xs text-amber-600 dark:text-amber-400">{message}</p>}
-      {lastRead && (
-        <details className="text-[11px] text-gray-500 dark:text-gray-400">
-          <summary className="cursor-pointer">Scan read (on this device only)</summary>
-          <p>Name: {lastRead.nameQuery || 'unreadable'} · Set: {lastRead.setCode || 'unreadable'} · Number: {lastRead.collectorNumber || 'unreadable'}</p>
-          <pre className="whitespace-pre-wrap break-words">{lastRead.rawText}</pre>
-          {lastRead.languageUnavailable && <p>Japanese OCR files were unavailable; using printed set and number for confirmation.</p>}
-        </details>
-      )}
-      {visualMessage && (
-        <p role="status" className="text-dbb-xs text-gray-500 dark:text-gray-400">
-          {visualMessage}
-        </p>
-      )}
-
-      <div className="flex gap-2">
+      <div className="flex shrink-0 gap-2">
         {status === 'error' && (
           <button
             type="button"
@@ -481,6 +463,21 @@ export default function CardScannerPanel({
         </button>
       </div>
 
+      <div data-scanner-tray="" className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain" style={{ touchAction: 'pan-y' }}>
+      <div className="flex items-start gap-2 text-dbb-xs text-gray-500 dark:text-gray-400">
+        <ScanLine className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+        <span>{scannerPrivacyNotice(SCANNER_ASSETS)}</span>
+      </div>
+      {message && <p role="status" className="text-dbb-xs text-amber-600 dark:text-amber-400">{message}</p>}
+      {lastRead && (
+        <details className="text-[11px] text-gray-500 dark:text-gray-400">
+          <summary className="min-h-[44px] cursor-pointer">Scan read (on this device only)</summary>
+          <p>Name: {lastRead.nameQuery || 'unreadable'} · Set: {lastRead.setCode || 'unreadable'} · Number: {lastRead.collectorNumber || 'unreadable'}</p>
+          <pre className="whitespace-pre-wrap break-words">{lastRead.rawText}</pre>
+          {lastRead.languageUnavailable && <p>Japanese OCR files were unavailable; using printed set and number for confirmation.</p>}
+        </details>
+      )}
+      {visualMessage && <p role="status" className="text-dbb-xs text-gray-500 dark:text-gray-400">{visualMessage}</p>}
       {children}
 
       <div className="space-y-2 rounded-dbb-md bg-gray-50 p-2 dark:bg-dbb-secondary/50">
@@ -508,7 +505,7 @@ export default function CardScannerPanel({
               return (
               <div key={item.shelfId} className={`rounded-dbb-md border border-gray-200 bg-white p-2 dark:border-gray-700 dark:bg-dbb-primary ${item.selected ? '' : 'opacity-60'}`}>
                 <div className="flex items-start gap-2">
-                  <label className="flex min-h-9 shrink-0 items-center gap-1 text-[11px] text-gray-500 dark:text-gray-400">
+                  <label className="flex min-h-11 shrink-0 items-center gap-1 text-[11px] text-gray-500 dark:text-gray-400">
                     <input
                       type="checkbox"
                       checked={item.selected}
@@ -547,7 +544,7 @@ export default function CardScannerPanel({
                     onClick={() => onRemoveShelfItem?.(item.shelfId)}
                     disabled={confirming || recovery}
                     aria-label={`Remove ${item.cardName} from scan shelf`}
-                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-dbb-md text-gray-400 hover:bg-red-500/10 hover:text-red-500 disabled:opacity-50"
+                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-dbb-md text-gray-400 hover:bg-red-500/10 hover:text-red-500 disabled:opacity-50"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
@@ -562,7 +559,7 @@ export default function CardScannerPanel({
                       value={item.quantity}
                       onChange={event => onEditShelfItem?.(item.shelfId, { quantity: event.target.value })}
                       disabled={confirming || recovery}
-                      className="mt-1 h-9 w-full rounded-dbb-md border border-gray-200 bg-white px-2 text-dbb-xs dark:border-gray-700 dark:bg-dbb-secondary disabled:opacity-50"
+                      className="mt-1 h-11 w-full rounded-dbb-md border border-gray-200 bg-white px-2 text-dbb-xs dark:border-gray-700 dark:bg-dbb-secondary disabled:opacity-50"
                     />
                   </label>
                   <label className="text-[11px] text-gray-500 dark:text-gray-400">
@@ -571,7 +568,7 @@ export default function CardScannerPanel({
                       value={item.finish}
                       onChange={event => onEditShelfItem?.(item.shelfId, { finish: event.target.value })}
                       disabled={confirming || recovery}
-                      className="mt-1 h-9 w-full rounded-dbb-md border border-gray-200 bg-white px-2 text-dbb-xs dark:border-gray-700 dark:bg-dbb-secondary disabled:opacity-50"
+                      className="mt-1 h-11 w-full rounded-dbb-md border border-gray-200 bg-white px-2 text-dbb-xs dark:border-gray-700 dark:bg-dbb-secondary disabled:opacity-50"
                     >
                       {item.finishes.map(finish => (
                         <option key={finish} value={finish}>{finish === 'nonfoil' ? 'Non-foil' : finish[0].toUpperCase() + finish.slice(1)}</option>
@@ -590,7 +587,7 @@ export default function CardScannerPanel({
                   value={binderId}
                   onChange={event => onBinderChange?.(event.target.value)}
                   disabled={confirming || recovery}
-                  className="mt-1 h-9 w-full rounded-dbb-md border border-gray-200 bg-white px-2 text-dbb-xs dark:border-gray-700 dark:bg-dbb-secondary disabled:opacity-50"
+                  className="mt-1 h-11 w-full rounded-dbb-md border border-gray-200 bg-white px-2 text-dbb-xs dark:border-gray-700 dark:bg-dbb-secondary disabled:opacity-50"
                 >
                   {binders.map(binder => (
                     <option key={binder.id} value={binder.id}>{binder.name}{binder.is_default ? ' (default)' : ''}</option>
@@ -603,7 +600,7 @@ export default function CardScannerPanel({
                   value={condition}
                   onChange={event => onConditionChange?.(event.target.value)}
                   disabled={confirming || recovery}
-                  className="mt-1 h-9 w-full rounded-dbb-md border border-gray-200 bg-white px-2 text-dbb-xs dark:border-gray-700 dark:bg-dbb-secondary disabled:opacity-50"
+                  className="mt-1 h-11 w-full rounded-dbb-md border border-gray-200 bg-white px-2 text-dbb-xs dark:border-gray-700 dark:bg-dbb-secondary disabled:opacity-50"
                 >
                   {conditions.map(option => (
                     <option key={option.value} value={option.value}>{option.label}</option>
@@ -623,6 +620,7 @@ export default function CardScannerPanel({
             </button>
           </div>
         )}
+      </div>
       </div>
     </div>
   )

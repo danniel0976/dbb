@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { createPortal } from 'react-dom'
+import { attachScannerViewport, revealScannerNotice } from '@/lib/scannerViewport.mjs'
 import { X, Search, Loader2, Plus, ChevronRight, ChevronDown, Filter, ScanLine } from 'lucide-react'
 import { rankScannerResults, isUsablePrintingEvidence } from '@/lib/cardScanner.mjs'
 import { compareScannerCandidatesVisually } from '@/lib/cardScannerVisualBrowser.mjs'
@@ -1197,12 +1199,43 @@ export default function AddCardModal({ binders = [], onClose, onAdded }) {
 
   const sheetRef = useRef(null)
   const closeBtnRef = useRef(null)
+  const viewportRef = useRef(null)
 
-  useFocusTrap(sheetRef, closeBtnRef, handleClose, [selectedEdition])
+  useEffect(() => {
+    if (!showScanner || !viewportRef.current) return
+    return attachScannerViewport(viewportRef.current)
+  }, [showScanner])
+  useEffect(() => {
+    if (showScanner && (pendingExit || scannerRecovery)) revealScannerNotice(viewportRef.current)
+  }, [showScanner, pendingExit, scannerRecovery])
+  useFocusTrap(sheetRef, closeBtnRef, handleClose, [selectedEdition, showScanner])
 
-  return (
+  const scannerNotices = <div data-scanner-notice="">
+    {scannerRecovery && (
+      <div role="alert" className="mb-3 space-y-2 rounded-dbb-md border border-amber-500 p-3 text-dbb-xs">
+        <p>Inventory may already have changed. This shelf is frozen. Check your library manually in another tab before continuing.</p>
+        <button type="button" disabled={adding} onClick={() => handleScannerBatchAdd(true)} className="min-h-[44px] w-full rounded-dbb-md border px-3 disabled:opacity-50">Retry the identical batch safely</button>
+        <p>Continuing removes submitted cards from this local shelf without resending them. Keep unchecked rows; reconcile unresolved cards manually.</p>
+        <button type="button" onClick={() => acknowledgeScannerLibraryCheck(true)} className="min-h-[44px] w-full rounded-dbb-md border px-3">Check my library then continue</button>
+        <p>By continuing, I acknowledge that I have checked my library.</p>
+        <button type="button" onClick={confirmScannerDiscard} className="min-h-[44px] w-full rounded-dbb-md border px-3">Discard local shelf only — inventory may already have changed</button>
+      </div>
+    )}
+    {pendingExit && !adding && !scannerRecovery && (
+      <ScannerExitPrompt
+        rows={pendingExit.rows}
+        quantity={pendingExit.quantity}
+        onKeep={() => setPendingExit(null)}
+        onDiscard={confirmScannerDiscard}
+      />
+    )}
+  </div>
+  const modal = (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 sm:items-center sm:p-4"
+      ref={viewportRef}
+      data-scanner-shell={showScanner ? '' : undefined}
+      style={showScanner ? { top: 'var(--scanner-top, 0px)', left: 'var(--scanner-left, 0px)', width: 'var(--scanner-width, 100%)', height: 'var(--scanner-height, 100dvh)', paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)', paddingLeft: 'env(safe-area-inset-left)', paddingRight: 'env(safe-area-inset-right)' } : undefined}
+      className={showScanner ? 'fixed inset-0 z-50 flex overflow-hidden bg-white dark:bg-dbb-primary' : 'fixed inset-0 z-50 flex items-end justify-center bg-black/60 sm:items-center sm:p-4'}
       onClick={(e) => { if (e.target === e.currentTarget) handleClose() }}
       role="presentation"
     >
@@ -1212,13 +1245,13 @@ export default function AddCardModal({ binders = [], onClose, onAdded }) {
         ref={sheetRef}
         role="dialog"
         aria-modal="true"
-        aria-label={selectedEdition ? 'Add to library' : 'Search card catalog'}
-        className="relative flex h-[92vh] w-full flex-col overflow-hidden rounded-t-dbb-xl bg-white shadow-2xl dark:bg-dbb-primary sm:h-auto sm:max-h-[90vh] sm:max-w-md sm:rounded-dbb-xl"
+        aria-label={showScanner ? 'Scan cards' : selectedEdition ? 'Add to library' : 'Search card catalog'}
+        className={showScanner ? 'relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-white dark:bg-dbb-primary' : 'relative flex h-[92vh] w-full flex-col overflow-hidden rounded-t-dbb-xl bg-white shadow-2xl dark:bg-dbb-primary sm:h-auto sm:max-h-[90vh] sm:max-w-md sm:rounded-dbb-xl'}
       >
         {/* Header — glass chrome */}
         <div className="dbb-glass-chrome flex shrink-0 items-center justify-between gap-3 px-4 py-3">
           <h2 className="truncate text-dbb-lg font-semibold tracking-heading text-gray-900 dark:text-white">
-            {selectedEdition ? 'Add to library' : 'Search card catalog'}
+            {showScanner ? 'Scan cards' : selectedEdition ? 'Add to library' : 'Search card catalog'}
           </h2>
           <button
             ref={closeBtnRef}
@@ -1231,33 +1264,10 @@ export default function AddCardModal({ binders = [], onClose, onAdded }) {
         </div>
 
         {/* Scrollable solid body */}
-        <div className="flex-1 overflow-y-auto overscroll-contain p-4">
-          {scannerRecovery && (
-            <div role="alert" className="mb-3 space-y-2 rounded-dbb-md border border-amber-500 p-3 text-dbb-xs">
-              <p>Inventory may already have changed. This shelf is frozen. Check your library manually in another tab before continuing.</p>
-              <button type="button" disabled={adding} onClick={() => handleScannerBatchAdd(true)} className="min-h-[44px] w-full rounded-dbb-md border px-3 disabled:opacity-50">
-                Retry the identical batch safely
-              </button>
-              <p>Continuing removes submitted cards from this local shelf without resending them. Keep unchecked rows; reconcile unresolved cards manually.</p>
-              <button type="button" onClick={() => acknowledgeScannerLibraryCheck(true)} className="min-h-[44px] w-full rounded-dbb-md border px-3">
-                Check my library then continue
-              </button>
-              <p>By continuing, I acknowledge that I have checked my library.</p>
-              <button type="button" onClick={confirmScannerDiscard} className="min-h-[44px] w-full rounded-dbb-md border px-3">
-                Discard local shelf only — inventory may already have changed
-              </button>
-            </div>
-          )}
-          {pendingExit && !adding && !scannerRecovery && (
-            <ScannerExitPrompt
-              rows={pendingExit.rows}
-              quantity={pendingExit.quantity}
-              onKeep={() => setPendingExit(null)}
-              onDiscard={confirmScannerDiscard}
-            />
-          )}
+        <div className={showScanner ? 'min-h-0 flex-1 overflow-hidden p-3' : 'flex-1 overflow-y-auto overscroll-contain p-4'}>
+          {!showScanner && scannerNotices}
           {!selectedEdition ? (
-            <div className="space-y-3">
+            <div className={showScanner ? 'h-full min-h-0' : 'space-y-3'}>
               {!showScanner && (
                 <>
                   {/* Search input — explicit submit only */}
@@ -1330,6 +1340,8 @@ export default function AddCardModal({ binders = [], onClose, onAdded }) {
                   resumeToken={scannerResumeToken}
                   visualStatus={scannerVisualStatus}
                 >
+                  {scannerNotices}
+                  {error && <p role="alert" className="text-sm text-red-500 dark:text-red-400">{error}</p>}
                   {loading && scanEvidence && (
                     <div className="flex items-center justify-center gap-2 rounded-dbb-md border border-dbb-accent/30 p-3 text-dbb-xs text-dbb-accent">
                       <Loader2 className="h-4 w-4 animate-spin" />
@@ -1372,7 +1384,7 @@ export default function AddCardModal({ binders = [], onClose, onAdded }) {
                 </p>
               )}
 
-              {error && <p className="text-sm text-red-500 dark:text-red-400">{error}</p>}
+              {error && !showScanner && <p className="text-sm text-red-500 dark:text-red-400">{error}</p>}
 
               {/* Results — grouped by card name */}
               {!showScanner && groups.length > 0 && (
@@ -1430,4 +1442,7 @@ export default function AddCardModal({ binders = [], onClose, onAdded }) {
       </div>
     </div>
   )
+  // Scanner is not a drawer descendant: transformed page/sheet ancestors
+  // cannot move its fixed guide. Manual catalog search retains its old sheet.
+  return showScanner && typeof document !== 'undefined' ? createPortal(modal, document.body) : modal
 }
