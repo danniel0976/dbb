@@ -7,14 +7,38 @@ import { scannerSelectionReason } from '../src/lib/cardScannerView.mjs'
 
 const source = readFileSync(new URL('../src/components/AddCardModal.js', import.meta.url), 'utf8')
 // Extract exact, non-JSX declarations, not a reconstructed implementation.
-function extract(name, optional = false) {
-  const pattern = new RegExp(`  const ${name} = (?:useCallback\\([\\s\\S]*?\\n  \\}, \\[[^\\]]*\\]\\)|[\\s\\S]*?\\n  \\})`)
-  const matches = [...source.matchAll(new RegExp(pattern.source, 'g'))]
-  if (optional && matches.length === 0) return ''
-  assert.equal(matches.length, 1, `exact handler extraction failed: ${name}`)
-  assert.doesNotMatch(matches[0][0], /<[A-Za-z]/, `${name} must remain non-JSX`)
-  return matches[0][0]
+function extract(name, optional = false, input = source) {
+  const marker = `  const ${name} = `
+  const start = input.indexOf(marker)
+  if (optional && start === -1) return ''
+  assert.ok(start >= 0, `missing handler: ${name}`)
+  assert.equal(input.indexOf(marker, start + marker.length), -1, `duplicate handler: ${name}`)
+  const tail = input.slice(start + marker.length)
+  const boundary = tail.search(/\n  (?:const |useEffect\(|return \()/)
+  assert.ok(boundary >= 0, `missing boundary: ${name}`)
+  const region = input.slice(start, start + marker.length + boundary)
+  const close = region.lastIndexOf('\n  }')
+  assert.ok(close >= 0, `missing handler closure: ${name}`)
+  const suffix = region.slice(close).match(/^\n  }(?:, \[[\s\S]*?\]\))?/)[0]
+  const declaration = region.slice(0, close) + suffix
+  assert.doesNotMatch(declaration, /<[A-Za-z]/, `${name} must remain non-JSX`)
+  assert.doesNotThrow(() => new Function(declaration), `invalid handler: ${name}`)
+  return declaration
 }
+const extractionFixture = `  const sample = useCallback(() => {
+    if (true) {
+      return 'nested'
+    }
+  }, [someDependency.map(value => value)])
+  const next = true`
+assert.match(extract('sample', false, extractionFixture), /someDependency.map/)
+for (const malformed of [
+  extractionFixture.replace('const sample', 'const missing'),
+  extractionFixture + '\n  const sample = () => {}',
+  extractionFixture.replace('\n  const next = true', ''),
+  extractionFixture.replace('\n  }, [', '\n  , ['),
+  extractionFixture.replace("return 'nested'", 'return <div />'),
+]) assert.throws(() => extract('sample', false, malformed), assert.AssertionError)
 const names = ['resumeScanner', 'leaveScannerMode', 'acceptScannerCandidate', 'handleScanEvidence',
   'handleSelectEdition', 'handleLoadMore', 'handleClear', 'handleManualFallback', 'closeNow',
   'handleClose', 'confirmScannerDiscard', 'openScanner', 'editScannerShelf', 'removeScannerShelf',
@@ -299,6 +323,27 @@ await test('shelf allowlist excludes capture/OCR and unsafe image URLs', async (
   const result = session.addScannerShelfItem([], { ...unsafe, source: 'scanner-confirmed' })
   assert.doesNotMatch(JSON.stringify(result), /data:|blob:|private|secret OCR/)
   assert.equal(result[0].imageUris.large, 'https://example.invalid/catalog.jpg')
+})
+await test('beforeunload protects pending shelf and recovery, removes listener on cleanup', async () => {
+  const start = source.indexOf('  // ─── Protect unsaved scanner rows')
+  assert.notEqual(start, -1, 'beforeunload effect required')
+  const end = source.indexOf('  // ─── Cleanup on unmount', start)
+  assert.ok(end > start)
+  for (const [rows, recovery, blocked] of [[[], false, false], [[row()], false, true], [[], true, true]]) {
+    const listeners = new Map()
+    let cleanup
+    const env = { ...session, scannerShelf: rows, scannerRecovery: recovery,
+      scannerShelfRef: { current: rows }, useEffect: fn => { cleanup = fn() },
+      window: { addEventListener: (name, fn) => listeners.set(name, fn),
+        removeEventListener: (name, fn) => { assert.equal(listeners.get(name), fn); listeners.delete(name) } } }
+    new Function('env', `with (env) { ${source.slice(start, end)} }`)(env)
+    let prevented = false
+    const event = { preventDefault: () => { prevented = true } }
+    listeners.get('beforeunload')(event)
+    assert.equal(prevented, blocked)
+    assert.equal(event.returnValue, blocked ? '' : undefined)
+    cleanup(); assert.equal(listeners.size, 0)
+  }
 })
 if (failures) process.exitCode = 1
 else console.log('CARD_SCANNER_INVENTORY_SAFETY_PASS')

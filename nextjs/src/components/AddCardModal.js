@@ -1145,6 +1145,17 @@ export default function AddCardModal({ binders = [], onClose, onAdded }) {
     return () => document.removeEventListener('keydown', handler, true)
   }, [selectedEdition])
 
+  // ─── Protect unsaved scanner rows on reload / tab close ────────────────
+  useEffect(() => {
+    const beforeUnload = (event) => {
+      if (pendingShelfSummary(scannerShelfRef.current).rows === 0 && !scannerRecovery) return
+      event.preventDefault()
+      event.returnValue = ''
+    }
+    window.addEventListener('beforeunload', beforeUnload)
+    return () => window.removeEventListener('beforeunload', beforeUnload)
+  }, [scannerRecovery])
+
   // ─── Cleanup on unmount ────────────────────────────────────────────────
   useEffect(() => {
     // arm() re-mounts the lifecycle on every mount of this effect. React
