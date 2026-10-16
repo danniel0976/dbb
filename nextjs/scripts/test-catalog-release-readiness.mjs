@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
-import { mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { copyFileSync, mkdirSync, mkdtempSync, readdirSync, rmdirSync, unlinkSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import {
@@ -100,6 +100,18 @@ const actualMigrationPaths = readdirSync(path.join(repoRoot, 'supabase', 'migrat
   .map(name => path.join(repoRoot, 'supabase', 'migrations', name))
 const actualMigrationVersions = migrationVersionsFromPaths(actualMigrationPaths)
 const tempDir = mkdtempSync(path.join(os.tmpdir(), 'dbb-catalog-release-test-'))
+const fixtureScripts = path.join(tempDir, 'nextjs', 'scripts')
+const fixtureMigrations = path.join(tempDir, 'supabase', 'migrations')
+const fixtureOps = path.join(tempDir, 'ops')
+for (const dir of [fixtureScripts, fixtureMigrations, fixtureOps]) mkdirSync(dir, { recursive: true })
+// The real CLI derives its repo root from its own file location. Give it an
+// explicit fixture rather than depending on untracked operator service files.
+for (const name of ['check-catalog-release-readiness.mjs', 'catalogReleaseReadiness.mjs', 'catalogFreshness.mjs', 'catalogRefresh.mjs']) {
+  copyFileSync(path.join(repoRoot, 'nextjs', 'scripts', name), path.join(fixtureScripts, name))
+}
+for (const file of actualMigrationPaths) writeFileSync(path.join(fixtureMigrations, path.basename(file)), '')
+writeFileSync(path.join(fixtureOps, 'dbb-catalog-preflight.service'), preflightService)
+writeFileSync(path.join(fixtureOps, 'dbb-catalog-preflight-alert.service'), alertService)
 try {
   const manifestPath = path.join(tempDir, 'manifest.json')
   const evidencePath = path.join(tempDir, 'evidence.json')
@@ -119,7 +131,7 @@ try {
     },
   }))
 
-  const cli = path.join(repoRoot, 'nextjs', 'scripts', 'check-catalog-release-readiness.mjs')
+  const cli = path.join(fixtureScripts, 'check-catalog-release-readiness.mjs')
   const admitted = spawnSync(process.execPath, [cli, '--manifest', manifestPath, '--evidence', evidencePath], {
     cwd: path.join(repoRoot, 'nextjs'),
     encoding: 'utf8',
@@ -127,6 +139,14 @@ try {
   })
   assert.equal(admitted.status, 0, admitted.stderr)
   assert.equal(JSON.parse(admitted.stdout).status, 'ready')
+
+  unlinkSync(path.join(fixtureOps, 'dbb-catalog-preflight-alert.service'))
+  const unwired = spawnSync(process.execPath, [cli, '--manifest', manifestPath, '--evidence', evidencePath], {
+    cwd: path.join(repoRoot, 'nextjs'), encoding: 'utf8',
+    env: { ...process.env, CATALOG_RELEASE_NOW: now.toISOString() },
+  })
+  assert.equal(unwired.status, 1, unwired.stderr)
+  assert(JSON.parse(unwired.stdout).blockers.includes('operator_alert_wiring_missing'))
 
   const refused = spawnSync(process.execPath, [cli, '--manifest', `${manifestPath}.missing`, '--evidence', `${evidencePath}.missing`], {
     cwd: path.join(repoRoot, 'nextjs'),
@@ -139,7 +159,14 @@ try {
   assert(refusal.blockers.includes('catalog_manifest_missing'))
   assert(refusal.blockers.includes('hosted_schema_evidence_missing'))
 } finally {
-  rmSync(tempDir, { recursive: true, force: true })
+  for (const dir of [fixtureScripts, fixtureMigrations, fixtureOps]) {
+    for (const name of readdirSync(dir)) unlinkSync(path.join(dir, name))
+    rmdirSync(dir)
+  }
+  for (const name of ['manifest.json', 'evidence.json']) unlinkSync(path.join(tempDir, name))
+  rmdirSync(path.join(tempDir, 'nextjs'))
+  rmdirSync(path.join(tempDir, 'supabase'))
+  rmdirSync(tempDir)
 }
 
 console.log('CATALOG_RELEASE_READINESS_PASS')

@@ -22,7 +22,7 @@ for (const signature of writers) {
   assert.ok(migration.includes(`GRANT EXECUTE ON FUNCTION public.${signature} TO service_role;`))
 }
 for (const name of triggers) assert.ok(migration.includes(`REVOKE ALL ON FUNCTION public.${name}() FROM PUBLIC, anon, authenticated;`))
-assert.equal((tests.match(/\('public\.[^']+', (?:true|false)\)/g) || []).length, 44)
+assert.equal((tests.match(/\('public\.[^']+', (?:true|false)\)/g) || []).length, 45)
 for (const code of [tests, schema]) {
   for (const role of ['anon','authenticated','service_role']) assert.ok(code.includes(`has_function_privilege('${role}'`))
   assert.ok(code.includes('aclexplode(') && code.includes('prosecdef'))
@@ -40,7 +40,7 @@ assert.ok(guard.test(newBody))
 assert.equal(newBody.replace(guard, '').trim(), oldBody.trim())
 assert.ok(migration.indexOf('CREATE OR REPLACE FUNCTION') < migration.indexOf('REVOKE ALL'))
 assert.ok(tests.includes('EXCEPTION WHEN insufficient_privilege'))
-console.log('RPC_EXECUTE_STATIC_PASS: exact ACLs, all44 inventory, ledger parity, guard-only function delta')
+console.log('RPC_EXECUTE_STATIC_PASS: exact ACLs, all45 inventory, ledger parity, guard-only function delta')
 
 if (process.argv.includes('--local-runtime')) {
   const container = process.env.PHASE45C_DB_CONTAINER || 'supabase_db_dbb-uat'

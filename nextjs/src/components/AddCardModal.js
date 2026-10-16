@@ -9,6 +9,8 @@ import {
   buildScannerBatchPayload,
   classifyBatchResponse,
   createScannerBatchLifecycle,
+  createScannerCaptureLifecycle,
+  removeSubmittedScannerRows,
   editScannerShelfItem,
   parseBatchResponseBody,
   removeScannerShelfItem,
@@ -556,7 +558,8 @@ export default function AddCardModal({ binders = [], onClose, onAdded }) {
   const [scanEvidence, setScanEvidence] = useState(null)
   const [scannerDecision, setScannerDecision] = useState(null)
   const [scannerVisualStatus, setScannerVisualStatus] = useState(null)
-  const [scannerShelf, setScannerShelf] = useState([])
+  const [scannerShelf, setScannerShelfState] = useState([])
+  const [scannerRecovery, setScannerRecovery] = useState(false)
   // A close the shelf guard stopped, and scans held outside scanner mode. Both
   // exist so a pending scan session is never lost without being shown first.
   const [pendingExit, setPendingExit] = useState(null)
@@ -573,6 +576,15 @@ export default function AddCardModal({ binders = [], onClose, onAdded }) {
   const searchGenRef = useRef(0)          // generation counter for staleness protection
   const scannerBatchPendingRef = useRef(false)
   const scannerBatchLifecycleRef = useRef(createScannerBatchLifecycle())
+  const scannerCaptureLifecycleRef = useRef(createScannerCaptureLifecycle())
+  const scannerShelfRef = useRef([])
+  // Synchronous shelf ownership prevents stale queued confirmations from seeing
+  // rows already settled locally, before React has rendered the new shelf.
+  const setScannerShelf = useCallback((value) => {
+    const next = typeof value === 'function' ? value(scannerShelfRef.current) : value
+    scannerShelfRef.current = next
+    setScannerShelfState(next)
+  }, [])
   const scannerSessionMutable = useCallback(() => scannerBatchLifecycleRef.current.canMutate(), [])
 
   useEffect(() => {
@@ -587,6 +599,7 @@ export default function AddCardModal({ binders = [], onClose, onAdded }) {
 
   const resumeScanner = useCallback(() => {
     if (!scannerSessionMutable()) return
+    scannerCaptureLifecycleRef.current.retire()
     setScanEvidence(null)
     setScannerDecision(null)
     setScannerVisualStatus(null)
@@ -605,21 +618,25 @@ export default function AddCardModal({ binders = [], onClose, onAdded }) {
   // scans simply disappearing from view.
   const leaveScannerMode = useCallback((exit) => {
     if (!scannerSessionMutable()) return
-    const outcome = resolveScannerExit({ exit, shelf: scannerShelf })
+    scannerCaptureLifecycleRef.current.retire()
+    const outcome = resolveScannerExit({ exit, shelf: scannerShelfRef.current })
     setHeldScans(outcome.kind === 'preserve' ? outcome : null)
     setPendingExit(null)
     setShowScanner(false)
   }, [scannerSessionMutable, scannerShelf])
 
-  const acceptScannerCandidate = useCallback((candidate, source) => {
+  const acceptScannerCandidate = useCallback((candidate, source, captureToken) => {
     if (!scannerSessionMutable()) return
+    if (!['scanner-direct', 'scanner-confirmed'].includes(source)) return
+    if (!candidate?.edition?.scryfall_id) return
+    if (!scannerCaptureLifecycleRef.current.consume(captureToken)) return
     setScannerShelf(current => addScannerShelfItem(current, {
       source,
       cardName: candidate.cardName,
       edition: candidate.edition,
     }))
     resumeScanner()
-  }, [resumeScanner, scannerSessionMutable])
+  }, [resumeScanner, scannerSessionMutable, setScannerShelf])
 
   // ─── Build the search URL from query + filters ─────────────────────────
   const buildSearchUrl = useCallback((searchQ, searchFilters, pageNum, limit = DEFAULT_LIMIT, scan = false, scannerEvidence = null) => {
@@ -756,7 +773,7 @@ export default function AddCardModal({ binders = [], onClose, onAdded }) {
         // Auto-add stays tied to the scan-time decision over the swept pool. A
         // user-triggered page load only widens the list they are choosing from.
         if (!append && decision.kind === 'direct') {
-          acceptScannerCandidate(decision.candidate, 'scanner-direct')
+          acceptScannerCandidate(decision.candidate, 'scanner-direct', evidence.captureToken)
           return
         }
         if (append) {
@@ -871,6 +888,7 @@ export default function AddCardModal({ binders = [], onClose, onAdded }) {
     if (!scannerSessionMutable()) return
     const seed = scannerRetrievalSeed(evidence)
     if (!seed) return
+    if (!scannerCaptureLifecycleRef.current.activate(evidence.captureToken)) return
     // Keep catalog retrieval broad. OCR set/rarity reads are ranking signals,
     // not hard filters; a noisy read must not hide the correct card entirely.
     // Only an unreadable title's set+serial fallback browses a set. Ordinary
@@ -912,6 +930,8 @@ export default function AddCardModal({ binders = [], onClose, onAdded }) {
   // Ends the modal outright. Only reached once the shelf is settled — either it
   // was empty, already written, or explicitly discarded.
   const closeNow = useCallback(() => {
+    scannerBatchLifecycleRef.current.invalidate()
+    scannerCaptureLifecycleRef.current.retire()
     if (abortRef.current) abortRef.current.abort()
     searchGenRef.current++
     setShowScanner(false)
@@ -925,10 +945,14 @@ export default function AddCardModal({ binders = [], onClose, onAdded }) {
   // here. Closing destroys the temporary shelf, so a non-empty one stops the
   // close once and asks rather than discarding a scan session silently.
   const handleClose = useCallback(() => {
+    if (scannerBatchLifecycleRef.current.unknownSnapshot()) {
+      setScannerRecovery(true)
+      return
+    }
     const outcome = resolveScannerBatchExit({
       batchPending: scannerBatchPendingRef.current,
       exit: 'close',
-      shelf: scannerShelf,
+      shelf: scannerShelfRef.current,
     })
     if (outcome.kind === 'blocked') return
     if (outcome.kind === 'confirm') {
@@ -939,19 +963,30 @@ export default function AddCardModal({ binders = [], onClose, onAdded }) {
   }, [closeNow, scannerShelf])
 
   const confirmScannerDiscard = useCallback(() => {
+    if (scannerBatchLifecycleRef.current.unknownSnapshot()) {
+      scannerBatchLifecycleRef.current.discard()
+      setScannerRecovery(false)
+      setScannerShelf([])
+      closeNow()
+      return
+    }
     const outcome = resolveScannerBatchExit({
       batchPending: scannerBatchPendingRef.current,
       exit: 'close',
-      shelf: scannerShelf,
+      shelf: scannerShelfRef.current,
       discardConfirmed: true,
     })
     if (outcome.kind === 'blocked') return
-    if (outcome.kind === 'discard') setScannerShelf([])
+    if (outcome.kind === 'discard') {
+      scannerBatchLifecycleRef.current.discard()
+      setScannerShelf([])
+    }
     closeNow()
-  }, [closeNow, scannerShelf])
+  }, [closeNow, setScannerShelf])
 
   const openScanner = () => {
     if (!scannerSessionMutable()) return
+    scannerCaptureLifecycleRef.current.retire()
     setScanEvidence(null)
     setScannerDecision(null)
     setScannerVisualStatus(null)
@@ -978,9 +1013,9 @@ export default function AddCardModal({ binders = [], onClose, onAdded }) {
     setScannerCondition(value)
   }
 
-  const handleScannerBatchAdd = async () => {
-    if (!scannerSessionMutable()) return
-    const payload = buildScannerBatchPayload(scannerShelf, {
+  const handleScannerBatchAdd = async (retry = false) => {
+    if (retry !== true && !scannerSessionMutable()) return
+    const payload = retry === true ? scannerBatchLifecycleRef.current.unknownSnapshot() : buildScannerBatchPayload(scannerShelfRef.current, {
       binderId: scannerBinderId,
       condition: scannerCondition,
     })
@@ -989,12 +1024,11 @@ export default function AddCardModal({ binders = [], onClose, onAdded }) {
       return
     }
 
-    // begin() is the synchronous freeze: every other handler consults
-    // canMutate() and goes inert the instant this returns a request.
-    const request = scannerBatchLifecycleRef.current.begin()
+    // Synchronous ownership includes the immutable submitted identities and
+    // remains held through body parsing, shelf settlement, and onAdded.
+    const request = retry === true ? scannerBatchLifecycleRef.current.retry() : scannerBatchLifecycleRef.current.begin(payload)
     if (!request) return
-
-    const count = payload.cards.length
+    scannerCaptureLifecycleRef.current.retire()
     scannerBatchPendingRef.current = true
     setPendingExit(null)
     setAdding(true)
@@ -1002,68 +1036,73 @@ export default function AddCardModal({ binders = [], onClose, onAdded }) {
 
     let res
     try {
-      // One all-or-nothing request: the server folds duplicates and writes the
-      // whole shelf in a single transaction, so a failure leaves nothing behind
-      // and the shelf the user is looking at is still the truth. Only the
-      // fetch itself can mean "nothing reached the server" -- parsing the
-      // response is handled below, after the commit boundary.
       res = await fetch('/api/library/add/batch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ ...request.snapshot, batchId: request.batchId }),
       })
     } catch (e) {
-      // Nothing reached the server: fail() releases the lock so the unchanged
-      // shelf becomes mutable and retryable again. commit() is never
-      // reachable from this branch.
-      const released = scannerBatchLifecycleRef.current.fail(request)
+      if (!scannerBatchLifecycleRef.current.fail(request)) return
       scannerBatchPendingRef.current = false
-      if (!released) return
-      setError(e.message || 'Failed to add scanned cards')
+      setScannerRecovery(true)
+      setError('Inventory may already have changed. This shelf is frozen. Retry the identical batch safely, or check your library manually before continuing.')
       setAdding(false)
       return
     }
-
-    // The commit boundary is the HTTP status alone, never the parsed body: a
-    // truncated 2xx body must not be reported as a failure against an
-    // already-committed, non-idempotent additive write.
-    if (classifyBatchResponse({ ok: res.ok }) === 'fail') {
-      const errorData = await parseBatchResponseBody(res)
-      const released = scannerBatchLifecycleRef.current.fail(request)
-      scannerBatchPendingRef.current = false
-      if (!released) return
-      setError(errorData.error || 'Failed to add scanned cards')
-      setAdding(false)
-      return
-    }
-
-    // The server has committed the write. commit() releases the lock first —
-    // before any fallible follow-up, including parsing the response body — so
-    // nothing below can turn an already-written batch into a reported
-    // failure or a re-armed retry.
-    const committed = scannerBatchLifecycleRef.current.commit(request)
-    scannerBatchPendingRef.current = false
-    if (!committed) return
-
+    if (!scannerBatchLifecycleRef.current.isCurrent(request)) return
     const data = await parseBatchResponseBody(res)
+    if (!scannerBatchLifecycleRef.current.isCurrent(request)) return
+    if (res.status >= 400 && res.status < 500) {
+      if (!scannerBatchLifecycleRef.current.reject(request)) return
+      scannerBatchPendingRef.current = false
+      setScannerRecovery(false)
+      setError(data.error || 'Could not add scanned cards. Review the batch before confirming again.')
+      setAdding(false)
+      return
+    }
+    if (classifyBatchResponse({ ok: res.ok, data, requested: payload.cards.length }) !== 'commit') {
+      if (!scannerBatchLifecycleRef.current.fail(request)) return
+      scannerBatchPendingRef.current = false
+      setScannerRecovery(true)
+      setError('Inventory may already have changed. This shelf is frozen. Retry the identical batch safely, or check your library manually before continuing.')
+      setAdding(false)
+      return
+    }
 
-    // These rows are in the library now, so this exit is settled: the close
-    // must not stop to ask about discarding what was just written.
-    setScannerShelf([])
+    // Only submitted printing+finish identities leave the shelf. Unchecked
+    // rows stay available, and the synchronous ref prevents a stale resend.
+    setScannerShelf(current => removeSubmittedScannerRows(current, request.snapshot))
     try {
+      const count = payload.cards.length
       onAdded?.({
         card_name: `${count} scanned printing${count === 1 ? '' : 's'}`,
-        inserted: data.inserted || 0,
-        merged: data.merged || 0,
+        inserted: data.inserted,
+        merged: data.merged,
+        replayed: data.replayed === true,
       })
-    } catch (err) {
-      console.error('[scanner] onAdded callback threw after a committed batch write', err)
+    } catch {
+      // A consumer callback cannot undo a known write or re-arm its rows.
     }
-    try {
-      closeNow()
-    } catch (err) {
-      console.error('[scanner] closeNow threw after a committed batch write', err)
-    }
+    if (!scannerBatchLifecycleRef.current.commit(request)) return
+    setScannerRecovery(false)
+    scannerBatchPendingRef.current = false
+    setAdding(false)
+  }
+
+  const acknowledgeScannerLibraryCheck = (checked) => {
+    if (checked !== true) return
+    const snapshot = scannerBatchLifecycleRef.current.unknownSnapshot()
+    if (!snapshot) return
+    // Continuing is NOT retry consent. Quarantine submitted identities locally
+    // before unlocking; unchecked rows remain, including other finishes.
+    setScannerShelf(current => removeSubmittedScannerRows(current, snapshot))
+    if (!scannerBatchLifecycleRef.current.continueAfterCheck()) return
+    scannerBatchPendingRef.current = false
+    setScannerRecovery(false)
+    setAdding(false)
+    setPendingExit(null)
+    resumeScanner()
+    setError('Submitted cards were removed from this local shelf, not resent. Reconcile any unresolved cards manually in your library.')
   }
 
   // ─── Add card to library ───────────────────────────────────────────────
@@ -1095,7 +1134,7 @@ export default function AddCardModal({ binders = [], onClose, onAdded }) {
       hasScanEvidence: Boolean(scanEvidence),
     })
     if (destination === 'scanner-shelf') {
-      acceptScannerCandidate({ edition, cardName }, 'scanner-confirmed')
+      acceptScannerCandidate({ edition, cardName }, 'scanner-confirmed', scanEvidence.captureToken)
       setError(null)
       return
     }
@@ -1121,6 +1160,17 @@ export default function AddCardModal({ binders = [], onClose, onAdded }) {
     return () => document.removeEventListener('keydown', handler, true)
   }, [selectedEdition])
 
+  // ─── Protect unsaved scanner rows on reload / tab close ────────────────
+  useEffect(() => {
+    const beforeUnload = (event) => {
+      if (pendingShelfSummary(scannerShelfRef.current).rows === 0 && !scannerRecovery) return
+      event.preventDefault()
+      event.returnValue = ''
+    }
+    window.addEventListener('beforeunload', beforeUnload)
+    return () => window.removeEventListener('beforeunload', beforeUnload)
+  }, [scannerRecovery])
+
   // ─── Cleanup on unmount ────────────────────────────────────────────────
   useEffect(() => {
     // arm() re-mounts the lifecycle on every mount of this effect. React
@@ -1129,6 +1179,12 @@ export default function AddCardModal({ binders = [], onClose, onAdded }) {
     // simulated unmount's invalidate() below would leave it permanently
     // unmounted after the second mount.
     scannerBatchLifecycleRef.current.arm()
+    if (scannerBatchLifecycleRef.current.unknownSnapshot()) {
+      scannerBatchPendingRef.current = false
+      setAdding(false)
+      setScannerRecovery(true)
+      setError('Inventory may already have changed. This shelf is frozen. Retry the identical batch safely, or check your library manually before continuing.')
+    }
     return () => {
       if (abortRef.current) {
         abortRef.current.abort()
@@ -1176,7 +1232,23 @@ export default function AddCardModal({ binders = [], onClose, onAdded }) {
 
         {/* Scrollable solid body */}
         <div className="flex-1 overflow-y-auto overscroll-contain p-4">
-          {pendingExit && !adding && (
+          {scannerRecovery && (
+            <div role="alert" className="mb-3 space-y-2 rounded-dbb-md border border-amber-500 p-3 text-dbb-xs">
+              <p>Inventory may already have changed. This shelf is frozen. Check your library manually in another tab before continuing.</p>
+              <button type="button" disabled={adding} onClick={() => handleScannerBatchAdd(true)} className="min-h-[44px] w-full rounded-dbb-md border px-3 disabled:opacity-50">
+                Retry the identical batch safely
+              </button>
+              <p>Continuing removes submitted cards from this local shelf without resending them. Keep unchecked rows; reconcile unresolved cards manually.</p>
+              <button type="button" onClick={() => acknowledgeScannerLibraryCheck(true)} className="min-h-[44px] w-full rounded-dbb-md border px-3">
+                Check my library then continue
+              </button>
+              <p>By continuing, I acknowledge that I have checked my library.</p>
+              <button type="button" onClick={confirmScannerDiscard} className="min-h-[44px] w-full rounded-dbb-md border px-3">
+                Discard local shelf only — inventory may already have changed
+              </button>
+            </div>
+          )}
+          {pendingExit && !adding && !scannerRecovery && (
             <ScannerExitPrompt
               rows={pendingExit.rows}
               quantity={pendingExit.quantity}
@@ -1254,6 +1326,7 @@ export default function AddCardModal({ binders = [], onClose, onAdded }) {
                   onConditionChange={changeScannerCondition}
                   onConfirmBatch={handleScannerBatchAdd}
                   confirming={adding}
+                  recovery={scannerRecovery}
                   resumeToken={scannerResumeToken}
                   visualStatus={scannerVisualStatus}
                 >
@@ -1278,7 +1351,7 @@ export default function AddCardModal({ binders = [], onClose, onAdded }) {
                           edition={candidate.edition}
                           cardName={candidate.cardName}
                           onSelect={handleSelectEdition}
-                          disabled={adding}
+                          disabled={adding || scannerRecovery}
                         />
                       ))}
                     </PrintingSelectionPanel>

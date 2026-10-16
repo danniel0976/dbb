@@ -85,8 +85,12 @@ export function resolveScanOutcome(evidence) {
  * matching and printing routing. Cancellation is checked only after that owned
  * promise settles, so an unmounted panel never re-enables itself.
  */
+let captureGeneration = 0
+
 export async function settleScanEvidence({ evidence, onEvidence, isCancelled } = {}) {
-  await onEvidence(evidence)
+  // Each completed camera read owns one non-image generation. Resuming or
+  // paging catalog results never creates another capture.
+  await onEvidence({ ...evidence, captureToken: ++captureGeneration })
   return isCancelled?.() ? 'cancelled' : 'live'
 }
 

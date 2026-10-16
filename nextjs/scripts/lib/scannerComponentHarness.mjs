@@ -49,7 +49,7 @@ export function scannerComponentHarness(relativePath, dependencies = {}) {
   const { code } = transform(source, { transforms: ['jsx', 'imports'], jsxRuntime: 'classic', production: true })
   const module = { exports: {} }
   // Classic JSX expects React; production components otherwise use named hooks.
-  new Function('require', 'module', 'exports', 'React', code)(require, module, module.exports, react)
+  new Function('require', 'module', 'exports', 'React', 'window', code)(require, module, module.exports, react, globalThis.window || new EventTarget())
   return {
     render(props = {}, attach = () => {}) {
       cursor = 0
