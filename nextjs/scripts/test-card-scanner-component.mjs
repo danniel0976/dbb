@@ -3,6 +3,7 @@ import { scannerComponentHarness, findScannerElement, scannerElementText } from 
 import * as parser from '../src/lib/cardScanner.mjs'
 import * as session from '../src/lib/cardScannerSession.mjs'
 import * as view from '../src/lib/cardScannerView.mjs'
+import { settleScanEvidence } from '../src/lib/cardScannerState.mjs'
 
 const stub = name => Object.assign(() => null, { displayName: name })
 const props = { binders: [], onClose() {}, onAdded() { throw new Error('scanner matching cannot write collection state') } }
@@ -18,6 +19,8 @@ const dependencies = {
   './ScannerShelfNotices': { HeldScansBanner: stub('HeldScansBanner'), ScannerExitPrompt: stub('ScannerExitPrompt') },
 }
 const panel = tree => findScannerElement(tree, element => element.type?.displayName === 'CardScannerPanel')
+// Deliver through the real camera-settlement seam, which owns capture tokens.
+const deliverScan = (tree, evidence) => settleScanEvidence({ evidence, onEvidence: panel(tree).props.onEvidence, isCancelled: () => false })
 const picker = tree => findScannerElement(tree, element => element.type?.displayName === 'PrintingSelectionPanel')
 const ed = (id, set, number) => ({ scryfall_id: id, set_code: set, collector_number: number, rarity: 'rare', finishes: ['nonfoil'] })
 try {
@@ -32,7 +35,7 @@ try {
     requests.push(query)
     return { ok: true, json: async () => ({ groups: [{ name: 'Natural Order', editions: [ed('sta-117', 'sta', '117')] }], total: 1, has_more: false }) }
   }
-  await panel(tree).props.onEvidence({ nameQuery: '', setCode: 'sta', collectorNumber: '117' })
+  await deliverScan(tree, { nameQuery: '', setCode: 'sta', collectorNumber: '117' })
   tree = harness.render(props)
   assert.equal(requests.length, 1, 'set/serial-only scan must reach catalog retrieval instead of doing nothing')
   assert.equal(requests[0].searchParams.get('set'), 'sta')
@@ -67,7 +70,7 @@ try {
   }
   const paddedEvidence = parser.extractScanEvidence('Unrelated OCR title\n0169 R\nMOM EN')
   assert.equal(paddedEvidence.collectorNumber, '169', 'printed leading zero must normalize to the catalog collector number')
-  await panel(tree).props.onEvidence(paddedEvidence)
+  await deliverScan(tree, paddedEvidence)
   tree = printingFallback.render(props)
   assert.equal(fallbackRequests.length, 2, 'an uncertain title with exact printing clues must retry as printing-only')
   assert.equal(fallbackRequests[1].searchParams.get('q'), '')
@@ -96,7 +99,7 @@ try {
       { name: 'Urabrask', editions: [ed('urabrask-tied-fallback', 'mom', '169')] },
     ], total: 1, has_more: false }) }
   }
-  await panel(tree).props.onEvidence(parser.extractScanEvidence('Saruman\n0169 R\nMOM EN'))
+  await deliverScan(tree, parser.extractScanEvidence('Saruman\n0169 R\nMOM EN'))
   tree = tiedFallback.render(props)
   assert.equal(tiedRequests.length, 2, 'a title tie with exact printed identifiers must use the safe printing-only fallback')
   assert.equal(picker(tree).props.reason, 'printing-only')
@@ -119,7 +122,7 @@ try {
     const same = { name: 'Roaming Throne', editions: [ed(`throne-${page}`, page === 4 ? 'lci' : 'xyz', page === 4 ? '258' : String(page))] }
     return { ok: true, json: async () => ({ groups: [same, { name: 'Roaming Unrelated', editions: [ed(`unrelated-${page}`, 'lci', '258')] }], total: 8, has_more: page < 4 }) }
   }
-  await panel(next).props.onEvidence({ nameQuery: 'roaming throne', setCode: 'lci', collectorNumber: '0258' })
+  await deliverScan(next, { nameQuery: 'roaming throne', setCode: 'lci', collectorNumber: '0258' })
   next = widened.render(props)
   assert.deepEqual(pages, [1, 2, 3])
   assert.ok(picker(next).props.children.every(row => row.props.cardName === 'Roaming Throne'))
@@ -148,7 +151,7 @@ try {
       { name: 'Unrelated', editions: [ed('unrelated', 'lci', '3')] },
     ], total: 3, has_more: false }) }
   }
-  await panel(next).props.onEvidence({ nameQuery: 'saruman' })
+  await deliverScan(next, { nameQuery: 'saruman' })
   next = ambiguous.render(props)
   assert.equal(picker(next).props.reason, 'card-name-tie')
   const alternatives = picker(next).props.children

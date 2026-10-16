@@ -165,6 +165,50 @@ function shelfIdFor(scryfallId, finish) {
   return `${scryfallId}:${finish}`
 }
 
+// Shelf rendering keeps only safe catalog URL fields, never capture URLs.
+function safeCatalogImageUris(uris) {
+  if (!uris || typeof uris !== 'object') return null
+  const safe = {}
+  for (const key of ['small', 'normal', 'large', 'png', 'art_crop', 'border_crop']) {
+    if (typeof uris[key] !== 'string') continue
+    try {
+      const url = new URL(uris[key])
+      if (url.protocol === 'https:' || url.protocol === 'http:') safe[key] = uris[key]
+    } catch { /* Not a catalog URL. */ }
+  }
+  return Object.keys(safe).length ? safe : null
+}
+
+/** Synchronous consumption shared by direct routing and chooser activation. */
+export function createScannerCaptureLifecycle() {
+  let latest = 0
+  let consumed = true
+  return {
+    activate(token) {
+      if (!Number.isSafeInteger(token) || token <= latest) return false
+      latest = token
+      consumed = false
+      return true
+    },
+    consume(token) {
+      if (token !== latest || consumed) return false
+      consumed = true
+      return true
+    },
+    retire() {
+      consumed = true
+    },
+  }
+}
+
+/** Remove only submitted printing+finish identities, including on recovery. */
+export function removeSubmittedScannerRows(shelf, payload) {
+  const identities = new Set((payload?.cards || []).map(card =>
+    shelfIdFor(card.scryfall_id, card.foil === 'normal' ? 'nonfoil' : card.foil)))
+  return (Array.isArray(shelf) ? shelf : []).filter(item =>
+    !identities.has(shelfIdFor(item.scryfallId, item.finish)))
+}
+
 /** Add one scanner-originated printing to the temporary shelf. */
 export function addScannerShelfItem(shelf, selection) {
   const current = Array.isArray(shelf) ? shelf : []
@@ -193,7 +237,7 @@ export function addScannerShelfItem(shelf, selection) {
     setCode: selection.edition.set_code || '',
     collectorNumber: selection.edition.collector_number || '',
     rarity: selection.edition.rarity || null,
-    imageUris: selection.edition.image_uris || null,
+    imageUris: safeCatalogImageUris(selection.edition.image_uris),
     finishes,
     finish,
     quantity: 1,
@@ -273,21 +317,27 @@ export function resolveScannerBatchExit({ batchPending = false, ...exitOptions }
 }
 
 /**
- * Own one scanner batch request at a time. The request token is also the
- * continuation generation: only the mounted lifecycle that began it may fail
- * or commit it, and invalidation makes every late continuation inert.
+ * Own the immutable submission through acknowledgement and local settlement.
+ * Transport/status/body failures cannot establish that inventory was unchanged.
+ * Unknown submissions stay frozen even across StrictMode cleanup/rearm.
  */
 export function createScannerBatchLifecycle() {
   let generation = 0
   let activeRequest = null
+  let phase = 'idle'
   let mounted = true
-
-  const owns = request => mounted && activeRequest === request
+  const owns = request => mounted && phase === 'pending' &&
+    activeRequest === request && request.generation === generation
 
   return {
-    begin() {
+    begin(payload) {
       if (!mounted || activeRequest) return null
-      activeRequest = { generation: ++generation }
+      const snapshot = payload ? Object.freeze({
+        binder_id: payload.binder_id,
+        cards: Object.freeze(payload.cards.map(card => Object.freeze({ ...card }))),
+      }) : null
+      activeRequest = Object.freeze({ generation: ++generation, snapshot })
+      phase = 'pending'
       return activeRequest
     },
     canMutate() {
@@ -301,47 +351,46 @@ export function createScannerBatchLifecycle() {
     },
     fail(request) {
       if (!owns(request)) return false
+      phase = 'unknown'
+      return true
+    },
+    unknownSnapshot() {
+      return mounted && phase === 'unknown' ? activeRequest?.snapshot : null
+    },
+    continueAfterCheck() {
+      if (!mounted || phase !== 'unknown') return false
       activeRequest = null
+      phase = 'idle'
       return true
     },
     commit(request) {
       if (!owns(request)) return false
       activeRequest = null
+      phase = 'idle'
       return true
     },
     invalidate() {
       mounted = false
-      activeRequest = null
+      if (activeRequest) phase = 'unknown'
       generation += 1
     },
-    // Re-arms a lifecycle invalidated by a prior mount's cleanup. React
-    // StrictMode double-invokes an effect (mount -> cleanup -> mount) in dev,
-    // and this object lives in a useRef that survives that, so invalidate()
-    // must not be terminal: each new mount calls arm() to make the same
-    // instance usable again rather than leaving it permanently unmounted.
     arm() {
       mounted = true
-      activeRequest = null
+      // Never erase a submission. Late continuations retain an old generation
+      // and cannot settle it; only explicit library-check recovery can proceed.
     },
   }
 }
 
-/**
- * Decide whether a batch response means the server committed the write,
- * using the HTTP status alone -- before the body is ever parsed. A truncated
- * or malformed 2xx body must never be able to turn an already-committed,
- * non-idempotent additive write into a reported failure, so this reads only
- * `ok` and has no awareness of whether the body can be parsed at all.
- */
-export function classifyBatchResponse({ ok } = {}) {
-  return ok === true ? 'commit' : 'fail'
+/** Only a readable, matching existing batch contract establishes known success. */
+export function classifyBatchResponse({ ok, data, requested } = {}) {
+  if (ok !== true || data?.ok !== true || !Number.isInteger(requested) || requested < 1) return 'unknown'
+  if (data.requested !== requested || data.rows !== requested) return 'unknown'
+  if (![data.inserted, data.merged].every(value => Number.isInteger(value) && value >= 0)) return 'unknown'
+  return data.inserted + data.merged === data.rows ? 'commit' : 'unknown'
 }
 
-/**
- * Parse a batch response body defensively. Used only after the commit/fail
- * boundary has already been decided from `ok`, so a rejected `.json()` call
- * (e.g. a truncated body) resolves to `{}` instead of throwing.
- */
+/** An unreadable body deliberately cannot satisfy the acknowledgement contract. */
 export async function parseBatchResponseBody(res) {
   try {
     const data = await res.json()
