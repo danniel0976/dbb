@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server'
 
 // Force Node.js runtime
 export const runtime = 'nodejs'
+// Must run per request: without this Next prerenders the handler at build time and the
+// keep-alive below never reaches Supabase (the response timestamp equals the deploy time).
+export const dynamic = 'force-dynamic'
 
 // Health check + Supabase keep-alive endpoint
 // Called by Vercel cron every 5 days to prevent Supabase free tier pause (7-day idle timeout)
