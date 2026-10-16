@@ -13,6 +13,8 @@
     "test:scanner-session": "node scripts/test-card-scanner-session.mjs",
     "test:scanner-assets": "node scripts/test-card-scanner-assets.mjs",
     "test:scanner-view": "node scripts/test-card-scanner-view.mjs",
+    "test:scanner-fixed-view": "node scripts/test-scanner-fixed-view.mjs",
+    "test:scanner-layout-browser": "node scripts/test-scanner-layout-browser.mjs",
     "test:library-batch-add": "node scripts/test-library-batch-add.mjs",
     "test:catalog-refresh": "node scripts/test-catalog-refresh.mjs",
     "test:catalog-search-fallback": "node scripts/test-catalog-search-fallback.mjs",
