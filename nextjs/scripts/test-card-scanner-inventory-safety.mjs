@@ -67,7 +67,7 @@ function harness(rows = [row(), row('a', 'foil', false), row('b', 'nonfoil', fal
     scannerCaptureLifecycleRef: { current: session.createScannerCaptureLifecycle?.() },
     scannerBatchPendingRef: { current: false }, abortRef: { current: null }, searchGenRef: { current: 0 },
     inputRef: { current: null }, showScanner: true, scanEvidence: { nameQuery: 'Lightning Bolt' },
-    scannerDecision: null, scannerResumeToken: 0, loadingMore: false, hasMore: true, committedQ: '',
+    scannerDecision: null, printingList: null, printingEditId: null, shelfUndo: null, lastScannerSetRef: {current:''}, scanningLanguage:'en', scannerSetLock:'', scannerResumeToken: 0, loadingMore: false, hasMore: true, committedQ: '',
     appliedFilters: {}, page: 1, error: null, adding: false, scannerRecovery: false,
     posts: [], searches: [], closed: 0, added: 0, violations: [],
     terminateScannerWorker: () => {}, console: { error: () => {} },
@@ -76,7 +76,7 @@ function harness(rows = [row(), row('a', 'foil', false), row('b', 'nonfoil', fal
   for (const key of ['ScanEvidence', 'ScannerDecision', 'ScannerVisualStatus', 'Groups', 'Total', 'HasMore',
     'CommittedQ', 'Q', 'HeldScans', 'ShowScanner', 'ScannerResumeToken', 'Filters', 'AppliedFilters',
     'Error', 'Loading', 'LoadingMore', 'PendingExit', 'ScannerBinderId', 'ScannerCondition', 'Adding',
-    'SelectedEdition', 'Page', 'ScannerRecovery']) {
+    'SelectedEdition', 'Page', 'ScannerRecovery', 'ShelfUndo', 'PrintingList', 'PrintingEditId']) {
     const prop = key[0].toLowerCase() + key.slice(1)
     env[`set${key}`] = value => { env[prop] = typeof value === 'function' ? value(env[prop]) : value }
   }

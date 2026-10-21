@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { attachScannerViewport, revealScannerNotice } from '@/lib/scannerViewport.mjs'
 import { X, Search, Loader2, Plus, ChevronRight, ChevronDown, Filter, ScanLine } from 'lucide-react'
+import { catalogImage } from '@/lib/scannerPrintings.mjs'
 import { rankScannerResults, isUsablePrintingEvidence } from '@/lib/cardScanner.mjs'
 import { compareScannerCandidatesVisually } from '@/lib/cardScannerVisualBrowser.mjs'
 import {
@@ -109,8 +110,8 @@ function CardImage({ card, size = 'sm' }) {
   const [loaded, setLoaded] = useState(false)
 
   useEffect(() => {
-    if (card.image_uris?.small) {
-      setSrc(card.image_uris.small)
+    if (catalogImage(card)?.small) {
+      setSrc(catalogImage(card).small)
       return
     }
     // Fallback: fetch card JSON from Scryfall to get image URI
@@ -434,8 +435,10 @@ function ScanEvidenceChips({ matches }) {
   )
 }
 
-function EditionRow({ edition, cardName, onSelect, disabled = false, showCardName = false }) {
+function EditionRow({ edition, cardName, onSelect, disabled = false, showCardName = false, languageHeading = null }) {
   return (
+    <>
+    {languageHeading && <h4 className="pt-2 text-xs font-semibold">{languageHeading}</h4>}
     <button
       onClick={() => onSelect(edition, cardName)}
       disabled={disabled}
@@ -463,6 +466,7 @@ function EditionRow({ edition, cardName, onSelect, disabled = false, showCardNam
       </div>
       <ChevronRight className="w-4 h-4 text-gray-400 dark:text-gray-600 flex-shrink-0" />
     </button>
+    </>
   )
 }
 
@@ -580,11 +584,18 @@ export default function AddCardModal({ binders = [], onClose, onAdded }) {
   const scannerBatchLifecycleRef = useRef(createScannerBatchLifecycle())
   const scannerCaptureLifecycleRef = useRef(createScannerCaptureLifecycle())
   const scannerShelfRef = useRef([])
+  const [printingList, setPrintingList] = useState(null)
+  const [printingEditId, setPrintingEditId] = useState(null)
+  const [shelfUndo, setShelfUndo] = useState(null)
+  const lastScannerSetRef = useRef('')
+  const [scanningLanguage, setScanningLanguage] = useState('en')
+  const [scannerSetLock, setScannerSetLock] = useState('')
   // Synchronous shelf ownership prevents stale queued confirmations from seeing
   // rows already settled locally, before React has rendered the new shelf.
   const setScannerShelf = useCallback((value) => {
     const next = typeof value === 'function' ? value(scannerShelfRef.current) : value
     scannerShelfRef.current = next
+    setShelfUndo(null)
     setScannerShelfState(next)
   }, [])
   const scannerSessionMutable = useCallback(() => scannerBatchLifecycleRef.current.canMutate(), [])
@@ -604,6 +615,8 @@ export default function AddCardModal({ binders = [], onClose, onAdded }) {
     scannerCaptureLifecycleRef.current.retire()
     setScanEvidence(null)
     setScannerDecision(null)
+    setPrintingList(null)
+    setPrintingEditId(null)
     setScannerVisualStatus(null)
     setGroups([])
     setTotal(0)
@@ -636,9 +649,44 @@ export default function AddCardModal({ binders = [], onClose, onAdded }) {
       source,
       cardName: candidate.cardName,
       edition: candidate.edition,
+      printingUnverified: candidate.printingUnverified === true,
     }))
+    lastScannerSetRef.current = candidate.edition.set_code || lastScannerSetRef.current
     resumeScanner()
   }, [resumeScanner, scannerSessionMutable, setScannerShelf])
+
+  const loadPrintingList = async (name, preferredId, append = false, editId = null) => {
+    if (!scannerSessionMutable()) return
+    if (abortRef.current) abortRef.current.abort()
+    const controller = new AbortController()
+    abortRef.current = controller
+    const gen = ++searchGenRef.current
+    setLoadingMore(true)
+    try {
+      const ev = scanEvidence || {}
+      const params = new URLSearchParams({ name, preferred: preferredId || '', language: scanningLanguage, set_lock: scannerSetLock, last_set: lastScannerSetRef.current, set: ev.setCode || '', collector: ev.collectorNumber || '' })
+      if (append && printingList?.cursor) params.set('cursor', printingList.cursor)
+      const res = await fetch(`/api/catalog/printings?${params}`, { signal: controller.signal })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Printing lookup failed')
+      if (gen !== searchGenRef.current || !scannerSessionMutable()) return
+      const editions = data.groups.flatMap(group => group.editions)
+      const candidates = [...(append ? scannerDecision?.candidates || [] : []), ...editions.map(edition => ({cardName:name,edition}))]
+      setPrintingList({name,preferredId,cursor:data.next_cursor})
+      if (editId) setPrintingEditId(editId)
+      setScannerDecision({kind:'uncertain',reason:'printing-tie',candidates})
+      setHasMore(data.has_more)
+    } catch (error) { if (error.name !== 'AbortError' && gen === searchGenRef.current) setError(error.message) }
+    finally { if (gen === searchGenRef.current) setLoadingMore(false) }
+  }
+  const openPrintingEditor = shelfId => {
+    const row = scannerShelfRef.current.find(item => item.shelfId === shelfId)
+    if (row) loadPrintingList(row.cardName, row.scryfallId, false, shelfId)
+  }
+  const undoShelfEdit = () => {
+    if (!scannerSessionMutable() || !shelfUndo) return
+    setScannerShelf(shelfUndo)
+  }
 
   // ─── Build the search URL from query + filters ─────────────────────────
   const buildSearchUrl = useCallback((searchQ, searchFilters, pageNum, limit = DEFAULT_LIMIT, scan = false, scannerEvidence = null) => {
@@ -758,11 +806,28 @@ export default function AddCardModal({ binders = [], onClose, onAdded }) {
         }
       }
 
+      if (evidence && !append) {
+        const initial = routeScannerMatch(ranked, routingEvidence)
+        const identified = initial.candidates?.[0]
+        const oneIdentity = identified && initial.candidates.every(c => c.cardName === identified.cardName)
+        if (initial.kind !== 'direct' && oneIdentity && !['strong-name-required', 'no-candidates', 'card-name-tie', 'printing-only'].includes(initial.reason)) {
+          const params = new URLSearchParams({ name: identified.cardName, language: routingEvidence.languagePrior || 'en', set_lock: routingEvidence.setLock || '', last_set: routingEvidence.lastSet || '', set: routingEvidence.setCode || '', collector: routingEvidence.collectorNumber || '' })
+          const response = await fetch(`/api/catalog/printings?${params}`, { signal: controller.signal })
+          const family = await response.json()
+          if (!response.ok) throw new Error(family.error || 'Printing lookup failed')
+          if (gen !== searchGenRef.current || !scannerSessionMutable()) return
+          ranked = rankScannerResults(family.groups, routingEvidence)
+          lastTotal = family.total
+          lastHasMore = family.has_more
+          setPrintingList({name:identified.cardName,preferredId:'',cursor:family.next_cursor})
+          decision = routeScannerMatch(ranked, routingEvidence, {completeIdentity: !family.has_more, language:routingEvidence.languagePrior})
+        }
+      }
       if (evidence) {
         // Visual comparison is a local tie-breaker only. A unique OCR/printing
         // decision keeps its existing path; uncertain candidates may be reordered
         // without changing scanScore or the direct/uncertain gate.
-        decision = routeScannerMatch(ranked, routingEvidence)
+        decision = decision || routeScannerMatch(ranked, routingEvidence)
         if (decision.kind !== 'direct') {
           setScannerVisualStatus({ status: 'checking' })
           const visual = await compareScannerCandidatesVisually(ranked, routingEvidence.visualSignature)
@@ -856,6 +921,7 @@ export default function AddCardModal({ binders = [], onClose, onAdded }) {
   const handleLoadMore = () => {
     if (!scannerSessionMutable()) return
     if (loadingMore || !hasMore) return
+    if (printingList) { loadPrintingList(printingList.name, printingList.preferredId, true); return }
     doSearch(committedQ, appliedFilters, page + 1, true, scanEvidence, scanEvidence ? SCAN_LIMIT : DEFAULT_LIMIT)
   }
 
@@ -888,6 +954,7 @@ export default function AddCardModal({ binders = [], onClose, onAdded }) {
 
   const handleScanEvidence = (evidence) => {
     if (!scannerSessionMutable()) return
+    evidence = { ...evidence, languagePrior: scanningLanguage, setLock: scannerSetLock, lastSet: lastScannerSetRef.current }
     const seed = scannerRetrievalSeed(evidence)
     if (!seed) return
     if (!scannerCaptureLifecycleRef.current.activate(evidence.captureToken)) return
@@ -997,7 +1064,9 @@ export default function AddCardModal({ binders = [], onClose, onAdded }) {
 
   const editScannerShelf = (shelfId, patch) => {
     if (!scannerSessionMutable()) return
-    setScannerShelf(current => editScannerShelfItem(current, shelfId, patch))
+    const before = scannerShelfRef.current
+    setScannerShelf(editScannerShelfItem(before, shelfId, patch))
+    setShelfUndo(before)
   }
 
   const removeScannerShelf = (shelfId) => {
@@ -1131,6 +1200,14 @@ export default function AddCardModal({ binders = [], onClose, onAdded }) {
   // ─── Select an edition ─────────────────────────────────────────────────
   const handleSelectEdition = (edition, cardName) => {
     if (!scannerSessionMutable()) return
+    if (printingEditId) {
+      editScannerShelf(printingEditId, { edition })
+      setPrintingEditId(null)
+      setPrintingList(null)
+      setScannerDecision(null)
+      setHasMore(false)
+      return
+    }
     const destination = routeCatalogSelection({
       scannerOpen: showScanner,
       hasScanEvidence: Boolean(scanEvidence),
@@ -1327,6 +1404,9 @@ export default function AddCardModal({ binders = [], onClose, onAdded }) {
                   onManual={handleManualFallback}
                   shelf={scannerShelf}
                   onEditShelfItem={editScannerShelf}
+                  onChangePrinting={openPrintingEditor}
+                  onUndoShelfEdit={undoShelfEdit}
+                  canUndoShelfEdit={Boolean(shelfUndo)}
                   onRemoveShelfItem={removeScannerShelf}
                   binders={binders}
                   binderId={scannerBinderId}
@@ -1341,6 +1421,10 @@ export default function AddCardModal({ binders = [], onClose, onAdded }) {
                   visualStatus={scannerVisualStatus}
                 >
                   {scannerNotices}
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <label>Scanning language<select aria-label="Scanning language" value={scanningLanguage} disabled={adding || scannerRecovery} onChange={event => setScanningLanguage(event.target.value)} className="min-h-[44px] w-full rounded border bg-white text-gray-900">{['en','ja','de','fr','es','it','pt','ko','ru','zhs','zht'].map(lang=><option key={lang} value={lang}>{lang.toUpperCase()}</option>)}</select></label>
+                    <label>Set lock<input aria-label="Scanner set lock" value={scannerSetLock} maxLength={5} disabled={adding || scannerRecovery} onChange={event => setScannerSetLock(event.target.value.toLowerCase().replace(/[^a-z0-9]/g,''))} className="min-h-[44px] w-full rounded border bg-white text-gray-900" /></label>
+                  </div>
                   {error && <p role="alert" className="text-sm text-red-500 dark:text-red-400">{error}</p>}
                   {loading && scanEvidence && (
                     <div className="flex items-center justify-center gap-2 rounded-dbb-md border border-dbb-accent/30 p-3 text-dbb-xs text-dbb-accent">
@@ -1356,9 +1440,10 @@ export default function AddCardModal({ binders = [], onClose, onAdded }) {
                       loadingMore={loadingMore}
                       onLoadMore={handleLoadMore}
                     >
-                      {scannerDecision.candidates.map(candidate => (
+                      {scannerDecision.candidates.map((candidate,index) => (
                         <EditionRow
                           key={candidate.edition.scryfall_id}
+                          languageHeading={index === 0 || candidate.edition.lang !== scannerDecision.candidates[index-1].edition.lang ? candidate.edition.lang?.toUpperCase() || 'Language not recorded' : null}
                           showCardName={new Set(scannerDecision.candidates.map(c => c.cardName)).size > 1}
                           edition={candidate.edition}
                           cardName={candidate.cardName}

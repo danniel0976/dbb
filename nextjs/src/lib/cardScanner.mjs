@@ -109,6 +109,7 @@ export function extractScanEvidence(text) {
   let setCode = null
   let collectorNumber = null
   let rarity = null
+  let language = null
 
   for (const { rawLine, line } of lines) {
     if (!isInfoLine(line, rawLine)) continue
@@ -117,6 +118,8 @@ export function extractScanEvidence(text) {
     const printedSet = setLanguageCode(line, rawLine)
     if (printedSet) {
       if (setCode === null) setCode = printedSet
+      const code = rawLine.toLowerCase().match(/(?:[•·∙⋅◦▪|/-]|\s)\s*([a-z]{2,3})(?=\s|$)/g)?.map(s => s.replace(/[^a-z]/g, '')).find(s => LANGUAGE_CODES.has(s))
+      if (language === null && code) language = ({ jp: 'ja', jpn: 'ja', eng: 'en' })[code] || code
       rest = line.replace(/^[a-z0-9]{3,5}\s+[a-z]{2,3}\b\s*/, '')
       if (!rest) continue
     }
@@ -153,7 +156,7 @@ export function extractScanEvidence(text) {
     }
   }
 
-  return { nameQuery, setCode, collectorNumber, rarity, rawText }
+  return { nameQuery, setCode, collectorNumber, rarity, rawText, ...(language ? { language } : {}) }
 }
 
 /**
@@ -236,7 +239,7 @@ function scoreName(catalogName, nameQuery) {
   const name = normalizeOcrText(catalogName)
   const query = normalizeOcrText(nameQuery)
   if (!name || !query) return { score: 0, kind: 'none' }
-  if (name === query) return { score: SCORE_EXACT_NAME, kind: 'exact' }
+  if (name === query || name.split(/\s*\/\/\s*/).includes(query)) return { score: SCORE_EXACT_NAME, kind: 'exact' }
   if (query.length >= 3 && (name.startsWith(query) || query.startsWith(name))) return { score: SCORE_PREFIX_NAME, kind: 'prefix' }
   const sim = similarity(name, query)
   if (sim <= 0) return { score: 0, kind: 'none' }
@@ -299,6 +302,13 @@ export function rankScannerResults(groups, evidence) {
             score += matches.rarity ? SCORE_RARITY_MATCH : -PENALTY_RARITY_MISS
           }
 
+          // A complete printed identifier outranks title-only agreement, not a
+          // weak fuzzy title. Explicit contradictions remain on scanMatches.
+          if (name.score >= SCORE_PREFIX_NAME && matches.set === true && matches.collector === true) score += 20000
+          if (ev.language && edition.lang) {
+            matches.language = edition.lang === ev.language
+            score += matches.language ? 100 : -100
+          }
           return { ...edition, scanScore: score, scanMatches: matches }
         })
         .sort((a, b) => b.scanScore - a.scanScore || compareCatalogOrder(a, b))

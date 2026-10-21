@@ -154,6 +154,9 @@ export default function CardScannerPanel({
   onManual,
   shelf = [],
   onEditShelfItem,
+  onChangePrinting,
+  onUndoShelfEdit,
+  canUndoShelfEdit = false,
   onRemoveShelfItem,
   binders = [],
   binderId = '',
@@ -535,6 +538,7 @@ export default function CardScannerPanel({
                     <p className="truncate text-[11px] text-gray-500 dark:text-gray-400">
                       {item.setName} · {item.setCode?.toUpperCase()} #{item.collectorNumber}
                     </p>
+                    {item.printingUnverified && <p className="text-xs font-semibold text-amber-700 dark:text-amber-300">Printing unverified</p>}
                     {rarity && (
                       <span className={`text-[11px] ${rarityToneClass(item.rarity)}`}>{rarity}</span>
                     )}
@@ -549,6 +553,7 @@ export default function CardScannerPanel({
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
                 </div>
+                <button type="button" disabled={confirming || recovery} onClick={() => onChangePrinting?.(item.shelfId)} aria-label={`Change printing for ${item.cardName}`} className="min-h-[44px] w-full rounded border text-xs disabled:opacity-50">Change printing</button>
                 <div className="mt-2 grid grid-cols-2 gap-2">
                   <label className="text-[11px] text-gray-500 dark:text-gray-400">
                     Quantity
@@ -580,6 +585,7 @@ export default function CardScannerPanel({
               )
             })}
 
+            {canUndoShelfEdit && <button type="button" onClick={onUndoShelfEdit} disabled={confirming || recovery} className="min-h-[44px] w-full rounded border text-xs disabled:opacity-50">Undo shelf edit</button>}
             <div className="grid grid-cols-2 gap-2">
               <label className="text-[11px] text-gray-500 dark:text-gray-400">
                 Binder

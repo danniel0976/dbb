@@ -873,15 +873,14 @@ shelf = addScannerShelfItem(shelf, {
 assert.equal(shelf.length, 2)
 assert.deepEqual(shelf.map(item => item.quantity), [1, 2])
 
-// A finish edit that would collide with an existing printing+finish row is
-// ignored rather than silently merging two rows' quantities.
+// A2: finish collisions merge quantities atomically; the old shelf is Undo.
 {
   const collided = editScannerShelfItem(shelf, 'id-mh2-123:nonfoil', { finish: 'foil' })
-  assert.equal(collided.length, 2)
+  assert.equal(collided.length, 1)
   assert.deepEqual(collided.map(item => [item.shelfId, item.finish, item.quantity]), [
-    ['id-mh2-123:foil', 'foil', 1],
-    ['id-mh2-123:nonfoil', 'nonfoil', 2],
+    ['id-mh2-123:foil', 'foil', 3],
   ])
+  assert.deepEqual(shelf.map(item => item.quantity), [1, 2], 'Undo snapshot is unchanged')
 }
 
 // Batch payload maps catalog nonfoil to the existing API's `normal` value, emits

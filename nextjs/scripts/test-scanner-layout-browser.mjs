@@ -63,6 +63,12 @@ try {
     }
   }
   await page.setViewportSize({width:390,height:844});await page.evaluate(()=>window.renderPanel(20));await page.waitForTimeout(50)
+  assert.equal(await page.getByText('Printing unverified', {exact:true}).count(),1,'assumed printing is visible')
+  assert.equal(await page.getByRole('button',{name:/Change printing/}).count(),20,'each row has a printing editor')
+  assert.equal(await page.getByRole('button',{name:'Undo shelf edit'}).count(),1,'Undo is reachable')
+  await page.locator('[data-scanner-tray]').evaluate(e=>e.scrollTop=0)
+  await page.waitForTimeout(40)
+  assert.ok(await page.getByText('Printing unverified',{exact:true}).isVisible(),'unverified badge is reachable at the top of the shelf')
   await page.screenshot({path:join(output,'rendered.png')})
   writeFileSync(join(output,'results.json'),JSON.stringify({pass:true,cases:results,modalPortalFocusManualClose:true},null,2))
   console.log(`SCANNER_BROWSER_PASS ${results.length} layout cases + actual modal portal/focus/manual/close; evidence ${output}`)

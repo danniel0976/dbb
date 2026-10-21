@@ -1,4 +1,5 @@
 import { hasUsableCollector, hasUsableSetCode } from './cardScanner.mjs'
+import { catalogImage, preferPrintings } from './scannerPrintings.mjs'
 import { createClientUuid } from './clientUuid.mjs'
 
 const SCANNER_SOURCES = new Set(['scanner-direct', 'scanner-confirmed'])
@@ -92,7 +93,7 @@ export function routeCatalogSelection({ scannerOpen = false, hasScanEvidence = f
  * have an exact/prefix name, agree with every OCR printing clue that exists,
  * and beat the next candidate rather than tying it.
  */
-export function routeScannerMatch(groups, evidence) {
+export function routeScannerMatch(groups, evidence, options = {}) {
   const candidates = scannerCandidates(groups)
   const uncertain = (reason, pool) => ({ kind: 'uncertain', reason, candidates: pool })
   if (candidates.length === 0) return uncertain('no-candidates', candidates)
@@ -129,8 +130,16 @@ export function routeScannerMatch(groups, evidence) {
   // pool, which can hold unrelated cards that merely share wording.
   const sameCard = candidates.filter(candidate => candidate.cardName === top.cardName)
 
+  const sameArt = sameCard.length > 0 && sameCard[0].edition.illustration_id && sameCard.every(c => c.edition.illustration_id === sameCard[0].edition.illustration_id)
+  const contradiction = fields.some(field => matches[field] === false) || matches.language === false
+  if (options.completeIdentity && matches.name === 'exact' && sameArt && !contradiction) {
+    const preferred = preferPrintings(sameCard.map(c => c.edition), { ...evidence, ...options })[0]
+    if (fields.some(field => preferred.scanMatches?.[field] === false) || preferred.scanMatches?.language === false) return uncertain('printing-evidence-conflict', sameCard)
+    const exact = fields.includes('set') && fields.includes('collector') && fields.every(field => preferred.scanMatches?.[field] === true) && (!evidence.language || preferred.scanMatches?.language === true)
+    return { kind: 'direct', candidate: { cardName: top.cardName, edition: preferred, printingUnverified: !exact }, candidates: sameCard }
+  }
   if (fields.length === 0) return uncertain('printing-evidence-required', sameCard)
-  if (!fields.every(field => matches[field] === true)) {
+  if (matches.language === false || !fields.every(field => matches[field] === true)) {
     return uncertain('printing-evidence-conflict', sameCard)
   }
 
@@ -216,7 +225,7 @@ export function addScannerShelfItem(shelf, selection) {
   if (!SCANNER_SOURCES.has(selection?.source) || !selection?.edition?.scryfall_id) return current
 
   const finishes = supportedFinishes(selection.edition)
-  const finish = finishes.includes('nonfoil') ? 'nonfoil' : finishes[0]
+  const finish = finishes.includes(selection.finish) ? selection.finish : finishes.includes('nonfoil') ? 'nonfoil' : finishes[0]
   const existing = current.find(item => (
     item.source && SCANNER_SOURCES.has(item.source) &&
     item.scryfallId === selection.edition.scryfall_id &&
@@ -225,7 +234,7 @@ export function addScannerShelfItem(shelf, selection) {
 
   if (existing) {
     return current.map(item => item.shelfId === existing.shelfId
-      ? { ...item, quantity: clampQuantity(item.quantity + 1) }
+      ? { ...item, quantity: clampQuantity(item.quantity + 1), printingUnverified: item.printingUnverified || selection.printingUnverified === true }
       : item)
   }
 
@@ -238,7 +247,9 @@ export function addScannerShelfItem(shelf, selection) {
     setCode: selection.edition.set_code || '',
     collectorNumber: selection.edition.collector_number || '',
     rarity: selection.edition.rarity || null,
-    imageUris: safeCatalogImageUris(selection.edition.image_uris),
+    imageUris: safeCatalogImageUris(catalogImage(selection.edition)),
+    printingUnverified: selection.printingUnverified === true,
+    language: selection.edition.lang || null,
     finishes,
     finish,
     quantity: 1,
@@ -252,26 +263,25 @@ export function removeScannerShelfItem(shelf, shelfId) {
 
 export function editScannerShelfItem(shelf, shelfId, patch) {
   const current = Array.isArray(shelf) ? shelf : []
-  return current.map(item => {
-    if (item.shelfId !== shelfId) return item
-    const next = { ...item }
-    if (patch && Object.hasOwn(patch, 'quantity')) next.quantity = clampQuantity(patch.quantity)
-    if (hasText(patch?.finish) && item.finishes?.includes(patch.finish)) {
-      // Changing the finish changes the row's identity, so it may not land on a
-      // printing+finish the shelf already holds; merging would lose a quantity.
-      const taken = current.some(other => (
-        other.shelfId !== item.shelfId &&
-        other.scryfallId === item.scryfallId &&
-        other.finish === patch.finish
-      ))
-      if (!taken) {
-        next.finish = patch.finish
-        next.shelfId = shelfIdFor(item.scryfallId, patch.finish)
-      }
-    }
-    if (typeof patch?.selected === 'boolean') next.selected = patch.selected
-    return next
-  })
+  const item = current.find(row => row.shelfId === shelfId)
+  if (!item) return current
+  let next = { ...item }
+  if (patch?.edition?.scryfall_id) {
+    const replacement = addScannerShelfItem([], { source: item.source, cardName: item.cardName, edition: patch.edition })[0]
+    if (!replacement) return current
+    next = { ...replacement, quantity: item.quantity, selected: item.selected, printingUnverified: false }
+  }
+  if (patch && Object.hasOwn(patch, 'quantity')) next.quantity = clampQuantity(patch.quantity)
+  if (hasText(patch?.finish) && next.finishes?.includes(patch.finish)) next.finish = patch.finish
+  if (typeof patch?.selected === 'boolean') next.selected = patch.selected
+  next.shelfId = shelfIdFor(next.scryfallId, next.finish)
+  const collision = current.find(row => row.shelfId !== shelfId && row.shelfId === next.shelfId)
+  if (collision) {
+    if (collision.quantity + next.quantity > 9999) return current
+    return current.filter(row => row.shelfId !== shelfId).map(row => row === collision
+      ? { ...row, quantity: row.quantity + next.quantity, selected: row.selected || next.selected, printingUnverified: row.printingUnverified || next.printingUnverified } : row)
+  }
+  return current.map(row => row.shelfId === shelfId ? next : row)
 }
 
 /**
