@@ -4,6 +4,7 @@ import * as parser from '../src/lib/cardScanner.mjs'
 import * as session from '../src/lib/cardScannerSession.mjs'
 import * as view from '../src/lib/cardScannerView.mjs'
 import { settleScanEvidence } from '../src/lib/cardScannerState.mjs'
+import * as printings from '../src/lib/scannerPrintings.mjs'
 import * as viewport from '../src/lib/scannerViewport.mjs'
 
 const stub = name => Object.assign(() => null, { displayName: name })
@@ -15,6 +16,7 @@ const dependencies = {
   // host keeps the returned tree traversable and runs the real viewport helper.
   'react-dom': { createPortal: node => node },
   '@/lib/scannerViewport.mjs': viewport,
+  '@/lib/scannerPrintings.mjs': printings,
   '@/lib/cardScanner.mjs': parser,
   '@/lib/cardScannerSession.mjs': session,
   '@/lib/cardScannerView.mjs': view,
@@ -38,17 +40,17 @@ try {
     const query = new URL(url, 'https://offline.invalid')
     assert.equal(query.pathname, '/api/catalog/search', 'scanner must not query/read/write the user collection')
     requests.push(query)
-    return { ok: true, json: async () => ({ groups: [{ name: 'Natural Order', editions: [ed('sta-117', 'sta', '117')] }], total: 1, has_more: false }) }
+    return { ok: true, json: async () => ({ groups: [{ name: 'Generic Ritual', editions: [ed('set-217', 'set', '217')] }], total: 1, has_more: false }) }
   }
-  await deliverScan(tree, { nameQuery: '', setCode: 'sta', collectorNumber: '117' })
+  await deliverScan(tree, { nameQuery: '', setCode: 'set', collectorNumber: '217' })
   tree = harness.render(props)
   assert.equal(requests.length, 1, 'set/serial-only scan must reach catalog retrieval instead of doing nothing')
-  assert.equal(requests[0].searchParams.get('set'), 'sta')
-  assert.equal(requests[0].searchParams.get('collector_number'), '117', 'printing-only scan must retrieve the exact catalog printing')
+  assert.equal(requests[0].searchParams.get('set'), 'set')
+  assert.equal(requests[0].searchParams.get('collector_number'), '217', 'printing-only scan must retrieve the exact catalog printing')
   assert.equal(requests[0].searchParams.get('q'), '')
   assert.equal(panel(tree).props.shelf.length, 0, 'printing-only evidence must never enter shelf automatically')
   assert.equal(picker(tree).props.reason, 'printing-only')
-  assert.equal(picker(tree).props.children[0].props.edition.scryfall_id, 'sta-117')
+  assert.equal(picker(tree).props.children[0].props.edition.scryfall_id, 'set-217')
   harness.unmount()
 
   // A weak or incorrect OCR title must not leave unrelated names in the
@@ -63,26 +65,26 @@ try {
     fallbackRequests.push(query)
     if (query.searchParams.get('q')) {
       return { ok: true, json: async () => ({ groups: [
-        { name: 'Sorin Markov', editions: [ed('wrong-title', 'mom', '7')] },
+        { name: 'Sorin Markov', editions: [ed('wrong-title', 'exp', '7')] },
       ], total: 1, has_more: false }) }
     }
-    if (query.searchParams.get('collector_number') !== '169') {
+    if (query.searchParams.get('collector_number') !== '219') {
       return { ok: true, json: async () => ({ groups: [], total: 0, has_more: false }) }
     }
     return { ok: true, json: async () => ({ groups: [
-      { name: 'Urabrask', editions: [ed('urabrask-mom-169', 'mom', '169')] },
+      { name: 'Generic Elder', editions: [ed('elder-mom-169', 'exp', '219')] },
     ], total: 1, has_more: false }) }
   }
-  const paddedEvidence = parser.extractScanEvidence('Unrelated OCR title\n0169 R\nMOM EN')
-  assert.equal(paddedEvidence.collectorNumber, '169', 'printed leading zero must normalize to the catalog collector number')
+  const paddedEvidence = parser.extractScanEvidence('Unrelated OCR title\n0219 R\nEXP EN')
+  assert.equal(paddedEvidence.collectorNumber, '219', 'printed leading zero must normalize to the catalog collector number')
   await deliverScan(tree, paddedEvidence)
   tree = printingFallback.render(props)
   assert.equal(fallbackRequests.length, 2, 'an uncertain title with exact printing clues must retry as printing-only')
   assert.equal(fallbackRequests[1].searchParams.get('q'), '')
-  assert.equal(fallbackRequests[1].searchParams.get('set'), 'mom')
-  assert.equal(fallbackRequests[1].searchParams.get('collector_number'), '169')
+  assert.equal(fallbackRequests[1].searchParams.get('set'), 'exp')
+  assert.equal(fallbackRequests[1].searchParams.get('collector_number'), '219')
   assert.equal(picker(tree).props.reason, 'printing-only')
-  assert.deepEqual(picker(tree).props.children.map(row => row.props.cardName), ['Urabrask'])
+  assert.deepEqual(picker(tree).props.children.map(row => row.props.cardName), ['Generic Elder'])
   assert.equal(panel(tree).props.shelf.length, 0, 'printing-only fallback must still require explicit user selection')
   printingFallback.unmount()
 
@@ -101,14 +103,14 @@ try {
       ], total: 2, has_more: false }) }
     }
     return { ok: true, json: async () => ({ groups: [
-      { name: 'Urabrask', editions: [ed('urabrask-tied-fallback', 'mom', '169')] },
+      { name: 'Generic Elder', editions: [ed('elder-tied-fallback', 'exp', '219')] },
     ], total: 1, has_more: false }) }
   }
-  await deliverScan(tree, parser.extractScanEvidence('Saruman\n0169 R\nMOM EN'))
+  await deliverScan(tree, parser.extractScanEvidence('Saruman\n0219 R\nEXP EN'))
   tree = tiedFallback.render(props)
   assert.equal(tiedRequests.length, 2, 'a title tie with exact printed identifiers must use the safe printing-only fallback')
   assert.equal(picker(tree).props.reason, 'printing-only')
-  assert.deepEqual(picker(tree).props.children.map(row => row.props.cardName), ['Urabrask'])
+  assert.deepEqual(picker(tree).props.children.map(row => row.props.cardName), ['Generic Elder'])
   assert.equal(panel(tree).props.shelf.length, 0)
   tiedFallback.unmount()
 
@@ -121,25 +123,31 @@ try {
   const pages = []
   globalThis.fetch = async url => {
     const query = new URL(url, 'https://offline.invalid')
+    if (query.pathname === '/api/catalog/printings') {
+      assert.equal(query.searchParams.get('name'), 'Generic Relic')
+      const more = query.searchParams.has('cursor')
+      const editions = more ? [ed('relic-4','new','259')] : [1,2,3].map(i=>ed(`relic-${i}`,'xyz',String(i)))
+      return {ok:true,json:async()=>({groups:[{name:'Generic Relic',editions}],total:4,has_more:!more,next_cursor:more?null:'generic-cursor'})}
+    }
     assert.equal(query.pathname, '/api/catalog/search')
     const page = Number(query.searchParams.get('page'))
     pages.push(page)
-    const same = { name: 'Roaming Throne', editions: [ed(`throne-${page}`, page === 4 ? 'lci' : 'xyz', page === 4 ? '258' : String(page))] }
-    return { ok: true, json: async () => ({ groups: [same, { name: 'Roaming Unrelated', editions: [ed(`unrelated-${page}`, 'lci', '258')] }], total: 8, has_more: page < 4 }) }
+    const same = { name: 'Generic Relic', editions: [ed(`relic-${page}`, 'xyz', String(page))] }
+    return { ok: true, json: async () => ({ groups: [same, { name: 'Generic Unrelated', editions: [ed(`unrelated-${page}`, 'new', '259')] }], total: 8, has_more: page < 4 }) }
   }
-  await deliverScan(next, { nameQuery: 'roaming throne', setCode: 'lci', collectorNumber: '0258' })
+  await deliverScan(next, { nameQuery: 'generic relic', setCode: 'new', collectorNumber: '0259' })
   next = widened.render(props)
   assert.deepEqual(pages, [1, 2, 3])
-  assert.ok(picker(next).props.children.every(row => row.props.cardName === 'Roaming Throne'))
+  assert.ok(picker(next).props.children.every(row => row.props.cardName === 'Generic Relic'))
   picker(next).props.onLoadMore()
   await new Promise(resolve => setImmediate(resolve))
   next = widened.render(props)
-  assert.deepEqual(pages, [1, 2, 3, 4])
-  assert.equal(picker(next).props.reason, 'direct-confirm')
+  assert.deepEqual(pages, [1, 2, 3], 'Load more must not repeat fuzzy search')
+  assert.equal(picker(next).props.reason, 'printing-tie')
   assert.equal(panel(next).props.shelf.length, 0, 'load-more never auto-adds')
   assert.equal(picker(next).props.children.length, 4, 'all same-name printings from the widened pool stay reachable')
-  assert.ok(picker(next).props.children.every(row => row.props.cardName === 'Roaming Throne'))
-  assert.ok(picker(next).props.children.some(row => row.props.edition.scryfall_id === 'throne-4'))
+  assert.ok(picker(next).props.children.every(row => row.props.cardName === 'Generic Relic'))
+  assert.ok(picker(next).props.children.some(row => row.props.edition.scryfall_id === 'relic-4'))
   widened.unmount()
 
   // A distinct-name tie keeps both cards visible and selectable in the real
@@ -153,7 +161,7 @@ try {
     return { ok: true, json: async () => ({ groups: [
       { name: 'Saruman of Many Colors', editions: [ed('colors', 'ltr', '1')] },
       { name: 'Saruman, the White Hand', editions: [ed('white', 'ltr', '2')] },
-      { name: 'Unrelated', editions: [ed('unrelated', 'lci', '3')] },
+      { name: 'Unrelated', editions: [ed('unrelated', 'new', '3')] },
     ], total: 3, has_more: false }) }
   }
   await deliverScan(next, { nameQuery: 'saruman' })
@@ -189,7 +197,7 @@ import * as capture from '../src/lib/cardScannerCapture.mjs'
   let cameraRequests = 0
   const fakeWorker = {
     async reinitialize() {}, async setParameters() {},
-    async recognize() { return { data: { text: ++ocrReads % 2 === 1 ? '117 R\nSTA JP' : '自然の秩序' } } },
+    async recognize() { return { data: { text: ++ocrReads % 2 === 1 ? '217 R\nSET JP' : '架空の儀式' } } },
   }
   page.createElement = () => {
     const canvas = { width: 0, height: 0 }
@@ -274,21 +282,21 @@ import * as capture from '../src/lib/cardScannerCapture.mjs'
     assert.equal(located, 1, 'capture must locate card bounds before layout-specific OCR')
     assert.equal(evidenceReads.length, 1)
     assert.equal(evidenceReads[0].titleLayout, 'vertical-japanese')
-    assert.equal(evidenceReads[0].setCode, 'sta')
-    assert.equal(evidenceReads[0].collectorNumber, '117')
+    assert.equal(evidenceReads[0].setCode, 'set')
+    assert.equal(evidenceReads[0].collectorNumber, '217')
     assert.equal(typeof workerOptions.errorHandler, 'function', 'optional language download failures must reject promises, not throw globally in Tesseract')
     const readText = scannerElementText(findScannerElement(render(), e => e.type === 'details'))
     assert.match(readText, /Scan read/)
-    assert.match(readText, /自然の秩序/)
-    assert.match(readText, /117/)
+    assert.match(readText, /架空の儀式/)
+    assert.match(readText, /217/)
     let finishInfo
     let startedInfo
     const started = new Promise(resolve => { startedInfo = resolve })
     let stalledReads = 0
     fakeWorker.recognize = async () => {
-      if (++stalledReads > 1) return { data: { text: '自然の秩序' } }
+      if (++stalledReads > 1) return { data: { text: '架空の儀式' } }
       startedInfo()
-      return new Promise(resolve => { finishInfo = () => resolve({ data: { text: '117 R\nSTA JP' } }) })
+      return new Promise(resolve => { finishInfo = () => resolve({ data: { text: '217 R\nSET JP' } }) })
     }
     const pendingRead = findScannerElement(render(), e => e.type === 'button' && scannerElementText(e).includes('Scan')).props.onClick()
     await started
