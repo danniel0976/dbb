@@ -137,7 +137,7 @@ export function routeScannerMatch(groups, evidence, options = {}) {
     const preferred = preferPrintings(sameCard.map(c => c.edition), { ...evidence, ...options })[0]
     if (!isPreferredPrintingEligible(preferred, { ...evidence, ...options })) return uncertain('printing-evidence-required', sameCard)
     if (fields.some(field => preferred.scanMatches?.[field] === false) || preferred.scanMatches?.language === false) return uncertain('printing-evidence-conflict', sameCard)
-    const exact = fields.includes('set') && fields.includes('collector') && fields.every(field => preferred.scanMatches?.[field] === true) && (!evidence.language || preferred.scanMatches?.language === true)
+    const exact = fields.includes('set') && fields.includes('collector') && fields.every(field => preferred.scanMatches?.[field] === true) && (!evidence.language || preferred.scanMatches?.language === true) && preferred.lang === (evidence.language || options.language || 'en')
     return { kind: 'direct', candidate: { cardName: top.cardName, edition: preferred, printingUnverified: !exact }, candidates: sameCard }
   }
   if (fields.length === 0) return uncertain('printing-evidence-required', sameCard)

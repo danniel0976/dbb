@@ -19,4 +19,15 @@ const family=rows.slice(0,2).map(e=>({...e,scanScore:100,scanMatches:{name:'exac
 assert.equal(routeScannerMatch([{name:base.name,editions:family}],{nameQuery:base.name},{completeIdentity:true}).kind,'direct')
 const dfc=family.map(e=>({...e,has_face_images:true,face_illustration_ids:['art-a', e.scryfall_id]}))
 assert.equal(routeScannerMatch([{name:base.name,editions:dfc}],{nameQuery:base.name},{completeIdentity:true}).kind,'uncertain','shared front alone is not a DFC art-family proof')
-console.log('SCANNER_METADATA_PASS preference tiers, promo exclusion, newest fallback, DFC identity')
+const footer = {nameQuery:base.name,setCode:'old',collectorNumber:'7'}
+const englishOnly = {...base,scryfall_id:'english-only',scanScore:100,scanMatches:{name:'exact',set:true,collector:true,language:null}}
+const languageFallback = routeScannerMatch([{name:base.name,editions:[englishOnly]}],footer,{completeIdentity:true,language:'ja'})
+assert.equal(languageFallback.kind,'direct')
+assert.equal(languageFallback.candidate.printingUnverified,true,'Japanese prior cannot silently certify an English-only printing')
+assert.equal(routeScannerMatch([{name:base.name,editions:[englishOnly]}],footer,{completeIdentity:true}).candidate.printingUnverified,false,'matching English default remains exact')
+assert.equal(routeScannerMatch([{name:base.name,editions:[{...englishOnly,lang:'ja',scanMatches:{...englishOnly.scanMatches,language:true}}]}],{...footer,language:'ja'},{completeIdentity:true,language:'en'}).candidate.printingUnverified,false,'explicit OCR language takes precedence over session prior for exactness')
+const unknownLanguage = routeScannerMatch([{name:base.name,editions:[{...englishOnly,lang:null}]}],footer,{completeIdentity:true})
+assert.equal(unknownLanguage.candidate.printingUnverified,true,'null catalog language is not exact')
+const missingArt = routeScannerMatch([{name:base.name,editions:[{...englishOnly,illustration_id:null,scanMatches:{name:'exact'}}]}],{nameQuery:base.name},{completeIdentity:true})
+assert.equal(missingArt.kind,'uncertain','single-face null art identity fails closed')
+console.log('SCANNER_METADATA_PASS preference tiers, promo exclusion, newest fallback, DFC identity, language and null-art safety')
