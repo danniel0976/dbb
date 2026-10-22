@@ -16,5 +16,11 @@
       "perf/*": false,
       "hotfix/*": false
     }
-  }
+  },
+  "crons": [
+    {
+      "path": "/api/health",
+      "schedule": "0 3 * * *"
+    }
+  ]
 }
