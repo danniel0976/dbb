@@ -25,7 +25,7 @@ import zlib from 'node:zlib'
 import {
   assertCatalogCompleteness,
   buildRefreshManifest,
-  normalizeCmc,
+  catalogRow,
   runWithFailureCleanup,
   selectBulkDownload,
   sourceUrlHash,
@@ -145,17 +145,6 @@ async function downloadFile(url, dest) {
   })
 }
 
-function extractImageUris(card) {
-  if (card.image_uris) {
-    return { small: card.image_uris.small || null, normal: card.image_uris.normal || null }
-  }
-  const face = card.card_faces?.[0]
-  if (face?.image_uris) {
-    return { small: face.image_uris.small || null, normal: face.image_uris.normal || null }
-  }
-  return null
-}
-
 async function upsertBatch(rows) {
   const stagedRows = rows.map(row => ({ refresh_id: refreshId, ...row }))
   const res = await fetch(`${SUPABASE_URL}/rest/v1/catalog_refresh_staging`, {
@@ -239,25 +228,8 @@ async function processFile(filePath) {
       continue
     }
 
-    // Only include paper cards (exclude digital-only)
-    if (card.digital) { skipped++; continue }
-    if (!card.id || !card.name || !card.set) { skipped++; continue }
-
-    const face = card.card_faces?.[0]
-    const row = {
-      scryfall_id: card.id,
-      name: card.name,
-      set_code: card.set,
-      set_name: card.set_name || null,
-      collector_number: card.collector_number || '',
-      rarity: card.rarity || null,
-      colors: card.color_identity || [],
-      type_line: card.type_line || face?.type_line || null,
-      cmc: normalizeCmc(card.cmc),
-      mana_cost: card.mana_cost || face?.mana_cost || null,
-      image_uris: extractImageUris(card),
-      finishes: card.finishes || [],
-    }
+    const row = catalogRow(card)
+    if (!row) { skipped++; continue }
 
     batch.push(row)
     total++

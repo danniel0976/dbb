@@ -1,0 +1,25 @@
+import assert from 'node:assert/strict'
+import * as refresh from './catalogRefresh.mjs'
+// Generic, invented identities: no owner-card fixtures or library writes.
+const card = { id:'11111111-1111-4111-8111-111111111111', name:'Lantern Adept', set:'tst', collector_number:'4', lang:'ja', oracle_id:'22222222-2222-4222-8222-222222222222', illustration_id:'33333333-3333-4333-8333-333333333333', released_at:'2025-03-01', frame:'2015', frame_effects:['showcase'], promo_types:['prerelease'], promo:true, border_color:'borderless', set_type:'expansion', games:['paper'], image_uris:{small:'https://example.invalid/card.jpg',normal:'https://example.invalid/normal.jpg'} }
+assert.equal(typeof refresh.catalogRow, 'function', 'importer needs a testable metadata-preserving row mapper')
+const row = refresh.catalogRow(card)
+for (const key of ['lang','oracle_id','illustration_id','released_at','frame','frame_effects','promo_types','promo','border_color','set_type','games']) assert.deepEqual(row[key],card[key],key)
+assert.equal(row.has_face_images,false)
+assert.equal(refresh.catalogRow({...card,layout:'art_series',set_type:'memorabilia'}).layout,'art_series','real art-series discriminator survives import')
+const dfc = refresh.catalogRow({...card, name:'Lantern // Shadow', illustration_id:undefined, image_uris:undefined, card_faces:[{illustration_id:card.illustration_id,image_uris:card.image_uris},{illustration_id:'44444444-4444-4444-8444-444444444444',image_uris:{small:'https://example.invalid/back.jpg'}}]})
+assert.equal(dfc.has_face_images,true)
+assert.equal(dfc.illustration_id,card.illustration_id)
+assert.deepEqual(dfc.face_illustration_ids,[card.illustration_id,'44444444-4444-4444-8444-444444444444'])
+assert.deepEqual(dfc.image_uris,card.image_uris)
+assert.equal(refresh.catalogRow({...card,digital:true}),null)
+assert.equal(refresh.catalogRow({...card,games:['arena']}),null)
+const legacy=refresh.catalogRow({id:card.id,name:'Generic Adept',set:'tst'})
+assert.equal(legacy.lang,null)
+assert.equal(legacy.promo,null)
+assert.equal(legacy.released_at,null)
+const reversible = refresh.catalogRow({...card,oracle_id:undefined,card_faces:[{oracle_id:card.oracle_id},{oracle_id:'55555555-5555-4555-8555-555555555555'}]})
+assert.equal(reversible.oracle_id,card.oracle_id,'reversible card uses front-face oracle identity')
+assert.equal(reversible.face_illustration_ids,null,'faces without art IDs must not store a null-only array')
+assert.deepEqual(refresh.catalogRow({...card,card_faces:[{illustration_id:card.illustration_id},{}]}).face_illustration_ids,[card.illustration_id,null],'partial face identity stays incomplete, not filtered into a false proof')
+console.log('CATALOG_METADATA_PASS multilingual/promo/DFC/paper/null mapping and reversible oracle fallback')

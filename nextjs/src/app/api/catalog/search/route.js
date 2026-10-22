@@ -138,7 +138,7 @@ export async function GET(request) {
   const to = from + limit - 1
 
   // Select columns — try full set first (migration-007), fall back to basic
-  const fullSelect = 'scryfall_id, name, set_code, set_name, collector_number, rarity, rarity_rank, colors, type_line, cmc, mana_cost, image_uris, finishes'
+  const fullSelect = 'scryfall_id, name, set_code, set_name, collector_number, rarity, rarity_rank, colors, type_line, cmc, mana_cost, image_uris, finishes, lang, oracle_id, illustration_id, released_at, frame, frame_effects, promo_types, border_color, has_face_images, face_illustration_ids, promo, set_type, layout, games'
 
   // One catalog query for one name-match plan, keeping the pre-migration schema
   // fallback intact. Returns the Supabase result shape so plan escalation can
@@ -212,6 +212,20 @@ export async function GET(request) {
       }
       groupMap.get(card.name).editions.push({
         scryfall_id: card.scryfall_id,
+        lang: card.lang ?? null,
+        oracle_id: card.oracle_id ?? null,
+        illustration_id: card.illustration_id ?? null,
+        released_at: card.released_at ?? null,
+        frame: card.frame ?? null,
+        frame_effects: card.frame_effects ?? null,
+        promo_types: card.promo_types ?? null,
+        border_color: card.border_color ?? null,
+        has_face_images: card.has_face_images ?? null,
+        face_illustration_ids: card.face_illustration_ids ?? null,
+        promo: card.promo ?? null,
+        set_type: card.set_type ?? null,
+        layout: card.layout ?? null,
+        games: card.games ?? null,
         set_code: card.set_code,
         set_name: card.set_name,
         collector_number: card.collector_number,

@@ -2,16 +2,31 @@
 export function catalogImage(card) {
   return card?.image_uris || card?.card_faces?.find(face => face.image_uris)?.image_uris || null
 }
+export function isPreferredPrintingEligible(e, options = {}) {
+  const explicit = e.scryfall_id === options.preferredId
+    || (options.setLock && e.set_code === options.setLock)
+    || (options.setCode && options.collectorNumber && e.set_code === options.setCode && String(e.collector_number).replace(/^0+(?=\d)/, '') === String(options.collectorNumber).replace(/^0+(?=\d)/, ''))
+  const ordinary = !e.digital && !e.promo && !e.promo_types?.length
+    && e.set_type !== 'art_series' && e.layout !== 'art_series' && !e.frame_effects?.includes('showcase') && (!e.games || e.games.includes('paper'))
+  return Boolean(explicit || ordinary)
+}
+export function catalogArtKey(e) {
+  if (!e?.illustration_id) return null
+  if (e.has_face_images) {
+    if (!e.face_illustration_ids?.length || e.face_illustration_ids.some(id => !id)) return null
+    return JSON.stringify(e.face_illustration_ids)
+  }
+  return e.illustration_id
+}
 export function preferPrintings(editions, options = {}) {
   const language = options.language || 'en'
   const key = e => [
-    e.scryfall_id === options.preferredId ? 1 : 0,
+    isPreferredPrintingEligible(e, options) ? 1 : 0,
     options.setLock && e.set_code === options.setLock ? 1 : 0,
     options.lastSet && e.set_code === options.lastSet ? 1 : 0,
     options.setCode && options.collectorNumber && e.set_code === options.setCode && String(e.collector_number).replace(/^0+(?=\d)/,'') === String(options.collectorNumber).replace(/^0+(?=\d)/,'') ? 1 : 0,
+    e.scryfall_id === options.preferredId ? 1 : 0,
     e.lang === language ? 1 : 0,
-    e.lang || '',
-    !e.digital && !e.promo && e.set_type !== 'art_series' && !e.frame_effects?.includes('showcase') && (!e.games || e.games.includes('paper')) ? 1 : 0,
     e.released_at || '',
   ]
   return [...editions].sort((a,b) => {

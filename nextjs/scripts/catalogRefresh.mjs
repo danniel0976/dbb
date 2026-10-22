@@ -64,6 +64,32 @@ export function normalizeCmc(value) {
   return Math.round(number * 100) / 100
 }
 
+export function catalogRow(card) {
+  if (!card || card.digital || !card.id || !card.name || !card.set) return null
+  if (Array.isArray(card.games) && !card.games.includes('paper')) return null
+  const faces = Array.isArray(card.card_faces) ? card.card_faces : []
+  const face = faces[0]
+  const images = card.image_uris || faces.find(f => f.image_uris)?.image_uris
+  const strings = value => Array.isArray(value) ? value.filter(v => typeof v === 'string') : null
+  return {
+    scryfall_id: card.id, name: card.name, set_code: card.set,
+    set_name: card.set_name || null, collector_number: card.collector_number || '',
+    rarity: card.rarity || null, colors: card.color_identity || [],
+    type_line: card.type_line || face?.type_line || null, cmc: normalizeCmc(card.cmc),
+    mana_cost: card.mana_cost || face?.mana_cost || null,
+    image_uris: images ? { small: images.small || null, normal: images.normal || null } : null,
+    finishes: card.finishes || [], lang: card.lang || null,
+    oracle_id: card.oracle_id || face?.oracle_id || null,
+    illustration_id: card.illustration_id || face?.illustration_id || null,
+    face_illustration_ids: faces.some(f => Boolean(f.illustration_id)) ? faces.map(f => f.illustration_id || null) : null,
+    has_face_images: faces.some(f => Boolean(f.image_uris)),
+    released_at: card.released_at || null, frame: card.frame || null,
+    frame_effects: strings(card.frame_effects), promo_types: strings(card.promo_types),
+    border_color: card.border_color || null, promo: typeof card.promo === 'boolean' ? card.promo : null,
+    set_type: card.set_type || null, layout: card.layout || null, games: strings(card.games),
+  }
+}
+
 export function buildRefreshManifest({ sourceField, sourceUrl, total, skipped, completedAt = new Date().toISOString() }) {
   return {
     completed_at: completedAt,
