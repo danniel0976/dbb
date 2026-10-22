@@ -1,5 +1,5 @@
 import { hasUsableCollector, hasUsableSetCode } from './cardScanner.mjs'
-import { catalogImage, preferPrintings } from './scannerPrintings.mjs'
+import { catalogImage, preferPrintings, catalogArtKey, isPreferredPrintingEligible } from './scannerPrintings.mjs'
 import { createClientUuid } from './clientUuid.mjs'
 
 const SCANNER_SOURCES = new Set(['scanner-direct', 'scanner-confirmed'])
@@ -130,10 +130,12 @@ export function routeScannerMatch(groups, evidence, options = {}) {
   // pool, which can hold unrelated cards that merely share wording.
   const sameCard = candidates.filter(candidate => candidate.cardName === top.cardName)
 
-  const sameArt = sameCard.length > 0 && sameCard[0].edition.illustration_id && sameCard.every(c => c.edition.illustration_id === sameCard[0].edition.illustration_id)
+  const artKey = catalogArtKey(sameCard[0]?.edition)
+  const sameArt = Boolean(artKey) && sameCard.every(c => catalogArtKey(c.edition) === artKey)
   const contradiction = fields.some(field => matches[field] === false) || matches.language === false
   if (options.completeIdentity && matches.name === 'exact' && sameArt && !contradiction) {
     const preferred = preferPrintings(sameCard.map(c => c.edition), { ...evidence, ...options })[0]
+    if (!isPreferredPrintingEligible(preferred, { ...evidence, ...options })) return uncertain('printing-evidence-required', sameCard)
     if (fields.some(field => preferred.scanMatches?.[field] === false) || preferred.scanMatches?.language === false) return uncertain('printing-evidence-conflict', sameCard)
     const exact = fields.includes('set') && fields.includes('collector') && fields.every(field => preferred.scanMatches?.[field] === true) && (!evidence.language || preferred.scanMatches?.language === true)
     return { kind: 'direct', candidate: { cardName: top.cardName, edition: preferred, printingUnverified: !exact }, candidates: sameCard }

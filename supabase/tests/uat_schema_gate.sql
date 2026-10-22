@@ -47,7 +47,8 @@ BEGIN
     ('20260803000001'),
     ('20260930000000'),
     ('20261015000000'),
-    ('20261016000000')
+    ('20261016000000'),
+    ('20261021000000')
   ) AS expected(version)
   WHERE NOT EXISTS (
     SELECT 1
@@ -59,8 +60,8 @@ BEGIN
     RAISE EXCEPTION 'UAT schema gate: missing migration version(s): %', v_missing;
   END IF;
 
-  IF (SELECT count(*) FROM supabase_migrations.schema_migrations) <> 16 THEN
-    RAISE EXCEPTION 'UAT schema gate: expected exactly 16 migration versions, found %',
+  IF (SELECT count(*) FROM supabase_migrations.schema_migrations) <> 17 THEN
+    RAISE EXCEPTION 'UAT schema gate: expected exactly 17 migration versions, found %',
       (SELECT count(*) FROM supabase_migrations.schema_migrations);
   END IF;
 END $$;
@@ -107,6 +108,18 @@ BEGIN
     OR v_publish !~ 'p_row_count::numeric / \(p_row_count \+ p_skipped_count\) < 0.85' THEN
     RAISE EXCEPTION 'UAT schema gate: catalog completeness admission is missing';
   END IF;
+END $$;
+
+-- Metadata must exist in both live and staging tables; old rows may be NULL.
+DO $$
+DECLARE v_count integer;
+BEGIN
+  SELECT count(*) INTO v_count FROM information_schema.columns
+  WHERE table_schema='public' AND table_name IN ('card_index','catalog_refresh_staging')
+    AND column_name IN ('lang','oracle_id','illustration_id','released_at','frame','frame_effects',
+      'promo_types','border_color','has_face_images','face_illustration_ids','promo','set_type','layout','games')
+    AND is_nullable='YES';
+  IF v_count <> 28 THEN RAISE EXCEPTION 'UAT schema gate: catalog metadata columns missing or not nullable'; END IF;
 END $$;
 
 -- A host that had Phase 45C before historical 45B must converge on the
